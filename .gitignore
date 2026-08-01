@@ -64,6 +64,7 @@ _*.mjs
 .trae/
 .mimocode/
 .claude/
+.trae-html-share-packages/
 .vscode/
 .idea/
 
