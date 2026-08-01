@@ -58,7 +58,26 @@ _*.log
 _*.json
 _*.md
 _*.mjs
+tmp_*.py
+tmp_*.mjs
 1.13
+analyze_accents.py
+analyze_images.py
+inspect_db.py
+verify_capability_gating.py
+test_formula_browser.py
+test_formula_workflow.py
+frontend/_*.mjs
+frontend/_*.json
+frontend/debug-*.mjs
+frontend/diagnose-*.py
+frontend/ecml-test*
+frontend/test-*.mjs
+frontend/test-report*
+frontend/test-run.log
+frontend/test-results/
+scripts/_migration_report.*
+scripts/db_corruption_*.csv
 
 # ===== IDE / 工具配置 =====
 .trae/
