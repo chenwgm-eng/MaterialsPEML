@@ -1,0 +1,151 @@
+workflow:
+  id: ecml_v2
+  name: "ECML 人机协同研发闭环"
+  version: "2.0.0"
+
+  nodes:
+    - id: define_requirements
+      name: "需求与规格定义"
+      type: task
+      handler: RequirementAgent
+      next:
+        - retrieve_knowledge
+
+    - id: retrieve_knowledge
+      name: "知识检索与问题建模"
+      type: task
+      handler: KnowledgeRetrievalAgent
+      next:
+        - generate_candidates
+
+    - id: generate_candidates
+      name: "候选设计与方案生成"
+      type: task
+      handler: CandidateGenerator
+      next:
+        - industrial_feasibility_screen
+        - virtual_evaluation
+
+    - id: industrial_feasibility_screen
+      name: "工业先验约束与可开发性筛选"
+      type: task
+      handler: IndustrialFeasibilityScreening
+      next:
+        pass:
+          - decision_gate
+        pass_with_risks:
+          - decision_gate
+        review:
+          - human_industrial_review
+        block:
+          - terminate_candidate
+
+    - id: virtual_evaluation
+      name: "虚拟评估与不确定性量化"
+      type: async_task
+      handler: ScientificEvaluationService
+      next:
+        completed:
+          - decision_gate
+
+    - id: decision_gate
+      name: "多目标决策与人工门控"
+      type: decision
+      handler: MultiObjectiveDecisionEngine
+      next:
+        auto_approved:
+          - create_experiment
+        human_review:
+          - human_approval
+        rejected:
+          - optimize_candidate
+
+    - id: create_experiment
+      name: "创建实验任务"
+      type: task
+      handler: ExperimentOrderService
+      next:
+        - wait_experiment_data
+
+    - id: wait_experiment_data
+      name: "等待实验数据"
+      type: event_wait
+      event: wet_data.qc_passed
+      timeout_policy: notify_owner
+      next:
+        - learn_and_attribute
+
+    - id: learn_and_attribute
+      name: "学习归因与阶段决策"
+      type: task
+      handler: LearningAndAttributionService
+      next:
+        - stage_decision
+
+  states:
+    candidate:
+      - GENERATED
+      - SCREENING
+      - VIRTUAL_EVALUATED
+      - PENDING_REVIEW
+      - APPROVED_FOR_EXPERIMENT
+      - REJECTED
+      - EXPERIMENTING
+      - VALIDATED
+      - NEEDS_OPTIMIZATION
+      - TERMINATED
+
+    experiment:
+      - DRAFT
+      - PENDING_APPROVAL
+      - APPROVED
+      - SCHEDULED
+      - IN_EXECUTION
+      - WAITING_FOR_DATA
+      - DATA_INGESTED
+      - QC_PENDING
+      - QC_FAILED
+      - SCIENTIST_REVIEW
+      - CONFIRMED
+      - REJECTED
+      - LEARNING_ELIGIBLE
+      - CLOSED
+
+    data_quality:
+      - PENDING
+      - VALID
+      - VALID_WITH_WARNING
+      - INVALID
+      - REQUIRES_REVIEW
+      - REJECTED
+
+  timeout_policy:
+    experiment_scheduling_timeout_hours: 24
+    execution_timeout_hours: 168
+    data_return_timeout_hours: 48
+    qc_review_timeout_hours: 24
+    approval_timeout_hours: 48
+
+  events:
+    - wet_data.qc_passed
+    - wet_data.qc_failed
+    - experiment.approved
+    - experiment.rejected
+    - experiment.completed
+    - experiment.failed
+    - candidate.blocked
+    - candidate.approved
+
+# Task 15：化学规则引擎配置（候选生成阶段硬过滤）
+# 字段全部可选，默认空（不做硬过滤）；可被环境变量覆盖：
+#   CHEMISTRY_REQUIRED_ELEMENTS / CHEMISTRY_FORBIDDEN_ELEMENTS
+#   CHEMISTRY_MAX_ELEMENTS_COUNT / CHEMISTRY_REQUIRED_STRUCTURE_TYPES
+chemistry_rules:
+  # 必须包含的元素符号（如 ["Li"]——锂电池语境默认含 Li）
+  required_elements: []
+  # 必须排除的元素符号（如 ["Co"]——无钴正极需求）
+  forbidden_elements: []
+  # 最大元素种类数上限（如 5——避免高熵体系过度膨胀）
+  max_elements_count: null
+  # 结构类型白名单（如 ["Layered", "Spinel", "Olivine"]）
+  required_structure_types: []

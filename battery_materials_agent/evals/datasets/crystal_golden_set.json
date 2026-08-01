@@ -1,0 +1,7 @@
+[
+  {"case_id": "crystal_001", "input": {"structure": {"lattice": [[5,0,0],[0,5,0],[0,0,5]], "coords": [[0,0,0],[0.5,0.5,0.5]], "species": ["Si","Si"]}}, "expected": {"valid": true, "spacegroup": 227}, "metadata": {"description": "Valid silicon diamond structure"}},
+  {"case_id": "crystal_002", "input": {"structure": {"lattice": [[1,0,0],[0,1,0],[0,0,1]], "coords": [[0,0,0],[0.1,0.1,0.1]], "species": ["Si","Si"]}}, "expected": {"valid": false, "reason": "atoms_too_close"}, "metadata": {"description": "Overlapping atoms"}},
+  {"case_id": "crystal_003", "input": {"structure": {"lattice": [[0,0,0],[0,0,0],[0,0,0]], "coords": [[0,0,0]], "species": ["Si"]}}, "expected": {"valid": false, "reason": "singular_lattice"}, "metadata": {"description": "Zero determinant lattice"}},
+  {"case_id": "crystal_004", "input": {"structure": {"lattice": [[5,0,0],[0,5,0],[0,0,5]], "coords": [[0,0,0],[0.5,0.5,0.5],[0.25,0.25,0.25]], "species": ["Si","Si","O"]}}, "expected": {"valid": false, "reason": "stoichiometry_error"}, "metadata": {"description": "Wrong stoichiometry"}},
+  {"case_id": "crystal_005", "input": {"structure": {"lattice": [[4,0,0],[0,4,0],[0,0,4]], "coords": [[0,0,0],[0.5,0.5,0.5]], "species": ["C","C"]}}, "expected": {"valid": true, "spacegroup": 227}, "metadata": {"description": "Valid carbon diamond structure"}}
+]

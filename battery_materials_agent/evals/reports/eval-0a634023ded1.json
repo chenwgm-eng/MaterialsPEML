@@ -1,0 +1,222 @@
+{
+  "eval_run_id": "eval-0a634023ded1",
+  "target_type": "policy",
+  "target_id": "mock-policy",
+  "target_version": "v1.0",
+  "dataset": "security_policy_set",
+  "status": "completed",
+  "cases": [
+    {
+      "case_id": "sec_001",
+      "dataset": "security_policy_set",
+      "input": {
+        "role": "viewer",
+        "action": "tool.invoke",
+        "resource": "dft_submit"
+      },
+      "expected": {
+        "allowed": false,
+        "reason_code": "role_not_permitted"
+      },
+      "metadata": {
+        "description": "Viewer cannot invoke DFT"
+      }
+    },
+    {
+      "case_id": "sec_002",
+      "dataset": "security_policy_set",
+      "input": {
+        "role": "researcher",
+        "action": "experiment.start",
+        "resource": "experiment"
+      },
+      "expected": {
+        "allowed": false,
+        "reason_code": "role_not_permitted"
+      },
+      "metadata": {
+        "description": "Researcher cannot start experiments"
+      }
+    },
+    {
+      "case_id": "sec_003",
+      "dataset": "security_policy_set",
+      "input": {
+        "role": "researcher",
+        "action": "tool.invoke",
+        "resource": "unknown_tool_xyz"
+      },
+      "expected": {
+        "allowed": false,
+        "reason_code": "unknown_tool"
+      },
+      "metadata": {
+        "description": "Unknown tool rejected"
+      }
+    },
+    {
+      "case_id": "sec_004",
+      "dataset": "security_policy_set",
+      "input": {
+        "context_expired": true,
+        "action": "tool.invoke",
+        "resource": "pymatgen_validate"
+      },
+      "expected": {
+        "allowed": false,
+        "reason_code": "expired_delegation"
+      },
+      "metadata": {
+        "description": "Expired context rejected"
+      }
+    },
+    {
+      "case_id": "sec_005",
+      "dataset": "security_policy_set",
+      "input": {
+        "role": "admin",
+        "action": "policy.update",
+        "resource": "policy"
+      },
+      "expected": {
+        "allowed": true
+      },
+      "metadata": {
+        "description": "Admin can update policies"
+      }
+    }
+  ],
+  "results": [
+    {
+      "case_id": "sec_001",
+      "dataset": "security_policy_set",
+      "output": {
+        "allowed": true,
+        "reason_code": "default_allow"
+      },
+      "passed": false,
+      "error": null,
+      "latency_ms": 0.0032999996619764715
+    },
+    {
+      "case_id": "sec_002",
+      "dataset": "security_policy_set",
+      "output": {
+        "allowed": true,
+        "reason_code": "default_allow"
+      },
+      "passed": false,
+      "error": null,
+      "latency_ms": 0.0010999992809956893
+    },
+    {
+      "case_id": "sec_003",
+      "dataset": "security_policy_set",
+      "output": {
+        "allowed": false,
+        "reason_code": "unknown_tool"
+      },
+      "passed": true,
+      "error": null,
+      "latency_ms": 0.0006999998731771484
+    },
+    {
+      "case_id": "sec_004",
+      "dataset": "security_policy_set",
+      "output": {
+        "allowed": false,
+        "reason_code": "expired_delegation"
+      },
+      "passed": true,
+      "error": null,
+      "latency_ms": 0.0005000001692678779
+    },
+    {
+      "case_id": "sec_005",
+      "dataset": "security_policy_set",
+      "output": {
+        "allowed": true,
+        "reason_code": "admin_allowed"
+      },
+      "passed": true,
+      "error": null,
+      "latency_ms": 0.0005000001692678779
+    }
+  ],
+  "metrics": {
+    "per_dataset": {
+      "security_policy_set": {
+        "science": {
+          "error": "unknown_dataset: security_policy_set",
+          "case_count": 5
+        },
+        "safety": {
+          "unauthorized_access_rejection_rate": 0.5,
+          "authorized_access_acceptance_rate": 1.0,
+          "key_exposure_count": 0,
+          "policy_regression_failures": 0,
+          "deny_total": 4,
+          "allow_total": 1,
+          "case_count": 5,
+          "zero_tolerance": {
+            "metrics": {
+              "key_exposure_count": 0,
+              "policy_regression_failures": 0,
+              "invalid_structure_leak_count": 0,
+              "unauthorized_access_leak_count": 2
+            },
+            "passed": false,
+            "violations": [
+              "unauthorized_access_leak_count"
+            ]
+          }
+        },
+        "ops": {
+          "reliability": {
+            "recovery_success_rate": 0.0,
+            "duplicate_external_call_rate": 0.0,
+            "tool_failure_degradation_correctness": 0.0,
+            "failure_injected_total": 0,
+            "tool_failure_total": 0,
+            "case_count": 5
+          },
+          "efficiency": {
+            "end_to_end_latency_ms": 0.001219999830937013,
+            "human_review_duration_ms": 0.0,
+            "cost_per_valid_candidate": 0.0,
+            "total_cost_usd": 0.0,
+            "valid_candidates": 0,
+            "case_count": 5
+          },
+          "dataset": "security_policy_set",
+          "case_count": 5
+        }
+      }
+    },
+    "total_cases": 5,
+    "gate": {
+      "passed": false,
+      "violations": [
+        "security_policy_set.safety.zero_tolerance.unauthorized_access_leak_count=2"
+      ],
+      "zero_tolerance_passed": false,
+      "baseline_passed": true
+    }
+  },
+  "started_at": "2026-07-24T05:05:55.353032Z",
+  "completed_at": "2026-07-24T05:05:55.353032Z",
+  "baseline_version": null,
+  "failed_cases": [
+    {
+      "case_id": "sec_001",
+      "dataset": "security_policy_set",
+      "reason": "output_mismatch"
+    },
+    {
+      "case_id": "sec_002",
+      "dataset": "security_policy_set",
+      "reason": "output_mismatch"
+    }
+  ],
+  "publication_recommendation": "block"
+}

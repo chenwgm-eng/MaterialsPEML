@@ -1,0 +1,733 @@
+/* ============================================================
+   BatteryPEML Lab — Design System (v3.0 黑白橙配色)
+   视觉定位：严谨、可信、专业、现代
+   主色: #F97316 (橙，专业醒目)
+   基底: 黑白灰层级
+   ============================================================ */
+
+:root {
+  /* —— 主色调（黑白橙规范）—— */
+  --primary: #f97316;
+  --primary-hover: #ea670c;
+  --primary-active: #c2410c;
+  --primary-light: #fb923c;
+  --primary-bg: rgba(249, 115, 22, 0.08);
+  --primary-bg-hover: rgba(249, 115, 22, 0.14);
+  --primary-border: rgba(249, 115, 22, 0.3);
+
+  /* —— 辅色 —— */
+  --secondary: #475569;
+  --secondary-bg: rgba(71, 85, 105, 0.1);
+
+  /* —— 深色主题 (仪表盘/Dashboard，统一深黑色调) —— */
+  --dark-bg-deepest: #0a0a0a;
+  --dark-bg-deep: #0f0f0f;
+  --dark-bg: #141414;
+  --dark-bg-light: #1a1a1a;
+  --dark-bg-lighter: #222222;
+  --dark-bg-card: #181818;
+  --dark-bg-card-hover: #1f1f1f;
+  --dark-border: #2a2a2a;
+  --dark-border-light: #333333;
+
+  /* —— 浅色主题 (内容页) —— */
+  --light-bg: #f7f7f8;
+  --light-bg-card: #ffffff;
+  --light-bg-hover: #f3f4f6;
+  --light-bg-active: #fff7ed;
+  --light-border: #e5e7eb;
+  --light-border-light: #f3f4f6;
+
+  /* —— 语义化主题变量（light 默认；dark 由 [data-theme="dark"] 覆盖）——
+     现有 --dark-bg-* / --light-bg-* 保留不变，新增 --bg / --bg-card / --bg-hover
+     供需要随主题切换的组件引用 */
+  --bg: var(--light-bg);
+  --bg-card: var(--light-bg-card);
+  --bg-hover: var(--light-bg-hover);
+
+  /* —— 侧边栏 (深黑渐变，橙色高亮) —— */
+  --sidebar-bg-start: #0a0a0a;
+  --sidebar-bg-end: #141414;
+  --sidebar-bg: linear-gradient(180deg, #0a0a0a 0%, #0f0f0f 40%, #141414 100%);
+  --sidebar-hover: rgba(249, 115, 22, 0.12);
+  --sidebar-active: rgba(249, 115, 22, 0.22);
+  --sidebar-text: #94a3b8;
+  --sidebar-text-active: #ffffff;
+  --sidebar-border: rgba(148, 163, 184, 0.08);
+
+  /* —— 圆角令牌（补全 --radius）—— */
+  --radius: 6px;
+
+  /* —— 文字颜色（Section 8 规范）—— */
+  --text-primary: #1d2129;
+  --text-secondary: #4e5969;
+  --text-muted: #86909c;
+  --text-on-dark: #e2e8f4;
+  --text-on-dark-secondary: #a8b4cc;
+  --text-on-dark-muted: #6a7a9a;
+
+  /* —— 语义色 / 状态色（Section 8 规范）—— */
+  /* 全局状态色语义：绿=成功/通过 | 橙=警告/待处理 | 红=错误/失败/高风险 | 蓝=信息/处理中 | 灰=默认/取消/归档 */
+  --success: #00b42a;
+  --success-bg: rgba(0, 180, 42, 0.1);
+  --warning: #ff7d00;
+  --warning-bg: rgba(255, 125, 0, 0.1);
+  --error: #f53f3f;
+  --error-bg: rgba(245, 63, 63, 0.1);
+  --danger: var(--error);
+  --danger-bg: var(--error-bg);
+  --info: #165dff;
+  --info-bg: rgba(22, 93, 255, 0.1);
+
+  /* —— 边框（Section 8 规范）—— */
+  --border: #e5e6eb;
+  --border-light: #f2f3f5;
+
+  /* —— 阴影（Section 8 规范）—— */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-dark: 0 4px 16px rgba(0, 0, 0, 0.3);
+
+  /* —— 圆角（Section 8 规范）—— */
+  --radius-sm: 6px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* —— 过渡 —— */
+  --transition-fast: 0.15s ease;
+  --transition: 0.2s ease;
+
+  /* —— 间距 token（统一各页 padding/margin/gap）—— */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+  --space-4xl: 40px;
+
+  /* —— 字体大小 token —— */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;   /* 基准 */
+  --font-size-lg: 14px;
+  --font-size-xl: 16px;
+  --font-size-2xl: 18px;
+  --font-size-3xl: 20px;  /* page-title */
+  --font-size-4xl: 24px;  /* stat-value */
+  --font-size-5xl: 28px;
+  --font-size-hero: 40px;
+
+  /* —— 字体族 token —— */
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+
+  /* —— 布局宽度 token —— */
+  --content-width-sm: 900px;   /* Settings */
+  --content-width-md: 1200px;  /* 多数页面 */
+  --content-width-lg: 1440px;  /* Dashboard/Orchestration/AgentManager */
+
+  /* —— 响应式断点 token —— */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1200px;
+  --breakpoint-2xl: 1440px;
+
+  /* —— Agent 角色色 token（消除 ROLE_COLOR 重复 3 份）—— */
+  --role-pm: #f97316;
+  --role-discovery: #10b981;
+  --role-synthesis: #f59e0b;
+  --role-dft: #8b5cf6;
+  --role-experiment: #06b6d4;
+  --role-literature: #ec4899;
+  --role-quality: #ef4444;
+  --role-router: #6b7280;
+  --role-custom: #6b7280;
+
+  /* —— 旧变量兼容 (逐步淘汰) —— */
+  --hero-bg: var(--dark-bg-deepest);
+  --section-bg: var(--light-bg-card);
+  --bg-gray: var(--light-bg);
+
+  /* === 状态色规范 (8.5) === */
+  /* 业务状态 */
+  --status-draft-color: #8b5cf6;       /* 草稿/立项 - 紫色 */
+  --status-running-color: #3b82f6;     /* 运行中/进行中 - 蓝色 */
+  --status-success-color: #10b981;     /* 成功/完成/通过 - 绿色 */
+  --status-warning-color: #f59e0b;     /* 警告/待审/超期 - 橙色 */
+  --status-error-color: #ef4444;       /* 失败/错误/拒绝 - 红色 */
+  --status-info-color: #06b6d4;        /* 信息/提示 - 青色 */
+  --status-neutral-color: #64748b;     /* 中性/已归档 - 灰色 */
+
+  /* 按钮层级 */
+  --btn-primary-bg: var(--primary, #f97316);
+  --btn-secondary-bg: #f1f5f9;
+  --btn-danger-bg: #ef4444;
+}
+
+/* ============================================================
+   深色主题覆盖：[data-theme="dark"] 下切换语义变量
+   - 保留 --primary / --success / --warning / --error 等语义色不变
+   - 仅切换背景 / 文字 / 边框 / 阴影 等会随主题变化的变量
+   - 同时覆盖 design-tokens.css 中 --realsee-surface 以保证 top-header 等组件在深色下一致
+   - 使用 :root[data-theme="dark"] 提升特异性（0,2,0），确保覆盖 design-tokens.css
+     中后导入的 :root 规则（0,1,0）
+   ============================================================ */
+:root[data-theme="dark"] {
+  /* —— 背景层级（复用现有 --dark-bg-* 体系）—— */
+  --bg: var(--dark-bg);
+  --bg-card: var(--dark-bg-card);
+  --bg-hover: var(--dark-bg-card-hover);
+
+  /* —— 文字颜色：切换到深色底配套的浅色文字 —— */
+  --text-primary: var(--text-on-dark);
+  --text-secondary: var(--text-on-dark-secondary);
+  --text-muted: var(--text-on-dark-muted);
+
+  /* —— 边框 —— */
+  --border: var(--dark-border);
+  --border-light: var(--dark-border-light);
+
+  /* —— 阴影：深色下阴影更重以体现层次 —— */
+  --shadow-card: var(--shadow-dark);
+
+  /* —— Realsee 专属变量覆盖（top-header / 历史组件引用）—— */
+  --realsee-bg: var(--dark-bg-deepest);
+  --realsee-on-bg: var(--text-on-dark);
+  --realsee-surface: var(--dark-bg-card);
+  --realsee-surface-soft: var(--dark-bg-lighter);
+  --realsee-surface-muted: var(--dark-bg-light);
+  --realsee-outline: var(--dark-border);
+
+  /* —— 旧变量兼容 —— */
+  --section-bg: var(--dark-bg-card);
+  --bg-gray: var(--dark-bg);
+
+  /* —— 原生表单控件 / 滚动条配色 —— */
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-family-base);
+  color: var(--text-primary);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+}
+
+/* —— 滚动条 —— */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ============================================================
+   通用工具类
+   ============================================================ */
+
+/* 审查意见0726：所有页面统一自适应内容区宽度，不再设固定 max-width */
+.page-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.page-header {
+  margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* 审查意见0726：页面使用说明，标题下方明确告知"何时用、用完得到什么" */
+.page-usage-hint {
+  font-size: 12px;
+  color: var(--text-muted, #8a92a6);
+  margin: 4px 0 0 0;
+  padding: 4px 8px;
+  background: rgba(245, 158, 11, 0.06);
+  border-left: 2px solid #f59e0b;
+  border-radius: 2px;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+/* —— 卡片 —— */
+.stat-card {
+  background: var(--light-bg-card);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  border: 1px solid var(--border);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-1px);
+}
+
+.stat-value {
+  font-size: var(--font-size-4xl);  /* 24px，与 StatCard 组件一致 */
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* —— 深色卡片 (用于深色主题区域) —— */
+.dark-card {
+  background: var(--dark-bg-card);
+  border: 1px solid var(--dark-border);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.dark-card:hover {
+  background: var(--dark-bg-card-hover);
+  border-color: var(--dark-border-light);
+}
+
+/* —— 过渡动画 —— */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--transition-fast);
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* —— 焦点可访问性 —— */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* —— 减少动画偏好 —— */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* —— 文字截断 —— */
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-truncate-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* —— Ant Design 组件覆盖 —— */
+.ant-table {
+  font-size: 13px;
+}
+
+.ant-table-thead > tr > th {
+  background: var(--light-bg-active) !important;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid var(--border-light) !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: var(--light-bg-hover) !important;
+}
+
+.ant-card {
+  border-color: var(--border) !important;
+}
+
+.ant-btn-primary {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+.ant-btn-primary:hover {
+  background: var(--primary-hover) !important;
+  border-color: var(--primary-hover) !important;
+}
+
+/* ============================================================
+   全局禁用态按钮视觉规范（审查意见0726）
+   原问题：disabled 与 enabled 仅蓝色深浅差异，肉眼难辨。
+   修复策略：禁用态改为浅灰背景 + 灰色文字 + 明显降低对比度，
+   并禁用指针交互；与可点击状态形成强视觉对比。
+   ============================================================ */
+.ant-btn[disabled],
+.ant-btn[disabled]:hover,
+.ant-btn[disabled]:focus,
+.ant-btn[disabled]:active {
+  background: #f0f2f5 !important;
+  border-color: #d9d9d9 !important;
+  color: #bfbfbf !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+}
+
+.ant-btn-primary[disabled],
+.ant-btn-primary[disabled]:hover,
+.ant-btn-primary[disabled]:focus,
+.ant-btn-primary[disabled]:active {
+  background: #f0f2f5 !important;
+  border-color: #d9d9d9 !important;
+  color: #bfbfbf !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+}
+
+.ant-btn-dangerous[disabled],
+.ant-btn-dangerous[disabled]:hover {
+  background: #fff1f0 !important;
+  border-color: #ffa39e !important;
+  color: #ffa39e !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+}
+
+/* 链接型按钮禁用态：浅灰文字，不抢视觉焦点 */
+.ant-btn-link[disabled],
+.ant-btn-link[disabled]:hover {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: #bfbfbf !important;
+  cursor: not-allowed !important;
+}
+
+/* 图标按钮禁用态：图标颜色统一变灰 */
+.ant-btn[disabled] .anticon,
+.ant-btn[disabled] .anticon svg {
+  color: #bfbfbf !important;
+}
+
+/* P2-6：禁用按钮 tooltip 包裹层
+   原生 <button disabled> 不派发 mouseenter，导致 a-tooltip 在禁用态不触发；
+   用此包裹层（内联块、不改变布局）让 tooltip 正常响应 */
+.tt-btn-wrap {
+  display: inline-block;
+}
+
+.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--primary) !important;
+}
+
+.ant-tabs-ink-bar {
+  background: var(--primary) !important;
+}
+
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1) !important;
+}
+
+.ant-input:focus,
+.ant-input-focused {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1) !important;
+}
+
+.ant-select-focused .ant-select-selector {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.1) !important;
+}
+
+/* —— 数字等宽 —— */
+.tabular-nums,
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* === 状态通用样式类 (8.5) === */
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.status-tag--draft { color: var(--status-draft-color); background: rgba(139, 92, 246, 0.1); }
+.status-tag--running { color: var(--status-running-color); background: rgba(59, 130, 246, 0.1); }
+.status-tag--success { color: var(--status-success-color); background: rgba(16, 185, 129, 0.1); }
+.status-tag--warning { color: var(--status-warning-color); background: rgba(245, 158, 11, 0.1); }
+.status-tag--error { color: var(--status-error-color); background: rgba(239, 68, 68, 0.1); }
+.status-tag--info { color: var(--status-info-color); background: rgba(6, 182, 212, 0.1); }
+.status-tag--neutral { color: var(--status-neutral-color); background: rgba(100, 116, 139, 0.1); }
+
+/* ============================================================
+   公共布局类（消除各页重复样式）
+   ============================================================ */
+
+/* 页面外壳：自适应内容区宽度（审查意见0726：统一全宽布局）*/
+.page-shell {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.page-shell--lg,
+.page-shell--sm {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+}
+
+/* 应用卡片：统一浅色卡片样式（消除 7 处重复） */
+.app-card {
+  background: var(--light-bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.app-card :deep(.ant-card-body) {
+  padding: var(--space-lg) var(--space-xl);
+}
+
+/* 卡片标题行（消除 3 处重复） */
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.card-title-text {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 空状态/错误状态/加载状态统一容器 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4xl) var(--space-lg);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.empty-state-icon {
+  font-size: 56px;
+  opacity: 0.4;
+  margin-bottom: var(--space-md);
+}
+
+/* 全局 pulse 动画（消除 MainLayout/Tools 重复定义） */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ============================================================
+   Loading 视觉语言统一规范（P2-2）
+   - 按钮内 loading：操作反馈（a-button :loading，antd 内置）
+   - 区域级 loading：内容占位（.app-loading-area）
+   - 行内 loading 提示：耗时操作说明（.app-loading-hint）
+   ============================================================ */
+
+/* 统一 Spin 圆点颜色（antd 默认蓝 → 系统主色） */
+.ant-spin .ant-spin-dot-item {
+  background-color: var(--primary, #f97316);
+}
+
+/* 区域级 loading：居中 spin + 提示文本 */
+.app-loading-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm, 8px);
+  min-height: 96px;
+  padding: var(--space-lg, 16px) 0;
+  color: var(--text-muted, #94a3b8);
+  font-size: var(--font-size-sm, 12px);
+}
+
+/* 行内 loading 提示：按钮旁的耗时说明 */
+.app-loading-hint {
+  margin-left: var(--space-sm, 8px);
+  font-size: var(--font-size-sm, 12px);
+  color: var(--text-muted, #94a3b8);
+}
+
+/* === 操作台风格增强 === */
+.orchestration-workspace {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 16px;
+  align-items: start;
+}
+
+.orchestration-left,
+.orchestration-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+/* 统一发现/预测等页面表单布局：固定标签宽度，保证多列/整行字段左对齐 */
+.discovery-form :deep(.ant-form-item) {
+  margin-bottom: 12px;
+}
+
+.discovery-form :deep(.ant-form-item-label) {
+  width: 110px;
+  flex: 0 0 110px;
+  text-align: right;
+}
+
+.discovery-form :deep(.ant-form-item-control) {
+  flex: 1;
+  min-width: 0;
+}
+
+.discovery-form .form-actions {
+  margin-left: 118px;
+}
+
+.discovery-form .form-actions :deep(.ant-form-item-label) {
+  display: none;
+}
+
+.phase-card {
+  background: var(--light-bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.phase-card .ant-card-body {
+  padding: 16px 20px;
+}
+
+.task-input-large .ant-input {
+  font-size: 14px;
+  padding: 10px 12px;
+}
+
+.team-panel {
+  position: sticky;
+  top: 60px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+.execution-log-container {
+  background: var(--dark-bg-deepest);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--dark-bg-lighter);
+  overflow: hidden;
+}
+
+@media (max-width: 1200px) {
+  .orchestration-workspace {
+    grid-template-columns: 1fr;
+  }
+  .team-panel {
+    position: static;
+    max-height: none;
+  }
+}
+
+/* ============================================================
+   评测修复 P1-4：overlay 指针拦截兜底
+   已关闭/隐藏的弹层不响应指针事件，避免残留拦截层遮挡页面操作
+   ============================================================ */
+.ant-select-dropdown-hidden,
+.ant-dropdown-hidden,
+.ant-tooltip-hidden,
+.ant-popover-hidden,
+.ant-picker-dropdown-hidden,
+.ant-cascader-dropdown-hidden,
+.ant-mentions-dropdown-hidden,
+.ant-time-picker-panel-hidden {
+  pointer-events: none !important;
+}

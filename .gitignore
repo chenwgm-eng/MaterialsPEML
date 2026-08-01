@@ -1,0 +1,73 @@
+# ===== 敏感文件 / Secrets =====
+.env
+*.env
+!*.env.example
+askcos-deploy/.env
+askcos-tmp/deploy/.env
+
+# ===== 日志 / Logs =====
+*.log
+backend.log
+frontend.log
+_skill_probe_v2.log
+_skill_probe_v3.log
+_skill_test_output*.log
+
+# ===== Python 缓存 / Compiled =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+
+# ===== 前端依赖与构建产物 =====
+node_modules/
+frontend/dist/
+frontend/frontend.log
+
+# ===== 截图与测试产物 =====
+frontend/screenshots/
+frontend/ecml-test-screenshots/
+frontend/test-screenshots*/
+**/screenshots/
+**/*-screenshots/
+**/*screenshot*/
+
+# ===== 数据库 / Database =====
+*.db
+*.db-shm
+*.db-wal
+*.db.bak.*
+data/*.db
+data/*.db-*
+data/*.db.bak.*
+battery_materials_agent/data/*.db
+battery_materials_agent/data/*.db-*
+battery_materials_agent/data/*.db.bak.*
+
+# ===== 大型模型数据 =====
+askcos-data/
+
+# ===== 缓存 =====
+data/mp_cache/
+
+# ===== 临时/调试脚本与报告 =====
+_*.py
+_*.log
+_*.json
+_*.md
+_*.mjs
+1.13
+
+# ===== IDE / 工具配置 =====
+.trae/
+.mimocode/
+.claude/
+.vscode/
+.idea/
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini

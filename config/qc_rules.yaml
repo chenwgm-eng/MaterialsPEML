@@ -1,0 +1,88 @@
+# QC 规则配置（Task 12.3）
+# 每次修改请递增 version 号，QC 结果会记录所用版本。
+version: "1.0.0"
+
+rules:
+  # ───────────────────────── 完整性检查 ─────────────────────────
+  completeness:
+    required_fields:
+      - field: property_name
+        severity: critical
+        suggested_action: "请填写属性名称"
+      - field: value
+        severity: critical
+        suggested_action: "请填写数值"
+      - field: unit
+        severity: critical
+        suggested_action: "请填写单位"
+      - field: sample_id
+        severity: critical
+        suggested_action: "请关联样品 ID"
+
+  # ───────────────────────── 合理性检查 ─────────────────────────
+  plausibility:
+    # 各属性数值合理范围
+    ranges:
+      ionic_conductivity:
+        min: 1.0e-10
+        max: 1.0e2
+        unit: S/cm
+        severity: error
+        suggested_action: "检查测量单位或重新测量"
+      band_gap:
+        min: 0
+        max: 20
+        unit: eV
+        severity: error
+        suggested_action: "检查测量单位或重新测量"
+      formation_energy:
+        min: -10
+        max: 10
+        unit: eV/atom
+        severity: error
+        suggested_action: "检查测量单位或重新测量"
+      electrochemical_window:
+        min: 0
+        max: 10
+        unit: V
+        severity: error
+        suggested_action: "检查测量单位或重新测量"
+      operating_voltage:
+        min: 0
+        max: 10
+        unit: V
+        severity: error
+        suggested_action: "检查测量单位或重新测量"
+      density:
+        min: 0
+        max: 50
+        unit: g/cm3
+        severity: error
+        suggested_action: "检查测量单位或重新测量"
+      melting_point:
+        min: -273
+        max: 5000
+        unit: K
+        severity: error
+        suggested_action: "检查测量单位或重新测量"
+      boiling_point:
+        min: -273
+        max: 10000
+        unit: K
+        severity: error
+        suggested_action: "检查测量单位或重新测量"
+    # 通用兜底范围（未在 ranges 中定义的属性使用）
+    generic:
+      min: -1000000
+      max: 1000000
+      severity: warning
+      suggested_action: "确认数值是否在合理范围"
+
+  # ───────────────────────── 样品关联检查 ─────────────────────────
+  sample_match:
+    # 样品 ID 空值判定严重度
+    empty_severity: critical
+    empty_suggested_action: "请填写样品 ID"
+    # 样品 ID 不在有效列表中的判定严重度
+    missing_severity: error
+    missing_suggested_action: "请确认样品 ID 是否已登记"

@@ -1,0 +1,53 @@
+version: v1.0
+description: Built-in default policy (auto-seeded)
+rules:
+- rule_id: deny-thinker-dft
+  subject_pattern: agent:thinker
+  action: tool.invoke
+  resource_pattern: tool:dft_*
+  allowed: false
+  reason_code: role_not_permitted
+  obligations: []
+  limits: {}
+  priority: 100
+- rule_id: deny-thinker-experiment-start
+  subject_pattern: agent:thinker
+  action: experiment.start
+  resource_pattern: '*'
+  allowed: false
+  reason_code: role_not_permitted
+  obligations: []
+  limits: {}
+  priority: 100
+- rule_id: deny-thinker-experiment-submit
+  subject_pattern: agent:thinker
+  action: experiment.submit
+  resource_pattern: '*'
+  allowed: false
+  reason_code: role_not_permitted
+  obligations: []
+  limits: {}
+  priority: 100
+- rule_id: deny-committee-experiment-start
+  subject_pattern: agent:committee
+  action: experiment.start
+  resource_pattern: '*'
+  allowed: false
+  reason_code: role_not_permitted
+  obligations: []
+  limits: {}
+  priority: 100
+- rule_id: conditional-researcher-scp
+  subject_pattern: role:researcher
+  action: tool.invoke
+  resource_pattern: tool:scp_*
+  allowed: true
+  reason_code: conditional_approval
+  obligations:
+  - verify_project_permission
+  - require_scp_risk_acknowledgement
+  limits:
+    max_risk_level: C
+  priority: 50
+created_at: '2026-07-24T09:53:44.955304Z'
+is_active: true

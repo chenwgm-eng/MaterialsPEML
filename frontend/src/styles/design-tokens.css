@@ -1,0 +1,52 @@
+/* ============================================================
+   Realsee-as-your-Service Design Tokens
+   来源: doc/realsee-as-your-service-DESIGN.md
+   用途: 保留 Realsee 专属变量供历史组件引用
+   注意: 主色/背景/文字/圆角/阴影/字体等语义色变量由 global.css 统一定义（黑白橙配色）。
+         本文件仅保留 global.css 未覆盖的 Realsee 专属变量与扩展尺寸/字重 token，
+         避免与 global.css 同名变量冲突导致视觉不一致。
+   ============================================================ */
+
+:root {
+  /* —— Realsee 核心色板（仅供历史组件引用，不覆盖语义色）—— */
+  --realsee-bg: #f7f7f8;
+  --realsee-on-bg: #1d2129;
+  --realsee-surface: #ffffff;
+  --realsee-surface-soft: #fff7ed;
+  --realsee-surface-muted: #f0fdf4;
+  --realsee-outline: #e5e7eb;
+  --realsee-primary: #f97316;
+  --realsee-primary-strong: #ea670c;
+  --realsee-primary-soft: #fff7ed;
+  --realsee-success: #16a34a;
+  --realsee-success-soft: #f0fdf4;
+  --realsee-dark-surface: #0a0a0a;
+  --realsee-dark-panel: #141414;
+  --realsee-dark-on-surface: #ffffff;
+  --realsee-dark-on-surface-muted: #cbd5e1;
+
+  /* —— 扩展阴影（global.css 未定义）—— */
+  --shadow-support: 0 22px 52px rgba(249, 115, 22, 0.2);
+
+  /* —— 扩展圆角（global.css 未定义）—— */
+  --radius-2xl: 24px;
+  --radius-panel: 28px;
+  --radius-pill: 999px;
+
+  /* —— 扩展间距（global.css 仅定义到 --space-4xl）—— */
+  --space-5xl: 56px;
+  --space-6xl: 72px;
+  --page-gutter: 24px;
+  --section-gap: 44px;
+
+  /* —— 扩展字号（global.css 仅定义到 --font-size-5xl）—— */
+  --font-size-6xl: 48px;
+
+  /* —— 字重 token（global.css 未定义）—— */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  --font-weight-black: 900;
+}

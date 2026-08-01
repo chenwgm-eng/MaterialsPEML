@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>杭州且言 · MaterialsLab — 种子轮路演</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@200;300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fafaf8;--paper-rgb:250,250,248;
+  --ink:#0a0a0a;--ink-rgb:10,10,10;
+  --grey-0:#f7f7f5;--grey-1:#efefed;--grey-2:#d4d4d2;--grey-3:#737373;
+  --accent:#002FA7;--accent-rgb:0,47,167;--accent-on:#ffffff;
+  --accent-bright:#5B7BFF;
+  --danger:#C62828;
+  --text-primary:#0a0a0a;--text-secondary:#404040;--text-helper:#737373;--text-placeholder:#a3a3a3;--text-on-color:#ffffff;
+  --border-subtle:#e0e0e0;--border-strong:#a3a3a3;
+  --sans:"Inter","Helvetica Neue","Helvetica","Arial","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
+  --sans-zh:"PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans SC","Microsoft YaHei UI","Microsoft YaHei","微软雅黑",sans-serif;
+  --mono:"JetBrains Mono","IBM Plex Mono","SF Mono","Cascadia Code","Consolas","Courier New",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--paper);color:var(--ink);font-family:var(--sans),var(--sans-zh);font-feature-settings:"ss01","cv11";-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{background:var(--paper);overflow:hidden}
+
+/* Deck container - horizontal scroll */
+#deck{position:fixed;inset:0;width:1200vw;height:100vh;display:flex;flex-wrap:nowrap;transition:transform .6s cubic-bezier(.77,0,.175,1);z-index:10;will-change:transform}
+.slide{width:100vw;height:100vh;flex:0 0 100vw;display:flex;flex-direction:column;padding:4vh 5vw 5.5vh 5vw;overflow-y:auto;overflow-x:hidden;background:var(--paper);color:var(--ink)}
+.slide.dark{background:var(--ink);color:var(--paper)}
+
+/* Chrome (header) */
+.chrome{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.65;margin-bottom:2.5vh;flex-shrink:0;border-bottom:1px solid var(--border-subtle);padding-bottom:1.8vh}
+.chrome .l,.chrome .r{display:flex;gap:1.2em;align-items:center}
+
+/* Footer */
+.foot{margin-top:auto;display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.55;padding-top:1.4vh;border-top:1px solid currentColor;border-color:rgba(127,127,127,.25);flex-shrink:0}
+
+/* Main content area */
+.content{flex:1;display:flex;flex-direction:column;justify-content:flex-start;min-height:0;gap:0}
+
+/* Slide body: fills remaining space and centers content vertically */
+.slide-body{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0;gap:1.8vh}
+
+/* Section header */
+.head{display:flex;flex-direction:column;gap:.6vh;flex-shrink:0;margin-bottom:1.4vh}
+.t-cat{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;opacity:.65}
+.t-cat.accent{color:var(--accent);font-weight:600;opacity:1}
+
+/* Typography */
+.h-xl-zh{font-family:var(--sans),var(--sans-zh);font-weight:300;font-size:min(3.4vw,6.5vh);line-height:1.08;letter-spacing:-.03em}
+.h-lg{font-family:var(--sans),var(--sans-zh);font-weight:300;font-size:2.6vw;line-height:1.12;letter-spacing:-.02em}
+.h-md{font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:1.8vw;line-height:1.2;letter-spacing:-.01em}
+.h-sm{font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:1.15vw;line-height:1.3;letter-spacing:0}
+.lead{font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.15vw);line-height:1.5;letter-spacing:0;opacity:.82}
+.body{font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(15px,.95vw);line-height:1.55;opacity:.76}
+.body-sm{font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(13px,.85vw);line-height:1.5;opacity:.68}
+.t-meta{font-family:var(--mono);font-size:max(11px,.7vw);letter-spacing:.16em;text-transform:uppercase;opacity:.55}
+.highlight{color:var(--accent);font-weight:700}
+
+/* Cards and grids */
+.card-fill{background:var(--grey-1);padding:1.8vh 1.4vw;border-radius:6px}
+.card-accent{background:var(--accent);color:var(--accent-on);padding:1.8vh 1.4vw;border-radius:6px}
+.card-accent .t-meta{color:rgba(255,255,255,.7)}
+.card-accent .body,.card-accent .body-sm{color:rgba(255,255,255,.9)}
+.card-outline{border:1px solid var(--border-subtle);padding:1.8vh 1.4vw;border-radius:6px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.6vh 1.8vw}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.6vh 1.4vw}
+.grid-2-6-4{display:grid;grid-template-columns:6fr 4fr;gap:2vh 2.4vw;align-items:start}
+.grid-2-7-5{display:grid;grid-template-columns:7fr 5fr;gap:2vh 2.4vw;align-items:start}
+.grid-2-8-4{display:grid;grid-template-columns:8fr 4fr;gap:2vh 2.4vw;align-items:start}
+
+/* KPI specific */
+.kpi-row-4{display:grid;grid-template-columns:repeat(4,1fr);gap:2vw}
+.kpi-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:2vw}
+.kpi-cell{display:flex;flex-direction:column;gap:.4vh;padding-top:1.2vh;border-top:2px solid rgba(127,127,127,.3)}
+.kpi-cell .kpi-label{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.55}
+.kpi-cell .kpi-value{font-family:var(--sans);font-weight:800;font-size:3.4vw;line-height:.9;letter-spacing:-.03em;font-feature-settings:"tnum"}
+.kpi-cell .kpi-note{font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:12px;opacity:.65;margin-top:.2vh}
+.num-mega{font-family:var(--sans);font-weight:800;font-size:6vw;line-height:.85;letter-spacing:-.04em;font-feature-settings:"tnum"}
+.num-mega.accent{color:var(--accent)}
+.num-big{font-family:var(--sans);font-weight:800;font-size:4.2vw;line-height:.9;letter-spacing:-.03em;font-feature-settings:"tnum"}
+
+/* Timeline */
+.tl{position:relative;padding-left:2.4vw;border-left:2px solid var(--accent)}
+.tl-node{position:relative;padding-bottom:1.8vh}
+.tl-node:last-child{padding-bottom:0}
+.tl-node::before{content:"";position:absolute;left:-2.55vw;top:.4vw;width:9px;height:9px;border-radius:50%;background:var(--accent)}
+.tl-date{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:.5vh}
+.tl-title{font-family:var(--sans),var(--sans-zh);font-weight:700;font-size:1.2vw;line-height:1.25}
+.tl-desc{font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(13px,.85vw);line-height:1.5;opacity:.68;margin-top:.2vh}
+
+/* Statement / closing */
+.h-statement{font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:3.6vw;line-height:1.1;letter-spacing:-.02em}
+.closing-ink-bar{background:var(--accent);padding:2.2vh 3.5vw;margin-top:auto;border-radius:6px}
+.closing-ink-bar .ink-bar-text{font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:1.2vw;line-height:1.4;color:var(--accent-on)}
+
+/* Name and role */
+.name-mega{font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:5vw;line-height:.95;letter-spacing:-.03em}
+.role-tag{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:3px 7px;border:1px solid currentColor;opacity:.65}
+
+/* Comparison table */
+.cmp-table{width:100%;border-collapse:collapse;font-size:max(13px,.8vw)}
+.cmp-table th{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.55;text-align:left;padding:.8vh .7vw;border-bottom:2px solid var(--border-strong)}
+.cmp-table td{padding:1vh .7vw;border-bottom:1px solid var(--border-subtle);line-height:1.45}
+.cmp-table tr:last-child td{border-bottom:none}
+.cmp-table .win{color:var(--accent);font-weight:700}
+.cmp-table .us{background:rgba(0,47,167,.06)}
+
+/* Tag */
+.tag{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:3px;opacity:.9}
+.tag-green{background:#E8F5E9;color:#2E7D32}
+.tag-blue{background:#E3F2FD;color:var(--accent)}
+.tag-red{background:#FFEBEE;color:var(--danger)}
+.tag-outline{background:transparent;border:1px solid currentColor;color:inherit;opacity:.7}
+
+/* Loop diagram */
+.loop-container{position:relative}
+.loop-svg-wrap{position:relative;width:100%;max-width:46vh;margin:0 auto}
+.loop-labels{display:grid;grid-template-columns:repeat(4,1fr);gap:1vw;margin-top:1.4vh}
+.loop-labels .loop-step-label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;opacity:.55;text-align:center}
+.loop-labels .loop-step-label.active{color:var(--accent);opacity:1;font-weight:600}
+
+/* Contact */
+.contact-row{display:flex;align-items:center;gap:1vw;font-size:1vw}
+.contact-ico{width:2vh;height:2vh;color:var(--accent);flex-shrink:0}
+
+/* Navigation */
+nav#nav{position:fixed;bottom:3vh;left:50%;transform:translateX(-50%);z-index:100;display:flex;gap:8px}
+nav#nav button{width:40px;height:40px;border:none;background:var(--ink);color:var(--paper);font-size:18px;cursor:pointer;border-radius:4px;opacity:.7;transition:opacity .2s}
+nav#nav button:hover{opacity:1}
+
+/* Slide indicator */
+.slide-indicator{position:fixed;top:2.5vh;right:3vw;z-index:100;font-family:var(--mono);font-size:12px;letter-spacing:.14em;opacity:.45}
+
+/* ===== COVER PAGE ===== */
+.cover-slide{position:relative}
+.cover-main{flex:1;display:grid;grid-template-columns:7fr 5fr;gap:3vw;align-items:center;min-height:0;padding:1vh 0}
+.cover-left{display:flex;flex-direction:column;gap:2.4vh}
+.cover-brand{font-family:var(--mono);font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.cover-title{font-family:var(--sans),var(--sans-zh);font-weight:300;font-size:min(4.2vw,7.5vh);line-height:1.08;letter-spacing:-.03em}
+.cover-title .line{display:block}
+.cover-title .line em{font-style:normal;font-weight:600;color:var(--accent)}
+.cover-subtitle{font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(17px,1.2vw);line-height:1.55;opacity:.72;max-width:48ch}
+.cover-right{display:flex;justify-content:flex-end;align-items:center;position:relative;height:100%}
+.cover-vert{font-family:var(--sans);font-weight:900;font-size:min(8vw,14vh);letter-spacing:-.04em;color:var(--accent);opacity:.08;writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;line-height:1}
+.cover-vert small{font-weight:300;font-size:.4em;opacity:.6;margin-top:.3em;display:block}
+.cover-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2vw;margin-top:auto}
+.cover-card{background:var(--grey-1);border-radius:6px;padding:2.2vh 1.4vw;display:flex;flex-direction:column;gap:.6vh;border-top:3px solid var(--accent)}
+.cover-card .cover-card-num{font-family:var(--sans);font-weight:800;font-size:2.4vw;line-height:1;font-feature-settings:"tnum";color:var(--accent)}
+.cover-card .cover-card-label{font-family:var(--sans-zh);font-weight:500;font-size:max(14px,.95vw);line-height:1.3}
+.cover-card .cover-card-desc{font-family:var(--sans-zh);font-size:max(12px,.75vw);opacity:.6;line-height:1.4}
+
+/* ===== DIVIDERS & DECOR ===== */
+.accent-bar{width:48px;height:3px;background:var(--accent);margin:1vh 0}
+.accent-bar.center{margin-left:auto;margin-right:auto}
+.section-lead{max-width:52ch;opacity:.72;margin-top:.6vh}
+
+/* Dark theme overrides */
+.slide.dark .chrome{opacity:.5;border-bottom-color:rgba(255,255,255,.15)}
+.slide.dark .foot{opacity:.4;border-color:rgba(255,255,255,.15)}
+.slide.dark .card-fill{background:rgba(255,255,255,.08)}
+.slide.dark .card-outline{border-color:rgba(255,255,255,.15)}
+.slide.dark .kpi-cell{border-top-color:rgba(255,255,255,.2)}
+.slide.dark .tl{border-left-color:var(--accent-bright)}
+.slide.dark .tl-node::before{background:var(--accent-bright)}
+.slide.dark .tl-date{color:var(--accent-bright)}
+.slide.dark .cmp-table th{border-bottom-color:rgba(255,255,255,.2)}
+.slide.dark .cmp-table td{border-bottom-color:rgba(255,255,255,.1)}
+.slide.dark .cmp-table .us{background:rgba(91,123,255,.12)}
+.slide.dark .tag-green{background:rgba(46,125,50,.25);color:#81C784}
+.slide.dark .tag-blue{background:rgba(91,123,255,.2);color:var(--accent-bright)}
+.slide.dark .tag-red{background:rgba(198,40,40,.2);color:#EF9A9A}
+.slide.dark .cover-card{background:rgba(255,255,255,.08);border-top-color:var(--accent-bright)}
+.slide.dark .cover-card-num{color:var(--accent-bright)}
+.slide.dark .cover-vert{color:var(--accent-bright)}
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <button id="prev" aria-label="上一页">←</button>
+  <button id="next" aria-label="下一页">→</button>
+</nav>
+<div class="slide-indicator" id="indicator">01 / 12</div>
+
+<main id="deck">
+
+  <!-- ==================== S01 · Cover ==================== -->
+  <section class="slide cover-slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">MaterialsLab · 种子轮路演 · 2026</div>
+      <div class="r">01 / 12</div>
+    </div>
+    <div class="content" style="justify-content:center">
+      <div class="cover-main">
+        <div class="cover-left">
+          <div class="cover-brand">工业软件老兵 × 材料研发 AI</div>
+          <h1 class="cover-title">
+            <span class="line">不是 AI 科学家做工业</span>
+            <span class="line"><em>而是工业人做 AI</em></span>
+          </h1>
+          <div class="accent-bar"></div>
+          <p class="cover-subtitle">
+            聚焦新材料及化工行业的 AI 加速研发平台<br>
+            以"工业化可行性"为锚点，打通从候选发现到量产验证的完整闭环
+          </p>
+        </div>
+        <div class="cover-right">
+          <div class="cover-vert">AI4S<small>MATERIALS</small></div>
+        </div>
+      </div>
+      <div class="cover-cards">
+        <div class="cover-card">
+          <div class="cover-card-num">3 个</div>
+          <div class="cover-card-label">窗口正在关闭</div>
+          <div class="cover-card-desc">赛道 / 技术 / 客户</div>
+        </div>
+        <div class="cover-card">
+          <div class="cover-card-num">130+</div>
+          <div class="cover-card-label">产品基线就绪</div>
+          <div class="cover-card-desc">真实材料学数据验证</div>
+        </div>
+        <div class="cover-card">
+          <div class="cover-card-num">4+</div>
+          <div class="cover-card-label">头部客户等 POC</div>
+          <div class="cover-card-desc">电池 / 高分子 / 新能源</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言管理咨询有限公司</div>
+      <div>Seed Round · 2026</div>
+    </div>
+  </section>
+
+  <!-- ==================== S02 · Pain Points — 三刀扎心 ==================== -->
+  <section class="slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">行业痛点 · Pain Points</div>
+      <div class="r">02 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat accent">AI4S 大模型遍地开花，但材料企业用不起来</div>
+        <h2 class="h-xl-zh">AI 模型越来越强，材料研发反而越来越远</h2>
+        <p class="section-lead">核心矛盾：AI 能解决"预测一个性质"，但解决不了"能不能量产"。</p>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <div class="card-fill">
+            <div class="t-meta accent" style="margin-bottom:.6vh">痛点 01</div>
+            <div class="h-md" style="font-weight:700;margin-bottom:.8vh">AI 产出 ≠ 工业可用</div>
+            <div class="body-sm">AI 推荐的候选材料，<span class="highlight">大量</span>因原料不可得、成本超标、EHS 不合规或供应链不成熟而被过滤。模型不管"能不能造出来"。</div>
+            <div class="body-sm" style="margin-top:.6vh;opacity:.55">行业研究普遍显示：从实验室候选到工业化量产通常需要 10-20 年。</div>
+          </div>
+          <div class="card-fill">
+            <div class="t-meta accent" style="margin-bottom:.6vh">痛点 02</div>
+            <div class="h-md" style="font-weight:700;margin-bottom:.8vh">数据孤岛 ≠ 数据资产</div>
+            <div class="body-sm">多数材料企业的实验数据散落在 LIMS/ELN/Excel/纸质记录中，文献锁在 PDF 里，工艺参数在老师傅脑子里 — 缺乏统一的结构化研发数据底座。</div>
+          </div>
+          <div class="card-fill">
+            <div class="t-meta accent" style="margin-bottom:.6vh">痛点 03</div>
+            <div class="h-md" style="font-weight:700;margin-bottom:.8vh">模型很强，决策很弱</div>
+            <div class="body-sm">材料研发需要多目标权衡、多轮迭代、跨部门协同。现有 AI 工具只解决"点"的问题，<span class="highlight">缺乏"链"的闭环</span>。</div>
+          </div>
+        </div>
+        <div class="card-accent" style="text-align:center;padding:1.4vh 2vw">
+          <div class="body" style="font-weight:600;opacity:1">材料企业真正需要的不是更强的 AI 模型，而是能把 AI、工艺、成本、供应链串起来的工业化决策系统</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Pain Points · 02 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S03 · Why Now — 三个窗口正在关闭 ==================== -->
+  <section class="slide dark" data-theme="dark">
+    <div class="chrome">
+      <div class="l">为什么是现在 · Why Now</div>
+      <div class="r">03 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat" style="color:var(--accent-bright)">万事俱备，只欠你这一票</div>
+        <h2 class="h-xl-zh" style="color:var(--paper)">三个窗口正在关闭</h2>
+        <p class="section-lead" style="color:rgba(255,255,255,.65)">深度原理证明了赛道，开源模型成熟了，客户在等 POC — 这不是趋势判断，是正在发生的事实。</p>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3" style="gap:2vh 1.8vw">
+          <div class="card-fill" style="background:rgba(255,255,255,.08);border-top:3px solid var(--accent-bright)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8vh">
+              <div class="t-meta" style="color:var(--accent-bright);font-weight:600">窗口 01 · 赛道</div>
+              <span class="tag tag-red">80% 关闭</span>
+            </div>
+            <div class="h-md" style="font-weight:700;margin-bottom:.8vh">AI4S 材料赛道已被验证</div>
+            <div class="body-sm" style="opacity:.85">头部玩家累计融资近 <span class="highlight" style="color:var(--accent-bright)">10 亿</span>人民币。赛道窗口正在快速关闭，留给新玩家的席位只剩 <span class="highlight" style="color:var(--accent-bright)">1-2 家</span>。</div>
+            <div style="margin-top:1.2vh;height:6px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden">
+              <div style="width:80%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-bright));border-radius:3px"></div>
+            </div>
+            <div class="t-meta" style="margin-top:.6vh;color:rgba(255,255,255,.5)">关闭倒计时：12-18 个月</div>
+          </div>
+          <div class="card-fill" style="background:rgba(255,255,255,.08);border-top:3px solid var(--accent-bright)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8vh">
+              <div class="t-meta" style="color:var(--accent-bright);font-weight:600">窗口 02 · 技术</div>
+              <span class="tag tag-blue">60% 关闭</span>
+            </div>
+            <div class="h-md" style="font-weight:700;margin-bottom:.8vh">开源模型刚达工业门槛</div>
+            <div class="body-sm" style="opacity:.85">MatterGen、GNoME、DeePMD-kit、MACE 等顶级模型开源可用。谁先完成"编排 + 工业化判断"，谁就占住生态位。</div>
+            <div style="margin-top:1.2vh;height:6px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden">
+              <div style="width:60%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-bright));border-radius:3px"></div>
+            </div>
+            <div class="t-meta" style="margin-top:.6vh;color:rgba(255,255,255,.5)">关闭倒计时：6-12 个月</div>
+          </div>
+          <div class="card-fill" style="background:rgba(255,255,255,.08);border-top:3px solid var(--accent-bright)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8vh">
+              <div class="t-meta" style="color:var(--accent-bright);font-weight:600">窗口 03 · 客户</div>
+              <span class="tag tag-green">40% 关闭</span>
+            </div>
+            <div class="h-md" style="font-weight:700;margin-bottom:.8vh">头部企业已在等 POC</div>
+            <div class="body-sm" style="opacity:.85">万向一二三、华峰新材料、当升科技、阳光电源等 <span class="highlight" style="color:var(--accent-bright)">4+</span> 头部企业已表达明确 POC 意向。</div>
+            <div style="margin-top:1.2vh;height:6px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden">
+              <div style="width:40%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-bright));border-radius:3px"></div>
+            </div>
+            <div class="t-meta" style="margin-top:.6vh;color:rgba(255,255,255,.5)">关闭倒计时：3-6 个月</div>
+          </div>
+        </div>
+        <div class="closing-ink-bar" style="margin-top:2.5vh">
+          <div class="ink-bar-text" style="text-align:center">
+            三个窗口同时存在是偶然，同时向我们倾斜是机会 — 错过这 6 个月，就不是同一个估值讲同一个故事了
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Why Now · 03 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S04 · Solution ==================== -->
+  <section class="slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">解决方案 · Solution</div>
+      <div class="r">04 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat accent">不是又一个 AI 模型，而是“AI + 工业化判断”的决策系统</div>
+        <h2 class="h-xl-zh">MaterialsLab：四层架构，从候选到量产全链路闭环</h2>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2-8-4">
+          <div style="display:flex;flex-direction:column;gap:1.4vh">
+            <div class="card-fill" style="padding:1.6vh 1.4vw">
+              <div style="display:flex;align-items:flex-start;gap:1vw">
+                <div class="t-meta accent" style="font-size:1.4vw;font-weight:800;min-width:2.2vw">01</div>
+                <div>
+                  <div class="h-sm" style="font-weight:700">候选发现与生成</div>
+                  <div class="body-sm">InternLM / SCP 工具链 + 开源模型生成晶体/聚合物候选，对接 Materials Project / GNoME</div>
+                </div>
+              </div>
+            </div>
+            <div class="card-fill" style="padding:1.6vh 1.4vw">
+              <div style="display:flex;align-items:flex-start;gap:1vw">
+                <div class="t-meta accent" style="font-size:1.4vw;font-weight:800;min-width:2.2vw">02</div>
+                <div>
+                  <div class="h-sm" style="font-weight:700">性质预测与多目标排序</div>
+                  <div class="body-sm">DFT / ML 混合精度预测，ECML 引擎驱动多轮迭代优化</div>
+                </div>
+              </div>
+            </div>
+            <div class="card-fill" style="padding:1.6vh 1.4vw;border-left:4px solid var(--accent)">
+              <div style="display:flex;align-items:flex-start;gap:1vw">
+                <div class="t-meta accent" style="font-size:1.4vw;font-weight:800;min-width:2.2vw">03</div>
+                <div>
+                  <div class="h-sm" style="font-weight:700"><span class="highlight">工业化可行性验证</span></div>
+                  <div class="body-sm">原料可得性、BOM 成本、EHS 合规、供应链成熟度 — 进实验室前就过滤不可落地的候选</div>
+                </div>
+              </div>
+            </div>
+            <div class="card-fill" style="padding:1.6vh 1.4vw">
+              <div style="display:flex;align-items:flex-start;gap:1vw">
+                <div class="t-meta accent" style="font-size:1.4vw;font-weight:800;min-width:2.2vw">04</div>
+                <div>
+                  <div class="h-sm" style="font-weight:700">实验设计 → 执行 → 反馈闭环</div>
+                  <div class="body-sm">12 个专业 Agent 协同，实验数据自动回流，持续校准预测精度</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="loop-container" style="display:flex;flex-direction:column;justify-content:center;height:100%">
+            <div class="loop-svg-wrap">
+              <svg viewBox="0 0 400 200" style="width:100%;height:100%">
+                <circle cx="200" cy="100" r="80" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5,5" opacity=".4"/>
+                <circle cx="200" cy="100" r="80" fill="none" stroke="var(--accent)" stroke-width="3" stroke-dasharray="200 400" stroke-linecap="round">
+                  <animate attributeName="stroke-dashoffset" from="600" to="0" dur="3s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="200" cy="30" r="8" fill="var(--accent)"/>
+                <circle cx="280" cy="100" r="8" fill="var(--accent)"/>
+                <circle cx="200" cy="170" r="8" fill="var(--accent)"/>
+                <circle cx="120" cy="100" r="8" fill="var(--accent)"/>
+                <text x="200" y="18" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--accent)" font-weight="600">生成</text>
+                <text x="292" y="105" text-anchor="start" font-family="var(--mono)" font-size="11" fill="var(--accent)" font-weight="600">筛选</text>
+                <text x="200" y="192" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--accent)" font-weight="600">验证</text>
+                <text x="108" y="105" text-anchor="end" font-family="var(--mono)" font-size="11" fill="var(--accent)" font-weight="600">实验</text>
+              </svg>
+            </div>
+            <div style="text-align:center;margin-top:1vh">
+              <div class="body-sm" style="opacity:.55">AI 驱动的研发闭环：每一轮迭代都有数据回流</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Solution · 04 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S05 · 赛道证据 ==================== -->
+  <section class="slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">赛道验证 · Market Validation</div>
+      <div class="r">05 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat accent">AI4S 材料赛道已被“真金白银”验证</div>
+        <h2 class="h-xl-zh">头部玩家已跑出，但产业化的最后一公里仍是空白</h2>
+        <p class="section-lead">资本已经证明了赛道价值。我们不做下一个模型，而是做“模型之后”的工业化决策层。</p>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2-6-4" style="align-items:stretch">
+          <div style="display:flex;flex-direction:column;gap:1.2vh">
+            <div class="card-fill" style="border-left:4px solid var(--accent);padding:1.6vh 1.4vw">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4vh">
+                <div class="h-sm" style="font-weight:700">头部玩家 A</div>
+                <span class="tag tag-blue">AI 分子模拟</span>
+              </div>
+              <div class="body-sm">累计融资 <span class="highlight">超 8 亿</span>人民币，专注分子动力学与药物/材料模拟</div>
+            </div>
+            <div class="card-fill" style="border-left:4px solid var(--accent);padding:1.6vh 1.4vw">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4vh">
+                <div class="h-sm" style="font-weight:700">头部玩家 B</div>
+                <span class="tag tag-blue">AI + 化学</span>
+              </div>
+              <div class="body-sm">累计融资 <span class="highlight">近 10 亿</span>人民币，聚焦化学反应生成与催化剂设计</div>
+            </div>
+            <div class="card-fill" style="border-left:4px solid var(--accent);padding:1.6vh 1.4vw">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4vh">
+                <div class="h-sm" style="font-weight:700">头部玩家 C</div>
+                <span class="tag tag-blue">AI 材料生成</span>
+              </div>
+              <div class="body-sm">融资 <span class="highlight">4.5 亿美元</span>，扩散模型逆向生成新材料，投后估值 26 亿美元</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1.4vh">
+            <div class="card-accent" style="text-align:center;padding:2.2vh 1.4vw">
+              <div class="t-meta" style="font-size:10px">赛道共识</div>
+              <div class="h-md" style="font-weight:700;margin:.8vh 0">AI4S 材料 = 已验证的大赛道</div>
+              <div class="body-sm" style="opacity:.9">头部玩家累计融资数十亿美元，证明资本市场认可“AI 加速材料研发”的方向。</div>
+            </div>
+            <div class="card-fill" style="padding:1.6vh 1.4vw">
+              <div class="t-meta accent" style="margin-bottom:.6vh">我们的生态位</div>
+              <div class="body-sm" style="margin-bottom:.6vh"><span class="highlight">头部玩家做“发现”</span>：生成候选、预测性质、发表论文</div>
+              <div class="body-sm"><span class="highlight">我们做“决策”</span>：把候选放进工业化约束里，回答“能不能造、值不值得造、怎么造”</div>
+            </div>
+            <div class="card-fill" style="padding:1.6vh 1.4vw">
+              <div class="t-meta accent" style="margin-bottom:.4vh">价值链关系</div>
+              <div class="body-sm">不是竞争，是互补 — 未来它们可能是我们的模型供应商，我们帮它们把技术落地成客户订单。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Market Validation · 05 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S06 · 开源生态 ==================== -->
+  <section class="slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">开源生态 · Open Source</div>
+      <div class="r">06 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat accent">不造轮子，站在巨人的肩膀上</div>
+        <h2 class="h-xl-zh">全球顶级开源 AI4S 模型，都是我们的"武器库"</h2>
+        <p class="section-lead">我们不需要从头训练大模型 — 我们做的是把世界顶级模型编排起来，加上工业化判断层这个"最后一公里"。</p>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2-6-4">
+          <div style="display:flex;flex-direction:column;gap:1.2vh">
+            <div style="font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.5;margin-bottom:.2vh">核心开源模型（已集成或规划集成）</div>
+            <div class="card-fill" style="padding:1.4vh 1.2vw">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3vh">
+                <div class="h-sm" style="font-weight:700">DeePMD-kit</div>
+                <span class="tag tag-blue">深势科技 · LGPL</span>
+              </div>
+              <div class="body-sm">深度学习分子动力学势函数，ACM 戈登贝尔奖。用于分子与晶体体系的离子输运、扩散与反应模拟。</div>
+            </div>
+            <div class="card-fill" style="padding:1.4vh 1.2vw">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3vh">
+                <div class="h-sm" style="font-weight:700">MACE / MACE-MP-0</div>
+                <span class="tag tag-blue">ACEsuit · MIT</span>
+              </div>
+              <div class="body-sm">通用预训练材料势函数大模型，覆盖 89 种元素。Materials Studio 2025 已集成。</div>
+            </div>
+            <div class="card-fill" style="padding:1.4vh 1.2vw">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3vh">
+                <div class="h-sm" style="font-weight:700">M3GNet + CHGNet</div>
+                <span class="tag tag-blue">UCSD · BSD</span>
+              </div>
+              <div class="body-sm">图神经网络通用势函数 + 电荷感知势函数 — 晶体材料与电池/催化/高分子体系的通用势函数组合。</div>
+            </div>
+            <div class="card-fill" style="padding:1.4vh 1.2vw">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3vh">
+                <div class="h-sm" style="font-weight:700">MatterGen + GNoME</div>
+                <span class="tag tag-blue">微软 / Google</span>
+              </div>
+              <div class="body-sm">扩散模型逆向生成 + 220 万晶体结构数据库。候选空间探索的"核武器"。</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1.4vh">
+            <div class="card-accent" style="text-align:center;padding:2.2vh 1.4vw">
+              <div class="t-meta" style="font-size:10px">我们的策略</div>
+              <div class="h-md" style="font-weight:700;margin:.8vh 0">开源模型 + 专有编排 = 技术杠杆最大化</div>
+              <div class="body-sm" style="opacity:.9">
+                全球顶级团队投入数十亿美元研发的开源模型，我们直接集成、编排、加工业化判断层。<br><br>
+                <span class="highlight">不需要从头训练大模型</span> — 我们做的是"最后一公里"的价值增量。
+              </div>
+            </div>
+            <div class="card-fill" style="padding:1.4vh 1.2vw">
+              <div class="t-meta" style="margin-bottom:.4vh">数据层开源资源</div>
+              <div class="body-sm">
+                <span class="highlight">Materials Project</span>：15 万+ 无机化合物数据<br>
+                <span class="highlight">GNoME 数据库</span>：38 万稳定晶体结构<br>
+                <span class="highlight">PubChem / ChEMBL</span>：分子与化合物数据<br>
+                <span class="highlight">SCP 材料专题</span>：11 个在线计算工具
+              </div>
+            </div>
+            <div class="card-fill" style="padding:1.4vh 1.2vw">
+              <div class="t-meta" style="margin-bottom:.4vh">编排层：我们的核心壁垒</div>
+              <div class="body-sm">
+                <span class="highlight">11 个 SCP 工具</span> + <span class="highlight">8 个 SKILL 管线</span> + <span class="highlight">12 个专业 Agent</span><br>
+                Agent 委员会机制：自动选择最优工具组合，结果可解释、决策可追溯
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Open Source · 06 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S07 · Traction ==================== -->
+  <section class="slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">产品验证 · Traction</div>
+      <div class="r">07 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat accent">不是 PPT 产品，是产品基线已就绪</div>
+        <h2 class="h-xl-zh">130+ 项真实验证 · 4+ 头部客户等 POC</h2>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2-7-5">
+          <div style="display:flex;flex-direction:column;gap:1.4vh">
+            <div class="kpi-row-4">
+              <div class="kpi-cell">
+                <div class="kpi-label">产品基线</div>
+                <div class="kpi-value">130+</div>
+                <div class="kpi-note">材料学验证用例</div>
+              </div>
+              <div class="kpi-cell">
+                <div class="kpi-label">P0 修复率</div>
+                <div class="kpi-value">100%</div>
+                <div class="kpi-note">数据缺陷全修复</div>
+              </div>
+              <div class="kpi-cell">
+                <div class="kpi-label">SCP 工具</div>
+                <div class="kpi-value">11</div>
+                <div class="kpi-note">全链路打通</div>
+              </div>
+              <div class="kpi-cell">
+                <div class="kpi-label">Agent 角色</div>
+                <div class="kpi-value">12</div>
+                <div class="kpi-note">专业分工协同</div>
+              </div>
+            </div>
+            <div class="card-fill">
+              <div class="t-meta accent" style="margin-bottom:.4vh">130+ 项验证覆盖了哪些环节？</div>
+              <div class="body-sm" style="margin-bottom:.4vh">
+                覆盖 <span class="highlight">晶体生成、聚合物配方、催化剂筛选、性质预测、逆合成、多目标优化、委员会决策</span> 等核心模块。
+              </div>
+              <div class="body-sm" style="opacity:.55">验证维度：端到端链路连通性、输入输出可解释性、数据一致性、异常分支处理。</div>
+            </div>
+            <div class="card-fill">
+              <div class="t-meta accent" style="margin-bottom:.4vh">黄金场景已跑通</div>
+              <div class="body-sm">
+                <span class="highlight">PI-Film-2026Q3</span>：高性能聚酰亚胺薄膜，从候选生成到实验建议全链路闭环 · <span class="highlight">Cat-HYD-2026Q3</span>：加氢催化剂配方，行业包可复制架构已验证
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1.2vh">
+            <div class="card-accent" style="padding:1.6vh 1.4vw">
+              <div class="t-meta" style="margin-bottom:.8vh">4+ 头部企业进入 POC / 方案阶段</div>
+              <div style="display:flex;flex-direction:column;gap:.8vh">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span class="body-sm"><span class="highlight">万向一二三</span> · 电池材料</span>
+                  <span class="tag tag-green">POC 意向确认</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span class="body-sm"><span class="highlight">当升科技</span> · 锂电正极</span>
+                  <span class="tag tag-green">POC 意向确认</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span class="body-sm"><span class="highlight">华峰新材料</span> · 高分子</span>
+                  <span class="tag tag-blue">方案对接中</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span class="body-sm"><span class="highlight">阳光电源</span> · 新能源</span>
+                  <span class="tag tag-blue">需求确认中</span>
+                </div>
+              </div>
+            </div>
+            <div class="card-fill">
+              <div class="t-meta accent" style="margin-bottom:.4vh">下一步：把意向变成协议</div>
+              <div class="body-sm">种子轮到账后 <span class="highlight">30 天内</span>，锁定 2-3 家 POC 协议；6 个月内完成首个付费客户闭环。</div>
+            </div>
+            <div class="card-fill" style="text-align:center;padding:1.4vh 1.2vw">
+              <div class="t-meta" style="margin-bottom:.4vh">当前状态</div>
+              <div class="body" style="font-weight:700">产品基线就绪 · 资金到位即可启动 POC</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Traction · 07 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S08 · Team ==================== -->
+  <section class="slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">团队 · Team</div>
+      <div class="r">08 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat accent">商业 + 技术 · 双轮驱动，互补而非堆砌</div>
+        <h2 class="h-xl-zh">懂产业的人做 AI，而不是 AI 科学家"跨界"做产业</h2>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card-fill">
+            <div class="t-meta accent" style="margin-bottom:.6vh">CEO · 毛莹莹</div>
+            <div class="h-md" style="font-weight:700;margin-bottom:.8vh">从 0 到 1 再到 C 轮的实战派</div>
+            <div class="body">
+              杭州且言创始人 / CEO，10 人团队全面管理<br>
+              前爱财科技集团副总裁，主导 B 轮融资 <span class="highlight">3 亿</span>；亲历 A 轮到 C 轮现象级发展<br>
+              浙江大学 MBA · 浙江科技学院本科<br>
+              <span class="highlight">核心能力：融资节奏、客户资源、品牌与运营体系搭建</span>
+            </div>
+          </div>
+          <div class="card-fill">
+            <div class="t-meta accent" style="margin-bottom:.6vh">CTO · 陈王淼</div>
+            <div class="h-md" style="font-weight:700;margin-bottom:.8vh">工业软件 + 材料研发双主场</div>
+            <div class="body">
+              杭州且言合伙人；前西门子 Opcenter RD&L 大中华区产品线负责人 / Enterprise Account Manager<br>
+              连续多年超额完成销售指标（FY24 约 2,000 万 / 110%；FY25 约 2,800 万 / 140%）<br>
+              浙大 MBA · 麦吉尔大学硕士 · 浙江科技学院本科<br>
+              <span class="highlight">核心能力：工业软件架构、材料研发流程、大客户落地</span>
+            </div>
+          </div>
+        </div>
+        <div class="card-fill" style="padding:1.2vh 1.6vw">
+          <div class="body-sm" style="opacity:.8">
+            <span class="highlight">为什么是我们？</span>深度原理的团队是 MIT 化学博士 — 他们对 AI 模型的理解是一流的，但材料企业需要的不仅是模型，更是一个能在企业 IT 环境里部署、能和 LIMS/ELN 对接、能贴合研发流程的工业软件。这恰恰是我们的主场。
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Team · 08 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S09 · Market ==================== -->
+  <section class="slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">市场 · Market</div>
+      <div class="r">09 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat">百亿市场 × 三层扩展 × 明确路径</div>
+        <h2 class="h-xl-zh">从典型材料场景切入，三阶段占领新材料及化工研发 AI 市场</h2>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2-7-5">
+          <div style="display:flex;flex-direction:column;gap:1.2vh">
+            <div class="card-fill">
+              <div class="t-meta accent" style="margin-bottom:.3vh">TAM：中国材料研发数字化市场</div>
+              <div class="body" style="font-weight:700;font-size:1.1vw">¥1000亿+</div>
+              <div class="body-sm">含仿真软件、LIMS、ELN、AI 加速 — 材料与化工企业研发数字化总支出</div>
+            </div>
+            <div class="card-fill">
+              <div class="t-meta accent" style="margin-bottom:.3vh">SAM：AI 驱动的材料研发加速</div>
+              <div class="body" style="font-weight:700;font-size:1.1vw">¥100亿+</div>
+              <div class="body-sm">AI4S 材料赛道（深势科技、深度原理、晶泰科技等共同验证的赛道规模）</div>
+            </div>
+            <div class="card-fill">
+              <div class="t-meta accent" style="margin-bottom:.3vh">SOM：新材料及化工 AI 研发平台</div>
+              <div class="body" style="font-weight:700;font-size:1.1vw">¥30-50亿</div>
+              <div class="body-sm">高分子、催化剂、特种化学品、电池材料 — 中国 10 万+ 新材料及化工企业</div>
+            </div>
+            <div class="card-fill">
+              <div class="t-meta accent" style="margin-bottom:.3vh">数据口径说明</div>
+              <div class="body-sm" style="opacity:.65">TAM/SAM/SOM 为团队基于公开行业研究、头部公司融资及客户访谈的估算，供投资判断参考。</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1.4vh">
+            <div class="card-accent" style="text-align:center;padding:2vh 1.4vw">
+              <div class="t-meta" style="font-size:10px">三层市场扩展路径</div>
+              <div style="margin-top:.8vh">
+                <div class="body-sm" style="opacity:1;font-weight:600;margin:.5vh 0">Phase 1 · 高分子/催化/电池材料等典型场景（当前）</div>
+                <div class="body-sm" style="opacity:.85;margin:.5vh 0">Phase 2 · 特种化学品与复合材料（6-12月）</div>
+                <div class="body-sm" style="opacity:.7;margin:.5vh 0">Phase 3 · 全材料品类与工艺包（12-18月）</div>
+              </div>
+            </div>
+            <div class="card-fill" style="text-align:center;padding:1.4vh 1.2vw">
+              <div class="t-meta" style="margin-bottom:.4vh">目标客户画像</div>
+              <div class="body-sm">
+                <span class="highlight">新材料企业</span>：高分子/复合材料/特种化学品研发团队<br>
+                <span class="highlight">化工集团</span>：催化剂/精细化工/工艺研发 R&D 中心<br>
+                <span class="highlight">科研院所</span>：材料与化学实验室
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Market · 09 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S10 · Roadmap ==================== -->
+  <section class="slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">路线图 · Roadmap</div>
+      <div class="r">10 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat accent">18 个月：从产品基线到付费客户到行业复制</div>
+        <h2 class="h-xl-zh">每一步都可验证、可度量、可交付</h2>
+      </div>
+      <div class="slide-body">
+        <div class="tl">
+          <div class="tl-node">
+            <div class="tl-date">阶段 0 · 已完成 ✓</div>
+            <div class="tl-title">可信止血与基线</div>
+            <div class="tl-desc">P0 修复完成、主数据打通、API 级数据完整性验证、130+ 项功能验证、11 个 SCP 工具 + 8 个 SKILL 管线全部集成</div>
+          </div>
+          <div class="tl-node">
+            <div class="tl-date">阶段 1 · 当前（种子轮资金）</div>
+            <div class="tl-title">黄金链路打通 + 客户 POC</div>
+            <div class="tl-desc">高分子/催化/电池材料等典型场景从目标提出到实验建议的无断点主链路；签约 <span class="highlight">2-3 家 POC 客户</span>；完成首个付费客户闭环</div>
+          </div>
+          <div class="tl-node">
+            <div class="tl-date">阶段 2 · 6 个月</div>
+            <div class="tl-title">AI 运营与证据治理</div>
+            <div class="tl-desc">能力契约、模型卡、实验放行卡上线；预测-实测校准机制建立；行业包架构标准化</div>
+          </div>
+          <div class="tl-node">
+            <div class="tl-date">阶段 3 · 12 个月（A 轮节点）</div>
+            <div class="tl-title">行业包并行验证 + 付费客户增长</div>
+            <div class="tl-desc">高分子复合材料、催化剂研发行业包复制验证；<span class="highlight">5+ 付费客户</span>；ARR 300-500 万；启动 A 轮融资</div>
+          </div>
+          <div class="tl-node">
+            <div class="tl-date">阶段 4 · 18 个月</div>
+            <div class="tl-title">交付产品化</div>
+            <div class="tl-desc">私有化部署方案、行业包安装器、多租户架构；从项目制向订阅制转型</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Roadmap · 10 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S11 · Ask ==================== -->
+  <section class="slide" data-theme="light">
+    <div class="chrome">
+      <div class="l">融资需求 · Ask</div>
+      <div class="r">11 / 12</div>
+    </div>
+    <div class="content">
+      <div class="head">
+        <div class="t-cat accent">500-1000 万 = 18 个月跑道 = A 轮启动资金</div>
+        <h2 class="h-xl-zh">种子轮：买时间，买证据，买下一张 A 轮门票</h2>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card-fill">
+            <div class="t-meta accent" style="margin-bottom:.8vh">资金用途</div>
+            <div style="display:flex;flex-direction:column;gap:1vh">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span class="body">黄金链路完善与产品化</span>
+                <span class="tag tag-blue">40%</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span class="body">客户拓展与 POC 验证</span>
+                <span class="tag tag-green">35%</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span class="body">团队补充（材料顾问 + 销售）</span>
+                <span class="tag tag-blue">15%</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span class="body">运营储备</span>
+                <span class="tag tag-green">10%</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-fill">
+            <div class="t-meta accent" style="margin-bottom:.8vh">18 个月里程碑（分阶段、可验证）</div>
+            <div style="display:flex;flex-direction:column;gap:1vh">
+              <div class="body" style="display:flex;align-items:center;gap:.5vw">
+                <span style="color:var(--accent);font-weight:800">✓</span> 12 个月：2-3 家头部客户 POC 闭环
+              </div>
+              <div class="body" style="display:flex;align-items:center;gap:.5vw">
+                <span style="color:var(--accent);font-weight:800">✓</span> 12 个月：2-3 家付费客户，ARR 100-200 万
+              </div>
+              <div class="body" style="display:flex;align-items:center;gap:.5vw">
+                <span style="color:var(--accent);font-weight:800">✓</span> 18 个月：5+ 付费客户，ARR 300-500 万
+              </div>
+              <div class="body" style="display:flex;align-items:center;gap:.5vw">
+                <span style="color:var(--accent);font-weight:800">✓</span> 18 个月：高分子/催化行业包完成复制验证
+              </div>
+              <div class="body" style="display:flex;align-items:center;gap:.5vw">
+                <span style="color:var(--accent);font-weight:800">✓</span> 启动 A 轮融资，目标估值 3-5 倍提升
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-accent" style="text-align:center;padding:1.4vh 2vw">
+          <div class="body" style="font-weight:600;opacity:1">
+            资金去向透明：70%+ 直接投入产品迭代与 POC 验证，每一分钱都对应 A 轮可验证的证据。
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Ask · 11 / 12</div>
+    </div>
+  </section>
+
+  <!-- ==================== S12 · Closing ==================== -->
+  <section class="slide dark" data-theme="dark">
+    <div class="chrome">
+      <div class="l">结语 · Closing</div>
+      <div class="r">12 / 12</div>
+    </div>
+    <div class="content" style="justify-content:center">
+      <div class="head" style="align-items:center;text-align:center;margin-bottom:2vh">
+        <div class="t-cat" style="color:var(--accent-bright)">不是 AI 科学家做工业，而是工业人做 AI</div>
+        <h2 class="h-statement" style="color:var(--paper)">让每一次研发决策<br><em style="font-style:italic;font-weight:300">可解释、可追溯、可复盘</em></h2>
+      </div>
+      <div style="text-align:center;max-width:52ch;margin:0 auto">
+        <p class="lead" style="color:rgba(255,255,255,.6);text-align:center">
+          新材料与化工产业升级已经打响，研发的"AI 化"不是选择题，而是生存题。<br>
+          MaterialsLab — 以工业化落地为锚，让 AI 真正走进新材料及化工企业的研发日常。
+        </p>
+      </div>
+      <div class="closing-ink-bar" style="margin-top:3vh">
+        <div class="ink-bar-text">杭州且言 · MaterialsLab · 材料智研 · 种子轮路演 2026</div>
+      </div>
+    </div>
+    <div class="foot">
+      <div>杭州且言 · MaterialsLab</div>
+      <div>Closing · 12 / 12</div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  const deck=document.getElementById('deck');
+  const slides=Array.from(document.querySelectorAll('.slide'));
+  const prev=document.getElementById('prev');
+  const nextBtn=document.getElementById('next');
+  const indicator=document.getElementById('indicator');
+  let current=0;
+  let total=slides.length;
+
+  function go(idx){
+    current=Math.max(0,Math.min(idx,total-1));
+    deck.style.transform='translateX('+(-current*100)+'vw)';
+    if(indicator) indicator.textContent=(current+1).toString().padStart(2,'0')+' / '+total.toString().padStart(2,'0');
+  }
+  prev.addEventListener('click',()=>go(current-1));
+  nextBtn.addEventListener('click',()=>go(current+1));
+  document.addEventListener('keydown',e=>{
+    if(e.key==='ArrowLeft')go(current-1);
+    if(e.key==='ArrowRight'||e.key===' ')go(current+1);
+  });
+  go(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+BatteryEMCL Lab
+Copyright (c) 2025 BatteryEMCL Lab
+
+This product includes software developed by third parties, as listed below.
+Each component is redistributed under its respective license terms.
+
+---
+
+## Apache License 2.0 Components
+
+This product includes the following software licensed under the Apache License,
+Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0):
+
+  • ECharts (https://github.com/apache/echarts)
+    Copyright 2017-2024 The Apache Software Foundation
+    Licensed under the Apache License, Version 2.0
+
+  • Playwright (https://github.com/microsoft/playwright)
+    Copyright Microsoft Corporation
+    Licensed under the Apache License, Version 2.0
+
+  • SheetJS (xlsx) (https://github.com/SheetJS/sheetjs)
+    Copyright SheetJS LLC
+    Licensed under the Apache License, Version 2.0
+
+  • PySCF (https://github.com/pyscf/pyscf)
+    Copyright 2014-2024 PySCF Developers
+    Licensed under the Apache License, Version 2.0
+
+  • requests (https://github.com/psf/requests)
+    Copyright Kenneth Reitz
+    Licensed under the Apache License, Version 2.0
+
+  • watchdog (https://github.com/gorakhargosh/watchdog)
+    Copyright 2011 Yesudeep Mangalapilly
+    Licensed under the Apache License, Version 2.0
+
+  • pytest-asyncio (https://github.com/pytest-dev/pytest-asyncio)
+    Copyright pytest-asyncio Contributors
+    Licensed under the Apache License, Version 2.0
+
+You may obtain a copy of the Apache License, Version 2.0 at:
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the Apache License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+---
+
+## GNU Lesser General Public License Components
+
+  • ASE - Atomic Simulation Environment (https://gitlab.com/ase/ase)
+    Licensed under LGPL-2.1+
+    The source code is available at https://gitlab.com/ase/ase
+
+  • psycopg (https://github.com/psycopg/psycopg)
+    Licensed under LGPL-3.0 with a libpq linking exception
+
+---
+
+## External Services (Not Distributed)
+
+The following components are NOT distributed as part of this product.
+They are external services deployed and operated by the customer:
+
+  • ASKCOS Retrosynthesis Engine (https://github.com/ASKCOS/ASKCOS)
+    Licensed under MPL-2.0
+    Communicated with exclusively via HTTP API (http://<customer-host>:5000)
+
+  • ASKCOS Reaction Data (https://github.com/ASKCOS/ASKCOS)
+    Licensed under CC BY-NC-SA 4.0
+    Customers must independently obtain and deploy this dataset.
+    Commercial use of this dataset requires a separate license from
+    the copyright holder.
+
+---
+
+For a complete inventory of all third-party components and their licenses,
+see the THIRD_PARTY_LICENSES.md file in this directory.

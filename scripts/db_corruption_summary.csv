@@ -1,0 +1,7 @@
+db_file,affected_records,affected_columns
+samples.db,9,6
+equipment.db,3,3
+experiments.db,0,0
+research.db,0,0
+committee.db,0,0
+materials.db,0,0

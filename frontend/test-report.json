@@ -1,0 +1,1397 @@
+[
+  {
+    "page": "Dashboard",
+    "path": "http://localhost:5175/dashboard",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"管理看板 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:47.243Z"
+  },
+  {
+    "page": "Dashboard",
+    "path": "http://localhost:5175/dashboard",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:47.274Z"
+  },
+  {
+    "page": "Dashboard",
+    "path": "http://localhost:5175/dashboard",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:00:47.283Z"
+  },
+  {
+    "page": "Dashboard",
+    "path": "/dashboard",
+    "step": "指标卡片",
+    "status": "PASS",
+    "detail": "检测到 58 个卡片/统计组件",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:47.335Z"
+  },
+  {
+    "page": "Dashboard",
+    "path": "/dashboard",
+    "step": "图表",
+    "status": "PASS",
+    "detail": "检测到 19 个图表元素",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:47.362Z"
+  },
+  {
+    "page": "Dashboard",
+    "path": "/dashboard",
+    "step": "时间范围切换",
+    "status": "WARN",
+    "detail": "未检测到时间范围选择器",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:00:47.367Z"
+  },
+  {
+    "page": "ControlPlane",
+    "path": "http://localhost:5175/",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"总览 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:50.622Z"
+  },
+  {
+    "page": "ControlPlane",
+    "path": "http://localhost:5175/",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:50.648Z"
+  },
+  {
+    "page": "ControlPlane",
+    "path": "http://localhost:5175/",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:00:50.657Z"
+  },
+  {
+    "page": "ControlPlane",
+    "path": "http://localhost:5175/",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 暂无进行中的工作从上方开始一次新材料研发，或从推荐模板快速启动。开始新材料研发",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:50.689Z"
+  },
+  {
+    "page": "ControlPlane",
+    "path": "/control-plane",
+    "step": "scope/scope_id报错",
+    "status": "PASS",
+    "detail": "未检测到 scope/scope_id 相关错误",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:50.690Z"
+  },
+  {
+    "page": "ControlPlane",
+    "path": "/control-plane",
+    "step": "运行记录",
+    "status": "INFO",
+    "detail": "无运行记录数据",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:50.694Z"
+  },
+  {
+    "page": "ControlPlane",
+    "path": "/control-plane",
+    "step": "筛选功能",
+    "status": "WARN",
+    "detail": "检测到 0 个筛选组件",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:00:50.699Z"
+  },
+  {
+    "page": "BudgetBoard",
+    "path": "http://localhost:5175/",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"总览 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:53.860Z"
+  },
+  {
+    "page": "BudgetBoard",
+    "path": "http://localhost:5175/",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:53.891Z"
+  },
+  {
+    "page": "BudgetBoard",
+    "path": "http://localhost:5175/",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:00:53.897Z"
+  },
+  {
+    "page": "BudgetBoard",
+    "path": "http://localhost:5175/",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 暂无进行中的工作从上方开始一次新材料研发，或从推荐模板快速启动。开始新材料研发",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:53.943Z"
+  },
+  {
+    "page": "BudgetBoard",
+    "path": "/budgets",
+    "step": "scope/scope_id报错",
+    "status": "PASS",
+    "detail": "未检测到 scope/scope_id 相关错误",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:53.943Z"
+  },
+  {
+    "page": "AgentManager",
+    "path": "http://localhost:5175/agents",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"智能体管理 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:56.459Z"
+  },
+  {
+    "page": "AgentManager",
+    "path": "http://localhost:5175/agents",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:56.490Z"
+  },
+  {
+    "page": "AgentManager",
+    "path": "http://localhost:5175/agents",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:00:56.495Z"
+  },
+  {
+    "page": "AgentManager",
+    "path": "/agents",
+    "step": "智能体列表",
+    "status": "PASS",
+    "detail": "检测到 43 个Agent相关元素",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:56.538Z"
+  },
+  {
+    "page": "AgentManager",
+    "path": "/agents",
+    "step": "Agent详情点击",
+    "status": "PASS",
+    "detail": "成功打开Agent详情",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:57.519Z"
+  },
+  {
+    "page": "AgentManager",
+    "path": "/agents",
+    "step": "能力描述中文化",
+    "status": "PASS",
+    "detail": "详情包含中文",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:57.523Z"
+  },
+  {
+    "page": "Tools",
+    "path": "http://localhost:5175/tools",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"工具与连接器 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:00:59.989Z"
+  },
+  {
+    "page": "Tools",
+    "path": "http://localhost:5175/tools",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:00.019Z"
+  },
+  {
+    "page": "Tools",
+    "path": "http://localhost:5175/tools",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:00.025Z"
+  },
+  {
+    "page": "Tools",
+    "path": "/tools",
+    "step": "标签页",
+    "status": "PASS",
+    "detail": "标签页: 使用视图 | 使用视图",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:00.063Z"
+  },
+  {
+    "page": "Tools",
+    "path": "/tools",
+    "step": "标签页切换",
+    "status": "PASS",
+    "detail": "切换到 \"使用视图\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:00.702Z"
+  },
+  {
+    "page": "Tools",
+    "path": "/tools",
+    "step": "筛选功能",
+    "status": "WARN",
+    "detail": "检测到 0 个筛选/搜索组件",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:00.705Z"
+  },
+  {
+    "page": "CapabilityCenter",
+    "path": "http://localhost:5175/",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"总览 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:03.926Z"
+  },
+  {
+    "page": "CapabilityCenter",
+    "path": "http://localhost:5175/",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:03.959Z"
+  },
+  {
+    "page": "CapabilityCenter",
+    "path": "http://localhost:5175/",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:03.964Z"
+  },
+  {
+    "page": "CapabilityCenter",
+    "path": "http://localhost:5175/",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 暂无进行中的工作从上方开始一次新材料研发，或从推荐模板快速启动。开始新材料研发",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:03.999Z"
+  },
+  {
+    "page": "CapabilityCenter",
+    "path": "/capability-center",
+    "step": "契约列表",
+    "status": "WARN",
+    "detail": "检测到 0 条契约",
+    "severity": "P1",
+    "timestamp": "2026-07-26T03:01:04.002Z"
+  },
+  {
+    "page": "EvalCenter",
+    "path": "http://localhost:5175/",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"总览 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:07.252Z"
+  },
+  {
+    "page": "EvalCenter",
+    "path": "http://localhost:5175/",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:07.281Z"
+  },
+  {
+    "page": "EvalCenter",
+    "path": "http://localhost:5175/",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:07.285Z"
+  },
+  {
+    "page": "EvalCenter",
+    "path": "http://localhost:5175/",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 暂无进行中的工作从上方开始一次新材料研发，或从推荐模板快速启动。开始新材料研发",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:07.317Z"
+  },
+  {
+    "page": "EvalCenter",
+    "path": "/eval-center",
+    "step": "评估任务列表",
+    "status": "WARN",
+    "detail": "检测到 0 条评估任务",
+    "severity": "P1",
+    "timestamp": "2026-07-26T03:01:07.322Z"
+  },
+  {
+    "page": "Settings",
+    "path": "http://localhost:5175/settings",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"系统设置 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:10.113Z"
+  },
+  {
+    "page": "Settings",
+    "path": "http://localhost:5175/settings",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:10.138Z"
+  },
+  {
+    "page": "Settings",
+    "path": "http://localhost:5175/settings",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:10.142Z"
+  },
+  {
+    "page": "Settings",
+    "path": "/settings",
+    "step": "设置项",
+    "status": "PASS",
+    "detail": "检测到 17 个可交互设置项",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:10.163Z"
+  },
+  {
+    "page": "Settings",
+    "path": "/settings",
+    "step": "修改设置",
+    "status": "PASS",
+    "detail": "成功修改输入框值",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:10.790Z"
+  },
+  {
+    "page": "UserManagement",
+    "path": "http://localhost:5175/users",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"用户管理 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:13.470Z"
+  },
+  {
+    "page": "UserManagement",
+    "path": "http://localhost:5175/users",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:13.493Z"
+  },
+  {
+    "page": "UserManagement",
+    "path": "http://localhost:5175/users",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:13.501Z"
+  },
+  {
+    "page": "UserManagement",
+    "path": "http://localhost:5175/users",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 暂无用户数据，请点击「新增用户」添加",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:13.531Z"
+  },
+  {
+    "page": "UserManagement",
+    "path": "/users",
+    "step": "用户列表",
+    "status": "PASS",
+    "detail": "检测到 2 个用户",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:13.538Z"
+  },
+  {
+    "page": "UserManagement",
+    "path": "/users",
+    "step": "新增用户入口",
+    "status": "PASS",
+    "detail": "成功打开新增用户对话框",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:14.514Z"
+  },
+  {
+    "page": "ResearchWorkbench",
+    "path": "http://localhost:5175/research",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"研发工作台 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:17.362Z"
+  },
+  {
+    "page": "ResearchWorkbench",
+    "path": "http://localhost:5175/research",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:17.390Z"
+  },
+  {
+    "page": "ResearchWorkbench",
+    "path": "http://localhost:5175/research",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:17.395Z"
+  },
+  {
+    "page": "ResearchWorkbench",
+    "path": "/research",
+    "step": "输入研发目标",
+    "status": "FAIL",
+    "detail": "elementHandle.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <span title=\"ASSB-LPSCl-2026Q3\" class=\"ant-select-selection-item\">ASSB-LPSCl-2026Q3</span> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <span title=\"ASSB-LPSCl-2026Q3\" class=\"ant-select-selection-item\">ASSB-LPSCl-2026Q3</span> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    56 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <span title=\"ASSB-LPSCl-2026Q3\" class=\"ant-select-selection-item\">ASSB-LPSCl-2026Q3</span> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and stable\u001b[22m\n",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:47.417Z"
+  },
+  {
+    "page": "CandidateWorkbench",
+    "path": "http://localhost:5175/workbench",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"候选设计 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:49.922Z"
+  },
+  {
+    "page": "CandidateWorkbench",
+    "path": "http://localhost:5175/workbench",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:49.952Z"
+  },
+  {
+    "page": "CandidateWorkbench",
+    "path": "http://localhost:5175/workbench",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:49.956Z"
+  },
+  {
+    "page": "CandidateWorkbench",
+    "path": "http://localhost:5175/workbench",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 请输入项目目标后点击「调用大模型生成候选」",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:49.985Z"
+  },
+  {
+    "page": "CandidateWorkbench",
+    "path": "/workbench",
+    "step": "候选材料",
+    "status": "PASS",
+    "detail": "检测到 2 个候选材料",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:49.993Z"
+  },
+  {
+    "page": "ECML",
+    "path": "http://localhost:5175/ecml",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"实验闭环迭代 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:52.723Z"
+  },
+  {
+    "page": "ECML",
+    "path": "http://localhost:5175/ecml",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:52.755Z"
+  },
+  {
+    "page": "ECML",
+    "path": "http://localhost:5175/ecml",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:52.760Z"
+  },
+  {
+    "page": "ECML",
+    "path": "/ecml",
+    "step": "创建迭代入口",
+    "status": "PASS",
+    "detail": "检测到 1 个创建按钮",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:52.781Z"
+  },
+  {
+    "page": "FormulaDesign",
+    "path": "http://localhost:5175/formula-design",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"配方与工艺 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:55.484Z"
+  },
+  {
+    "page": "FormulaDesign",
+    "path": "http://localhost:5175/formula-design",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:55.515Z"
+  },
+  {
+    "page": "FormulaDesign",
+    "path": "http://localhost:5175/formula-design",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:55.520Z"
+  },
+  {
+    "page": "FormulaDesign",
+    "path": "http://localhost:5175/formula-design",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 输入目标材料后点击生成配方",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:55.551Z"
+  },
+  {
+    "page": "FormulaDesign",
+    "path": "/formula-design",
+    "step": "创建配方入口",
+    "status": "PASS",
+    "detail": "成功打开创建配方",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:56.477Z"
+  },
+  {
+    "page": "FormulaDesign",
+    "path": "/formula-design",
+    "step": "填写配方参数",
+    "status": "FAIL",
+    "detail": "elementHandle.fill: Error: Element is not an <input>, <textarea>, <select> or [contenteditable] and does not have a role allowing [aria-readonly]\nCall log:\n\u001b[2m    - fill(\"NCM811正极配方\")\u001b[22m\n\u001b[2m  - attempting fill action\u001b[22m\n\u001b[2m    - waiting for element to be visible, enabled and editable\u001b[22m\n",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:56.604Z"
+  },
+  {
+    "page": "FormulaDesign",
+    "path": "/formula-design",
+    "step": "版本控制",
+    "status": "PASS",
+    "detail": "检测到 1 个版本相关元素",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:56.612Z"
+  },
+  {
+    "page": "MaterialProperties",
+    "path": "http://localhost:5175/properties",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"属性字典 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:59.114Z"
+  },
+  {
+    "page": "MaterialProperties",
+    "path": "http://localhost:5175/properties",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:01:59.143Z"
+  },
+  {
+    "page": "MaterialProperties",
+    "path": "http://localhost:5175/properties",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:01:59.146Z"
+  },
+  {
+    "page": "RawMaterials",
+    "path": "http://localhost:5175/materials",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"物料规格库 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:02.359Z"
+  },
+  {
+    "page": "RawMaterials",
+    "path": "http://localhost:5175/materials",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:02.389Z"
+  },
+  {
+    "page": "RawMaterials",
+    "path": "http://localhost:5175/materials",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:02:02.395Z"
+  },
+  {
+    "page": "SampleManager",
+    "path": "http://localhost:5175/samples",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"样品管理 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:05.005Z"
+  },
+  {
+    "page": "SampleManager",
+    "path": "http://localhost:5175/samples",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:05.036Z"
+  },
+  {
+    "page": "SampleManager",
+    "path": "http://localhost:5175/samples",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:02:05.041Z"
+  },
+  {
+    "page": "Experiments",
+    "path": "http://localhost:5175/experiments",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"实验数据 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:08.022Z"
+  },
+  {
+    "page": "Experiments",
+    "path": "http://localhost:5175/experiments",
+    "step": "面包屑",
+    "status": "INFO",
+    "detail": "未检测到面包屑组件（可能已移除）",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:08.055Z"
+  },
+  {
+    "page": "Experiments",
+    "path": "http://localhost:5175/experiments",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:02:08.060Z"
+  },
+  {
+    "page": "异常测试",
+    "path": "/formula-design",
+    "step": "非法数值输入",
+    "status": "PASS",
+    "detail": "输入负数测试完成",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:14.703Z"
+  },
+  {
+    "page": "异常测试",
+    "path": "/research",
+    "step": "极端长文本输入",
+    "status": "FAIL",
+    "detail": "elementHandle.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <span title=\"ASSB-LPSCl-2026Q3\" class=\"ant-select-selection-item\">ASSB-LPSCl-2026Q3</span> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <span title=\"ASSB-LPSCl-2026Q3\" class=\"ant-select-selection-item\">ASSB-LPSCl-2026Q3</span> intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    57 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <span title=\"ASSB-LPSCl-2026Q3\" class=\"ant-select-selection-item\">ASSB-LPSCl-2026Q3</span> intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:46.568Z"
+  },
+  {
+    "page": "异常测试",
+    "path": "/dashboard",
+    "step": "刷新数据一致性",
+    "status": "PASS",
+    "detail": "刷新前后内容一致",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:54.660Z"
+  },
+  {
+    "page": "Discovery",
+    "path": "http://localhost:5175/workbench",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"候选设计 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:56.193Z"
+  },
+  {
+    "page": "Discovery",
+    "path": "http://localhost:5175/workbench",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:02:56.206Z"
+  },
+  {
+    "page": "Discovery",
+    "path": "http://localhost:5175/workbench",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 请输入项目目标后点击「调用大模型生成候选」",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:56.220Z"
+  },
+  {
+    "page": "Discovery",
+    "path": "/discovery",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:56.259Z"
+  },
+  {
+    "page": "KnowledgeGraph",
+    "path": "http://localhost:5175/knowledge-graph",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"知识图谱 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:57.951Z"
+  },
+  {
+    "page": "KnowledgeGraph",
+    "path": "http://localhost:5175/knowledge-graph",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:02:57.981Z"
+  },
+  {
+    "page": "KnowledgeGraph",
+    "path": "/knowledge",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:58.063Z"
+  },
+  {
+    "page": "Synthesis",
+    "path": "http://localhost:5175/synthesis",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"合成路径 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:59.904Z"
+  },
+  {
+    "page": "Synthesis",
+    "path": "http://localhost:5175/synthesis",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:02:59.933Z"
+  },
+  {
+    "page": "Synthesis",
+    "path": "http://localhost:5175/synthesis",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 输入 SMILES 开始规划合成路线",
+    "severity": "",
+    "timestamp": "2026-07-26T03:02:59.966Z"
+  },
+  {
+    "page": "Synthesis",
+    "path": "/synthesis",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:00.038Z"
+  },
+  {
+    "page": "Prediction",
+    "path": "http://localhost:5175/prediction",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"性质预测 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:01.880Z"
+  },
+  {
+    "page": "Prediction",
+    "path": "http://localhost:5175/prediction",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:01.908Z"
+  },
+  {
+    "page": "Prediction",
+    "path": "http://localhost:5175/prediction",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 输入参数并点击「开始预测」查看预测结果",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:01.937Z"
+  },
+  {
+    "page": "Prediction",
+    "path": "/prediction",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:02.024Z"
+  },
+  {
+    "page": "ApprovalCenter",
+    "path": "http://localhost:5175/decision-center?tab=approval",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"决策放行 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:03.878Z"
+  },
+  {
+    "page": "ApprovalCenter",
+    "path": "http://localhost:5175/decision-center?tab=approval",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:03.908Z"
+  },
+  {
+    "page": "ApprovalCenter",
+    "path": "http://localhost:5175/decision-center?tab=approval",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 本页为聚合视图，仅展示已触发审批规则的事项。当前无待审批事项——实验任务的审批动作请在「实验工作台」内完成（提交任务、确认结果时触发），数据质量的审核请在「数据质量」页面进行。前往实验工作台前往数据质",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:03.939Z"
+  },
+  {
+    "page": "ApprovalCenter",
+    "path": "/approvals",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:04.021Z"
+  },
+  {
+    "page": "CommitteeCenter",
+    "path": "http://localhost:5175/committee",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"页面未找到 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:05.613Z"
+  },
+  {
+    "page": "CommitteeCenter",
+    "path": "http://localhost:5175/committee",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:05.636Z"
+  },
+  {
+    "page": "CommitteeCenter",
+    "path": "http://localhost:5175/committee",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 404抱歉，您访问的页面不存在返回首页返回上一页可能原因：页面地址已变更，请使用左侧导航栏重新进入链接已失效，请联系管理员URL 拼写错误，请检查地址栏",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:05.661Z"
+  },
+  {
+    "page": "CommitteeCenter",
+    "path": "/committee",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:05.729Z"
+  },
+  {
+    "page": "ReleaseCardCenter",
+    "path": "http://localhost:5175/decision-center?tab=release",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"决策放行 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:07.597Z"
+  },
+  {
+    "page": "ReleaseCardCenter",
+    "path": "http://localhost:5175/decision-center?tab=release",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:07.630Z"
+  },
+  {
+    "page": "ReleaseCardCenter",
+    "path": "/release-cards",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:07.734Z"
+  },
+  {
+    "page": "DataIngest",
+    "path": "http://localhost:5175/data-ingest",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"数据接入 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:09.909Z"
+  },
+  {
+    "page": "DataIngest",
+    "path": "http://localhost:5175/data-ingest",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:09.940Z"
+  },
+  {
+    "page": "DataIngest",
+    "path": "http://localhost:5175/data-ingest",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 目标字段源列匹配方式暂无数据",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:09.976Z"
+  },
+  {
+    "page": "DataIngest",
+    "path": "/data-ingest",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:10.069Z"
+  },
+  {
+    "page": "ValueReport",
+    "path": "http://localhost:5175/value-report",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"收益账单 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:12.363Z"
+  },
+  {
+    "page": "ValueReport",
+    "path": "http://localhost:5175/value-report",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:12.394Z"
+  },
+  {
+    "page": "ValueReport",
+    "path": "http://localhost:5175/value-report",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 请选择项目以查看研发收益账单",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:12.424Z"
+  },
+  {
+    "page": "ValueReport",
+    "path": "/value-report",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:12.514Z"
+  },
+  {
+    "page": "EquipmentLedger",
+    "path": "http://localhost:5175/equipment",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"设备台账 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:14.596Z"
+  },
+  {
+    "page": "EquipmentLedger",
+    "path": "http://localhost:5175/equipment",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:14.626Z"
+  },
+  {
+    "page": "EquipmentLedger",
+    "path": "/equipment",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:14.720Z"
+  },
+  {
+    "page": "Orchestration",
+    "path": "http://localhost:5175/orchestration",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"智能编排 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:16.867Z"
+  },
+  {
+    "page": "Orchestration",
+    "path": "http://localhost:5175/orchestration",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:16.896Z"
+  },
+  {
+    "page": "Orchestration",
+    "path": "http://localhost:5175/orchestration",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 👥暂无小队成员 在左侧输入任务目标并点击「开始分析」， AI 将从 Agent 角色库自动推荐小队成员。 前往 Agent 管理查看角色库",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:16.921Z"
+  },
+  {
+    "page": "Orchestration",
+    "path": "/orchestration",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:16.982Z"
+  },
+  {
+    "page": "TechnologyIntelligence",
+    "path": "http://localhost:5175/tech-intel",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"页面未找到 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:18.548Z"
+  },
+  {
+    "page": "TechnologyIntelligence",
+    "path": "http://localhost:5175/tech-intel",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:18.578Z"
+  },
+  {
+    "page": "TechnologyIntelligence",
+    "path": "http://localhost:5175/tech-intel",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 404抱歉，您访问的页面不存在返回首页返回上一页可能原因：页面地址已变更，请使用左侧导航栏重新进入链接已失效，请联系管理员URL 拼写错误，请检查地址栏",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:18.611Z"
+  },
+  {
+    "page": "TechnologyIntelligence",
+    "path": "/tech-intel",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:18.678Z"
+  },
+  {
+    "page": "DecisionCenter",
+    "path": "http://localhost:5175/decision-center",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"决策放行 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:20.513Z"
+  },
+  {
+    "page": "DecisionCenter",
+    "path": "http://localhost:5175/decision-center",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:20.546Z"
+  },
+  {
+    "page": "DecisionCenter",
+    "path": "/decision-center",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:20.642Z"
+  },
+  {
+    "page": "BatteryLifeWorkflow",
+    "path": "http://localhost:5175/battery-life",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"性能寿命预测 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:22.731Z"
+  },
+  {
+    "page": "BatteryLifeWorkflow",
+    "path": "http://localhost:5175/battery-life",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:22.760Z"
+  },
+  {
+    "page": "BatteryLifeWorkflow",
+    "path": "/battery-life",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:22.848Z"
+  },
+  {
+    "page": "DataQualityWorkbench",
+    "path": "http://localhost:5175/data-quality",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"数据质量 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:24.960Z"
+  },
+  {
+    "page": "DataQualityWorkbench",
+    "path": "http://localhost:5175/data-quality",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:24.994Z"
+  },
+  {
+    "page": "DataQualityWorkbench",
+    "path": "http://localhost:5175/data-quality",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 🔬暂无待 QC 检查的实验数据QC 检查在实验工作台录入数据后自动触发，请先到「实验工作台」录入实验结果。前往实验工作台",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:25.024Z"
+  },
+  {
+    "page": "DataQualityWorkbench",
+    "path": "/data-quality",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:25.112Z"
+  },
+  {
+    "page": "ECMLRuns",
+    "path": "http://localhost:5175/ecml/runs",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"迭代历史 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:27.146Z"
+  },
+  {
+    "page": "ECMLRuns",
+    "path": "http://localhost:5175/ecml/runs",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:27.177Z"
+  },
+  {
+    "page": "ECMLRuns",
+    "path": "/ecml/runs",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:27.267Z"
+  },
+  {
+    "page": "ECMLMonitor",
+    "path": "http://localhost:5175/ecml/monitor",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"页面未找到 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:29.155Z"
+  },
+  {
+    "page": "ECMLMonitor",
+    "path": "http://localhost:5175/ecml/monitor",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:29.185Z"
+  },
+  {
+    "page": "ECMLMonitor",
+    "path": "http://localhost:5175/ecml/monitor",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 404抱歉，您访问的页面不存在返回首页返回上一页可能原因：页面地址已变更，请使用左侧导航栏重新进入链接已失效，请联系管理员URL 拼写错误，请检查地址栏",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:29.217Z"
+  },
+  {
+    "page": "ECMLMonitor",
+    "path": "/ecml/monitor",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:29.280Z"
+  },
+  {
+    "page": "MyTasks",
+    "path": "http://localhost:5175/my-tasks",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"我的待办 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:31.127Z"
+  },
+  {
+    "page": "MyTasks",
+    "path": "http://localhost:5175/my-tasks",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:31.163Z"
+  },
+  {
+    "page": "MyTasks",
+    "path": "/my-tasks",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:31.269Z"
+  },
+  {
+    "page": "ExperimentWorkbench",
+    "path": "http://localhost:5175/experiment-workbench",
+    "step": "页面标题",
+    "status": "PASS",
+    "detail": "标题: \"实验工作台 - BatteryEMCL\"",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:33.523Z"
+  },
+  {
+    "page": "ExperimentWorkbench",
+    "path": "http://localhost:5175/experiment-workbench",
+    "step": "中英文混杂",
+    "status": "WARN",
+    "detail": "页面同时包含中英文，需人工检查",
+    "severity": "P2",
+    "timestamp": "2026-07-26T03:03:33.549Z"
+  },
+  {
+    "page": "ExperimentWorkbench",
+    "path": "http://localhost:5175/experiment-workbench",
+    "step": "空状态",
+    "status": "INFO",
+    "detail": "检测到空状态: 📋暂无待审批任务 实验任务提交后，系统根据成本、危险品、模型置信度自动判断： 低风险自动放行，高风险进入此队列等待人工审批。",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:33.578Z"
+  },
+  {
+    "page": "ExperimentWorkbench",
+    "path": "/experiment-workbench",
+    "step": "页面加载",
+    "status": "PASS",
+    "detail": "页面正常加载",
+    "severity": "",
+    "timestamp": "2026-07-26T03:03:33.676Z"
+  }
+]

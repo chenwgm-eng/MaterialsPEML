@@ -1,0 +1,14 @@
+db_file,table_name,record_id,column_name,corrupted_value,suggested_action
+samples.db,samples,SMP_181b75f4,storage_location,???B-02,mark_corrupted_pending_pg_migration
+samples.db,samples,SMP_e5d72472,storage_location,???B-02,mark_corrupted_pending_pg_migration
+samples.db,samples,SMP_181b75f4,storage_condition,????,mark_corrupted_pending_pg_migration
+samples.db,samples,SMP_e5d72472,storage_condition,????,mark_corrupted_pending_pg_migration
+samples.db,samples,SMP_181b75f4,notes,???????? Li6PS5Cl - ??????,mark_corrupted_pending_pg_migration
+samples.db,samples,SMP_e5d72472,notes,???????? Li6PS5Cl,mark_corrupted_pending_pg_migration
+samples.db,sample_transfers,TRF_c2c9691c,from_location,???B-02,mark_corrupted_pending_pg_migration
+samples.db,sample_transfers,TRF_c2c9691c,to_location,???B-02,mark_corrupted_pending_pg_migration
+samples.db,sample_transfers,TRF_c2c9691c,transferred_by,???,mark_corrupted_pending_pg_migration
+equipment.db,equipment,EQUIP-F622BE,name,??????,mark_corrupted_pending_pg_migration
+equipment.db,equipment,EQUIP-F622BE,responsible_person,?????,mark_corrupted_pending_pg_migration
+equipment.db,equipment,EQUIP-F622BE,notes,EIS????,mark_corrupted_pending_pg_migration
+materials.db,N/A,N/A,N/A,N/A,file_not_found_skipped

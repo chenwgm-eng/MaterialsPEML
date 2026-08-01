@@ -1,0 +1,7 @@
+[
+  {"case_id": "sec_001", "input": {"role": "viewer", "action": "tool.invoke", "resource": "dft_submit"}, "expected": {"allowed": false, "reason_code": "role_not_permitted"}, "metadata": {"description": "Viewer cannot invoke DFT"}},
+  {"case_id": "sec_002", "input": {"role": "researcher", "action": "experiment.start", "resource": "experiment"}, "expected": {"allowed": false, "reason_code": "role_not_permitted"}, "metadata": {"description": "Researcher cannot start experiments"}},
+  {"case_id": "sec_003", "input": {"role": "researcher", "action": "tool.invoke", "resource": "unknown_tool_xyz"}, "expected": {"allowed": false, "reason_code": "unknown_tool"}, "metadata": {"description": "Unknown tool rejected"}},
+  {"case_id": "sec_004", "input": {"context_expired": true, "action": "tool.invoke", "resource": "pymatgen_validate"}, "expected": {"allowed": false, "reason_code": "expired_delegation"}, "metadata": {"description": "Expired context rejected"}},
+  {"case_id": "sec_005", "input": {"role": "admin", "action": "policy.update", "resource": "policy"}, "expected": {"allowed": true}, "metadata": {"description": "Admin can update policies"}}
+]

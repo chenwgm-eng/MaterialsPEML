@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  postgres:
+    # 使用 pgvector 镜像，支持向量检索
+    # 迁移脚本 0028 自动检测 pgvector 扩展；0029 将 TEXT 占位列升级为 vector(1024)
+    image: pgvector/pgvector:pg16
+    container_name: batteryemcl-postgres
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: batteryemcl
+      POSTGRES_PASSWORD: batteryemcl_dev
+      POSTGRES_DB: batteryemcl
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U batteryemcl -d batteryemcl"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
+    driver: local

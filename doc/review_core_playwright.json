@@ -1,0 +1,2389 @@
+{
+  "env": {
+    "backendHealth": 200,
+    "backendRunning": true,
+    "taskVerified": true
+  },
+  "auth": {
+    "user_id": "U-9AF74283",
+    "role": "admin",
+    "tokenPreview": "U-9AF74283.178536519..."
+  },
+  "projects": [
+    {
+      "project_id": "PROJ-34890B52",
+      "name": "PEO-LiTFSI-2026Q3_1"
+    },
+    {
+      "project_id": "PROJ-3DB94354",
+      "name": "ASSB-LPSCl-2026Q3-V2_1"
+    }
+  ],
+  "pages": [
+    {
+      "name": "首页",
+      "route": "/",
+      "url": "http://localhost:5173/",
+      "finalUrl": "http://localhost:5173/",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-100_home_initial.png",
+      "clickCount": 12,
+      "clicks": [
+        {
+          "text": "首页",
+          "tag": "A",
+          "href": "/",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "开始新材料研发",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "2979\n候选材料\n本周新增 2979",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": true,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "760\n实验任务\n待审批 2 · 总数 760",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "40\n闭环迭代\n进行中 0 · 近30天完成 25",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "48\n合成路径\n服务可用率 93%",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "待审批实验任务\n2 个实验任务等待审批\n2",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "开始新材料研发",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "下一步",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        }
+      ],
+      "core": null,
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-101_home_final.png"
+    },
+    {
+      "name": "我的待办",
+      "route": "/my-tasks",
+      "url": "http://localhost:5173/my-tasks",
+      "finalUrl": "http://localhost:5173/my-tasks",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-102_my-tasks_initial.png",
+      "clickCount": 26,
+      "clicks": [
+        {
+          "text": "首页",
+          "tag": "A",
+          "href": "/",
+          "status": "clicked",
+          "urlChanged": true,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "实验放行卡",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "委员会Case",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "实验审批",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": true,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "QC审批",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "物料审批",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "状态",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "推荐结论",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "查询",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "重置",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "刷新",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "从委员会 Case 生成",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "卡号\t标题\t推荐结论\t状态\t复核人\t创建时间\t操作\nrc-794ce49a\tReview release card\t需要补充证据\t草稿\t-\t2026/7/29 ",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "rc-794ce49a\tReview release card\t需要补充证据\t草稿\t-\t2026/7/29 16:55:31",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "rc-e3fd4657\tReview release card\t需要补充证据\t草稿\t-\t2026/7/29 16:48:51",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "rc-4f93d4f8\tReview release card\t需要补充证据\t草稿\t-\t2026/7/29 16:27:43",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "rc-9b982b24\tReview release card\t需要补充证据\t草稿\t-\t2026/7/29 16:01:23",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "1",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "1",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        }
+      ],
+      "core": null,
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-103_my-tasks_final.png"
+    },
+    {
+      "name": "项目管理",
+      "route": "/projects",
+      "url": "http://localhost:5173/projects",
+      "finalUrl": "http://localhost:5173/projects",
+      "loadStatus": "ok",
+      "loadErrors": [
+        "[warning] [Vue warn]: Invalid prop: type check failed for prop \"showTotal\". Expected Function, got String with value \"\". \n  at <APagination key=0 current=1 onUpdate:current=fn  ... > \n  at <Projects onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > \n  at <BaseTransition mode=\"out-in\" appear=false persisted=false  ... > \n  at <Transition name=\"fade\" mode=\"out-in\" > \n  at <RouterView>",
+        "[warning] [Vue warn]: Invalid prop: type check failed for prop \"showTotal\". Expected Function, got String with value \"\". \n  at <Pagination current=1 total=17 pageSize=10  ... > \n  at <APagination key=0 current=1 onUpdate:current=fn  ... > \n  at <Projects onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > \n  at <BaseTransition mode=\"out-in\" appear=false persisted=false  ... > \n  at <T"
+      ],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-104_projects_initial.png",
+      "clickCount": 11,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "新建项目",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "1",
+          "tag": "LI",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "1",
+          "tag": "A",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "2",
+          "tag": "LI",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [
+            "[warning] [Vue warn]: Invalid prop: type check failed for prop \"showTotal\". Expected Function, got String with value \"\". \n  at <APagination key=0 current=2 onUpdate:current=fn  ... > \n  at <Projects onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > \n  at <BaseTransition mode=\"out-in\" appear=false persisted=false  ... > \n  at <Transition name=\"fade\" mode=\"out-in\" > \n  at <RouterView>",
+            "[warning] [Vue warn]: Invalid prop: type check failed for prop \"showTotal\". Expected Function, got String with value \"\". \n  at <Pagination current=2 total=17 pageSize=10  ... > \n  at <APagination key=0 current=2 onUpdate:current=fn  ... > \n  at <Projects onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > \n  at <BaseTransition mode=\"out-in\" appear=false persisted=false  ... > \n  at <T"
+          ],
+          "failedRequests": []
+        },
+        {
+          "text": "2",
+          "tag": "A",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "10 条/页",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        }
+      ],
+      "core": null,
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-105_projects_final.png"
+    },
+    {
+      "name": "项目新建",
+      "route": "/projects/new",
+      "url": "http://localhost:5173/projects/new",
+      "finalUrl": "http://localhost:5173/projects/new",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-106_projects_new_initial.png",
+      "clickCount": 7,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "目标输入\n输入项目目标和基本信息",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "任务拆解\nAI 生成任务与交付物",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "3确认创建\n确认并创建项目",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "Agent 执行",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        }
+      ],
+      "core": {
+        "status": "success",
+        "projectName": "PW核心测评项目-1785322087636",
+        "phase2": true,
+        "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-107_projects_new_core.png",
+        "errors": [],
+        "failedRequests": []
+      },
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-108_projects_new_final.png"
+    },
+    {
+      "name": "候选材料设计",
+      "route": "/workbench",
+      "url": "http://localhost:5173/workbench?project_id=PROJ-3DB94354&task_id=c7952d32-41c4-40f2-94af-a01237a76422",
+      "finalUrl": "http://localhost:5173/workbench?project_id=PROJ-3DB94354&task_id=c7952d32-41c4-40f2-94af-a01237a76422",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-109_workbench_initial.png",
+      "clickCount": 11,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "ASSB-LPSCl-2026Q3-V2_1",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "硫化物固态电解质离子电导率优化",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "Agent 生成中…",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "综合评分",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        }
+      ],
+      "core": {
+        "status": "success",
+        "candidateCount": 2,
+        "hasMessage": false,
+        "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-110_workbench_core.png",
+        "errors": [],
+        "failedRequests": []
+      },
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-111_workbench_final.png"
+    },
+    {
+      "name": "性质预测",
+      "route": "/prediction",
+      "url": "http://localhost:5173/prediction?formula=LiCoO2&target_property=ionic_conductivity",
+      "finalUrl": "http://localhost:5173/prediction?formula=LiCoO2&target_property=ionic_conductivity",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-112_prediction_initial.png",
+      "clickCount": 16,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "标准预测\n跨尺度建模\n 晶体材料\n 聚合物\n化学式\n模板：\nLiCoO2\nLiFePO4\nNMC811\n优化模式\n单目标\n多目标优化\n候选数量\n目标属性\n离子电",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "晶体材料",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "聚合物",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "LiCoO2",
+          "tag": "SPAN",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "LiFePO4",
+          "tag": "SPAN",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "NMC811",
+          "tag": "SPAN",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "离子电导率 (S/cm)",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "首席材料学家",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "开始预测",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "预测性质条形图（按 离子电导率 (S/cm) 排序）",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        }
+      ],
+      "core": {
+        "status": "failed_or_empty",
+        "candidateCount": 0,
+        "hasMessage": false,
+        "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-113_prediction_core.png",
+        "errors": [
+          "[warning] [Vue warn]: Unhandled error during execution of render function \n  at <CandidateTable data= [Object, Object, Object, Object, Object] loading=false type=\"crystal\"  ... > \n  at <ACard key=0 class=\"app-card\" bordered=false > \n  at <ASpin key=1 spinning=false > \n  at <Prediction onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > \n  at <BaseTransition mode=\"out-in\" appear=false ",
+          "[warning] [Vue warn]: Unhandled error during execution of component update \n  at <Prediction onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > \n  at <BaseTransition mode=\"out-in\" appear=false persisted=false  ... > \n  at <Transition name=\"fade\" mode=\"out-in\" > \n  at <RouterView> \n  at <Anonymous hasSider=undefined prefixCls=\"ant-layout-content\" tagName=\"main\"  ... > \n  at <ALayoutCo",
+          "[warning] [Vue warn]: Unhandled error during execution of component update \n  at <ASpin key=1 spinning=false > \n  at <Prediction onVnodeUnmounted=fn<onVnodeUnmounted> ref=Ref< Proxy(Object) > > \n  at <BaseTransition mode=\"out-in\" appear=false persisted=false  ... > \n  at <Transition name=\"fade\" mode=\"out-in\" > \n  at <RouterView> \n  at <Anonymous hasSider=undefined prefixCls=\"ant-layout-content\" ta",
+          "[pageerror] ReferenceError: energyPerAtomUnit is not defined"
+        ],
+        "failedRequests": []
+      },
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-114_prediction_final.png"
+    },
+    {
+      "name": "合成路径",
+      "route": "/synthesis",
+      "url": "http://localhost:5173/synthesis?smiles=CCO",
+      "finalUrl": "http://localhost:5173/synthesis?smiles=CCO",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-115_synthesis_initial.png",
+      "clickCount": 18,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "目标分子 SMILES\n模板：\n乙醇 · CCO\n异丙醇 · CC(C)O\n环己烷 · C1CCCCC1\n环氧乙烷 · C1CO1\n分子结构预览：\nHO\n点击查",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "乙醇 · CCO",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "异丙醇 · CC(C)O",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "环己烷 · C1CCCCC1",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "环氧乙烷 · C1CO1",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "HO\n点击查看 3D",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "modal",
+              "title": "3D 分子结构 — C1CO1"
+            },
+            {
+              "type": "modal2"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "规划合成路径",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "综合成本-可行性-步骤数 三维对比",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "路线 R1\n可合成\n79分\n步骤数\n1\n置信度\n79%\n综合成本\n1.5\n分步反应式（1 步）\nDFT 可行性校验\n启动校验\n待校验",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "分步反应式（1 步）",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "启动校验",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "反应机理网络",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "发送到实验",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "发送到实验",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        }
+      ],
+      "core": {
+        "status": "success",
+        "routeCount": 1,
+        "serviceError": "",
+        "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-116_synthesis_core.png",
+        "errors": [],
+        "failedRequests": []
+      },
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-117_synthesis_final.png"
+    },
+    {
+      "name": "配方与工艺",
+      "route": "/formula-design",
+      "url": "http://localhost:5173/formula-design?target=LiCoO2",
+      "finalUrl": "http://localhost:5173/formula-design?target=LiCoO2",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-118_formula-design_initial.png",
+      "clickCount": 45,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "生成新配方",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "项目：\n来源：\n全部来源\n目标材料：\n重 置\n共 30 条\n配方编号\t来源\t目标材料\t版本\t物料数\t总成本 (¥/kg)\t更新时间\t操作\n\n \n\t\n \n\t\n \n",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "全部来源",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "重 置",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "BOM-0FBB25A4CC\t候选BOM\tLi7La3Zr1.5In0.5O12\tV01\t2 项\t¥0.00\t2026-07-27 18:02\t详情",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "BOM-8064EF00CF\t候选BOM\tLi7La3Zr1.5Yb0.5O12\tV01\t4 项\t¥0.00\t2026-07-27 16:00\t详情",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "BOM-11A44FD2FD\t候选BOM\tLi7La3Zr1.5Yb0.5O12\tV01\t5 项\t¥0.00\t2026-07-27 15:45\t详情",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "BOM-14F45A81AE\t候选BOM\tLi7La3Zr1.5Yb0.5O12\tV01\t4 项\t¥0.00\t2026-07-27 15:44\t详情",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "BOM-4BBD9DF163\t候选BOM\tLi7La3Zr1.5Yb0.5O12\tV01\t5 项\t¥0.00\t2026-07-27 15:33\t详情",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "BOM-9FAD006334\t候选BOM\tLi7La3Zr1.5Yb0.5O12\tV01\t4 项\t¥0.00\t2026-07-27 15:33\t详情",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "BOM-FBB4D4E09E\t候选BOM\tPP/EPDM/Talc(70/15/15)\tV01\t0 项\t¥0.00\t2026-07-27 00:34\t详情",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "BOM-E244F55950\t候选BOM\tPoly(propylene carbonate)\tV01\t0 项\t¥0.00\t2026-07-26 23:33\t详情",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "FORM-736FC7C5活跃\t配方设计\tLi6PS5Cl\tV01\t2 项\t¥0.00\t2026-07-29 16:52\t详情历史",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "历史",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "FORM-216FB462活跃\t配方设计\tLi6PS5Cl\tV01\t2 项\t¥0.00\t2026-07-29 16:45\t详情历史",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "详情",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "历史",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "1",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "1",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "2",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "2",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "3",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "3",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "🏭\n配方工艺师\nAI",
+          "tag": "SPAN",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "LiCoO2",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "常用批量",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "生成配方",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        }
+      ],
+      "core": {
+        "status": "failed_or_empty",
+        "bomRows": 0,
+        "hasError": false,
+        "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-119_formula-design_core.png",
+        "errors": [
+          "[error] Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+        ],
+        "failedRequests": [
+          {
+            "url": "http://localhost:5173/api/mcp/tools/design_formula/call",
+            "status": 500
+          }
+        ]
+      },
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-120_formula-design_final.png"
+    },
+    {
+      "name": "实验闭环迭代",
+      "route": "/ecml",
+      "url": "http://localhost:5173/ecml?target=LiCoO2&target_property=ionic_conductivity",
+      "finalUrl": "http://localhost:5173/ecml?target=LiCoO2&target_property=ionic_conductivity",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-121_ecml_initial.png",
+      "clickCount": 19,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "目标\n模板：\nLiCoO2\nLiFePO4\npolymer electrolyte PEO\n目标属性\n离子电导率 (S/cm)\n单目标\n多目标\n迭代次数\n取消运",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "离子电导率 (S/cm)",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "取消运行",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "执行状态\n运行中\n查看中间结果\n运行中... 已等待 13s\nexperiment · 第 0/40 次轮询\n材料路由\n判断材料类型，选择处理分支\n🧭\n材料路",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "查看中间结果",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "🧭\n材料路由调度员\nAI",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "🔬\n首席材料学家\nAI",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "🏭\n配方工艺师\nAI",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "🔮\n电池寿命预言者\nAI",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "🧮\nDFT 计算专家\nAI",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "📊\n实验数据分析员\nAI",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "🎓\n电池衰减学习者\nAI",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "委员会门禁\n前往委员会中心\n多智能体委员会对候选材料进行立项/优先级/偏差等门禁审查，决策通过后方可进入下一环节\n晶体构建\n待定\nreject\n候选优先级\n待定",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "前往委员会中心",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": true,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        }
+      ],
+      "core": {
+        "status": "completed",
+        "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-122_ecml_core.png",
+        "errors": [],
+        "failedRequests": []
+      },
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-123_ecml_final.png"
+    },
+    {
+      "name": "迭代历史",
+      "route": "/ecml/runs",
+      "url": "http://localhost:5173/ecml/runs",
+      "finalUrl": "http://localhost:5173/ecml/runs",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-124_ecml_runs_initial.png",
+      "clickCount": 8,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "运行记录\n新建实验闭环迭代\n正式\n测试\n全部\n选择项目\n请先选择项目\n重 置\n\tRun ID\t目标\t目标属性\t迭代次数\t来源\t状态\t更新时间\t操作\n\n \n\t\n ",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "新建实验闭环迭代",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": true,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "选择项目",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "请先选择项目",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "重 置",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        }
+      ],
+      "core": null,
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-125_ecml_runs_final.png"
+    },
+    {
+      "name": "性能寿命预测",
+      "route": "/battery-life",
+      "url": "http://localhost:5173/battery-life",
+      "finalUrl": "http://localhost:5173/battery-life",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-126_battery-life_initial.png",
+      "clickCount": 9,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "材料化学式\n可选：填写化学式用于基准数据库对比，如 LiFePO4、NMC532、催化剂配方等\n循环数据\nJSON 数组，每项含 cycle（循环数）与 cap",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "SPAN",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "加载示例数据",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "清 空",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "开始预测",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        }
+      ],
+      "core": null,
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-127_battery-life_final.png"
+    },
+    {
+      "name": "实验工作台",
+      "route": "/experiment-workbench",
+      "url": "http://localhost:5173/experiment-workbench?create=1&project_id=PROJ-3DB94354",
+      "finalUrl": "http://localhost:5173/experiment-workbench?create=1&project_id=PROJ-3DB94354",
+      "loadStatus": "ok",
+      "loadErrors": [],
+      "loadFailedRequests": [],
+      "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-128_experiment-workbench_initial.png",
+      "clickCount": 41,
+      "clicks": [
+        {
+          "text": "新建",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "最近",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "系统管理员\n管理员",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "实验任务\n批量导入\n新建任务\n任务 ID\t项目\t状态\t来源\t优先级\t风险\t负责人\t数据条数\t操作\t\n \n\t\n \n\t\n \n\t\n \n\t\n \n\t\n \n\t\n \n\t\n \n",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "",
+          "tag": "DIV",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "批量导入",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "modal",
+              "title": "批量导入实验数据"
+            },
+            {
+              "type": "modal2"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "新建任务",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "EXP_8a30e83c\tPROJ-3DB94354\t\n草稿\n\t人工\tP2\t-\t当前用户\t0\t\n审批\n录入数据\n查看结果\n项目数据",
+          "tag": "TR",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "查看结果",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [
+            {
+              "type": "drawer"
+            }
+          ],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "项目数据",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": true,
+          "popups": [],
+          "errors": [
+            "[warning] Note: Customize `getInputElement` should customize clear and placeholder logic instead of configuring `allowClear` and `placeholder`."
+          ],
+          "failedRequests": []
+        },
+        {
+          "text": "ORD-ECML-ecml_202-1\t\t\n已审批\n草案\n\tAI\tP2\t-\t\t1\t\n审批\n录入数据\n查看结果",
+          "tag": "TR",
+          "href": "",
+          "status": "clicked",
+          "urlChanged": false,
+          "popups": [],
+          "errors": [],
+          "failedRequests": []
+        },
+        {
+          "text": "录入数据",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "查看结果",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "ORD_D71AED94E3\t\t\n草稿\n草案\n\tAI\tP2\t-\t\t0\t\n审批\n录入数据\n查看结果",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "查看结果",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "ORD_B71A7BC488\t\t\n草稿\n草案\n\tAI\tP2\t-\t\t0\t\n审批\n录入数据\n查看结果",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "查看结果",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "ORD_A3D6DB9F68\t\t\n草稿\n草案\n\tAI\tP2\t-\t\t0\t\n审批\n录入数据\n查看结果",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "查看结果",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "ORD_0E9B3367B4\t\t\n草稿\n草案\n\tAI\tP2\t-\t\t0\t\n审批\n录入数据\n查看结果",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "查看结果",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "ORD_D02C873C99\t\t\n草稿\n草案\n\tAI\tP2\t-\t\t0\t\n审批\n录入数据\n查看结果",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "查看结果",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "ORD_B9264B8BCD\tPROJ-3DB94354\t\n草稿\n草案\n\tAI\tP2\t-\t\t0\t\n审批\n录入数据\n查看结果\n项目数据",
+          "tag": "TR",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "查看结果",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "项目数据",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "1",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "1",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "2",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "2",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "3",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "3",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "4",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "4",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "5",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "5",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "•••",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "98",
+          "tag": "LI",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "98",
+          "tag": "A",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "",
+          "tag": "BUTTON",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        },
+        {
+          "text": "8 条/页",
+          "tag": "DIV",
+          "href": "",
+          "status": "error",
+          "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button, a, [role=\"button\"], .ant-select, .ant-tabs-tab, .ant-pagination-item, .ant-table-row, .ant-card, .ant-btn, [oncli"
+        }
+      ],
+      "core": {
+        "status": "success",
+        "message": "",
+        "screenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-129_experiment-workbench_core.png",
+        "errors": [],
+        "failedRequests": []
+      },
+      "finalScreenshot": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-130_experiment-workbench_final.png"
+    }
+  ],
+  "core": [],
+  "defects": [
+    {
+      "id": "BEMCL-PRED-P0-001",
+      "module": "PRED",
+      "severity": "P0",
+      "title": "性质预测 核心操作未返回有效结果",
+      "steps": "执行 性质预测",
+      "expected": "操作成功并展示结果",
+      "actual": "状态=failed_or_empty; ",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-113_prediction_core.png",
+      "suggestion": "修复对应业务链路"
+    },
+    {
+      "id": "BEMCL-PRED-P1-002",
+      "module": "PRED",
+      "severity": "P1",
+      "title": "性质预测 操作期间报错",
+      "steps": "执行 性质预测",
+      "expected": "无 console error",
+      "actual": "[pageerror] ReferenceError: energyPerAtomUnit is not defined",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-113_prediction_core.png",
+      "suggestion": "检查前端事件与数据流"
+    },
+    {
+      "id": "BEMCL-FORMULA-P0-003",
+      "module": "FORMULA",
+      "severity": "P0",
+      "title": "配方与工艺 核心操作未返回有效结果",
+      "steps": "执行 配方与工艺",
+      "expected": "操作成功并展示结果",
+      "actual": "状态=failed_or_empty; ",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-119_formula-design_core.png",
+      "suggestion": "修复对应业务链路"
+    },
+    {
+      "id": "BEMCL-FORMULA-P1-004",
+      "module": "FORMULA",
+      "severity": "P1",
+      "title": "配方与工艺 操作期间报错",
+      "steps": "执行 配方与工艺",
+      "expected": "无 console error",
+      "actual": "[error] Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-119_formula-design_core.png",
+      "suggestion": "检查前端事件与数据流"
+    },
+    {
+      "id": "BEMCL-FORMULA-P0-005",
+      "module": "FORMULA",
+      "severity": "P0",
+      "title": "配方与工艺 操作接口失败",
+      "steps": "执行 配方与工艺",
+      "expected": "接口返回 200",
+      "actual": "HTTP 500 http://localhost:5173/api/mcp/tools/design_formula/call",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-119_formula-design_core.png",
+      "suggestion": "检查后端的业务接口"
+    },
+    {
+      "id": "BEMCL-FE-P2-006",
+      "module": "FE",
+      "severity": "P2",
+      "title": "首页 部分可点击元素无法交互",
+      "steps": "遍历点击 /",
+      "expected": "所有可点击元素正常响应",
+      "actual": "2 个点击异常：48\n合成路径\n服务可用率 93%, 下一步",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-101_home_final.png",
+      "suggestion": "检查元素覆盖与事件绑定"
+    },
+    {
+      "id": "BEMCL-FE-P2-007",
+      "module": "FE",
+      "severity": "P2",
+      "title": "我的待办 部分可点击元素无法交互",
+      "steps": "遍历点击 /my-tasks",
+      "expected": "所有可点击元素正常响应",
+      "actual": "17 个点击异常：委员会Case, 状态",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-103_my-tasks_final.png",
+      "suggestion": "检查元素覆盖与事件绑定"
+    },
+    {
+      "id": "BEMCL-FE-P2-008",
+      "module": "FE",
+      "severity": "P2",
+      "title": "项目管理 部分可点击元素无法交互",
+      "steps": "遍历点击 /projects",
+      "expected": "所有可点击元素正常响应",
+      "actual": "1 个点击异常：",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-105_projects_final.png",
+      "suggestion": "检查元素覆盖与事件绑定"
+    },
+    {
+      "id": "BEMCL-FE-P2-009",
+      "module": "FE",
+      "severity": "P2",
+      "title": "候选材料设计 部分可点击元素无法交互",
+      "steps": "遍历点击 /workbench",
+      "expected": "所有可点击元素正常响应",
+      "actual": "1 个点击异常：Agent 生成中…",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-111_workbench_final.png",
+      "suggestion": "检查元素覆盖与事件绑定"
+    },
+    {
+      "id": "BEMCL-FE-P2-010",
+      "module": "FE",
+      "severity": "P2",
+      "title": "性质预测 部分可点击元素无法交互",
+      "steps": "遍历点击 /prediction",
+      "expected": "所有可点击元素正常响应",
+      "actual": "8 个点击异常：, LiCoO2",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-114_prediction_final.png",
+      "suggestion": "检查元素覆盖与事件绑定"
+    },
+    {
+      "id": "BEMCL-FE-P2-011",
+      "module": "FE",
+      "severity": "P2",
+      "title": "合成路径 部分可点击元素无法交互",
+      "steps": "遍历点击 /synthesis",
+      "expected": "所有可点击元素正常响应",
+      "actual": "4 个点击异常：综合成本-可行性-步骤数 三维对比, 反应机理网络",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-117_synthesis_final.png",
+      "suggestion": "检查元素覆盖与事件绑定"
+    },
+    {
+      "id": "BEMCL-FE-P2-012",
+      "module": "FE",
+      "severity": "P2",
+      "title": "配方与工艺 部分可点击元素无法交互",
+      "steps": "遍历点击 /formula-design",
+      "expected": "所有可点击元素正常响应",
+      "actual": "44 个点击异常：新建, 最近",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-120_formula-design_final.png",
+      "suggestion": "检查元素覆盖与事件绑定"
+    },
+    {
+      "id": "BEMCL-FE-P2-013",
+      "module": "FE",
+      "severity": "P2",
+      "title": "实验闭环迭代 部分可点击元素无法交互",
+      "steps": "遍历点击 /ecml",
+      "expected": "所有可点击元素正常响应",
+      "actual": "1 个点击异常：最近",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-123_ecml_final.png",
+      "suggestion": "检查元素覆盖与事件绑定"
+    },
+    {
+      "id": "BEMCL-FE-P2-014",
+      "module": "FE",
+      "severity": "P2",
+      "title": "实验工作台 部分可点击元素无法交互",
+      "steps": "遍历点击 /experiment-workbench",
+      "expected": "所有可点击元素正常响应",
+      "actual": "30 个点击异常：录入数据, 查看结果",
+      "evidence": "d:\\BattleFish\\BatteryEMCL Lab\\frontend\\screenshots\\pw_core\\EV-20260729-130_experiment-workbench_final.png",
+      "suggestion": "检查元素覆盖与事件绑定"
+    }
+  ]
+}

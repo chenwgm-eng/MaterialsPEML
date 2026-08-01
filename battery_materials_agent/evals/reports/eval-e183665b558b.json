@@ -1,0 +1,551 @@
+{
+  "eval_run_id": "eval-e183665b558b",
+  "target_type": "model",
+  "target_id": "mock-llm",
+  "target_version": "v2.0",
+  "dataset": "crystal_golden_set",
+  "status": "completed",
+  "cases": [
+    {
+      "case_id": "crystal_001",
+      "dataset": "crystal_golden_set",
+      "input": {
+        "structure": {
+          "lattice": [
+            [
+              5,
+              0,
+              0
+            ],
+            [
+              0,
+              5,
+              0
+            ],
+            [
+              0,
+              0,
+              5
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ],
+          "species": [
+            "Si",
+            "Si"
+          ]
+        }
+      },
+      "expected": {
+        "valid": true,
+        "spacegroup": 227
+      },
+      "metadata": {
+        "description": "Valid silicon diamond structure"
+      }
+    },
+    {
+      "case_id": "crystal_002",
+      "dataset": "crystal_golden_set",
+      "input": {
+        "structure": {
+          "lattice": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0.1,
+              0.1,
+              0.1
+            ]
+          ],
+          "species": [
+            "Si",
+            "Si"
+          ]
+        }
+      },
+      "expected": {
+        "valid": false,
+        "reason": "atoms_too_close"
+      },
+      "metadata": {
+        "description": "Overlapping atoms"
+      }
+    },
+    {
+      "case_id": "crystal_003",
+      "dataset": "crystal_golden_set",
+      "input": {
+        "structure": {
+          "lattice": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "species": [
+            "Si"
+          ]
+        }
+      },
+      "expected": {
+        "valid": false,
+        "reason": "singular_lattice"
+      },
+      "metadata": {
+        "description": "Zero determinant lattice"
+      }
+    },
+    {
+      "case_id": "crystal_004",
+      "dataset": "crystal_golden_set",
+      "input": {
+        "structure": {
+          "lattice": [
+            [
+              5,
+              0,
+              0
+            ],
+            [
+              0,
+              5,
+              0
+            ],
+            [
+              0,
+              0,
+              5
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ],
+            [
+              0.25,
+              0.25,
+              0.25
+            ]
+          ],
+          "species": [
+            "Si",
+            "Si",
+            "O"
+          ]
+        }
+      },
+      "expected": {
+        "valid": false,
+        "reason": "stoichiometry_error"
+      },
+      "metadata": {
+        "description": "Wrong stoichiometry"
+      }
+    },
+    {
+      "case_id": "crystal_005",
+      "dataset": "crystal_golden_set",
+      "input": {
+        "structure": {
+          "lattice": [
+            [
+              4,
+              0,
+              0
+            ],
+            [
+              0,
+              4,
+              0
+            ],
+            [
+              0,
+              0,
+              4
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ],
+          "species": [
+            "C",
+            "C"
+          ]
+        }
+      },
+      "expected": {
+        "valid": true,
+        "spacegroup": 227
+      },
+      "metadata": {
+        "description": "Valid carbon diamond structure"
+      }
+    }
+  ],
+  "results": [
+    {
+      "case_id": "crystal_001",
+      "dataset": "crystal_golden_set",
+      "output": {
+        "valid": true,
+        "reason": null,
+        "spacegroup": 227,
+        "candidate": {
+          "lattice": [
+            [
+              5,
+              0,
+              0
+            ],
+            [
+              0,
+              5,
+              0
+            ],
+            [
+              0,
+              0,
+              5
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ],
+          "species": [
+            "Si",
+            "Si"
+          ]
+        },
+        "model": "mock-llm-v1"
+      },
+      "passed": true,
+      "error": null,
+      "latency_ms": 0.08770000022195745
+    },
+    {
+      "case_id": "crystal_002",
+      "dataset": "crystal_golden_set",
+      "output": {
+        "valid": false,
+        "reason": "atoms_too_close",
+        "spacegroup": null,
+        "candidate": {
+          "lattice": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0.1,
+              0.1,
+              0.1
+            ]
+          ],
+          "species": [
+            "Si",
+            "Si"
+          ]
+        },
+        "model": "mock-llm-v1"
+      },
+      "passed": true,
+      "error": null,
+      "latency_ms": 0.05689999852620531
+    },
+    {
+      "case_id": "crystal_003",
+      "dataset": "crystal_golden_set",
+      "output": {
+        "valid": false,
+        "reason": "singular_lattice",
+        "spacegroup": null,
+        "candidate": {
+          "lattice": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "species": [
+            "Si"
+          ]
+        },
+        "model": "mock-llm-v1"
+      },
+      "passed": true,
+      "error": null,
+      "latency_ms": 0.01920000067912042
+    },
+    {
+      "case_id": "crystal_004",
+      "dataset": "crystal_golden_set",
+      "output": {
+        "valid": false,
+        "reason": "stoichiometry_error",
+        "spacegroup": null,
+        "candidate": {
+          "lattice": [
+            [
+              5,
+              0,
+              0
+            ],
+            [
+              0,
+              5,
+              0
+            ],
+            [
+              0,
+              0,
+              5
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ],
+            [
+              0.25,
+              0.25,
+              0.25
+            ]
+          ],
+          "species": [
+            "Si",
+            "Si",
+            "O"
+          ]
+        },
+        "model": "mock-llm-v1"
+      },
+      "passed": true,
+      "error": null,
+      "latency_ms": 0.11009999980160501
+    },
+    {
+      "case_id": "crystal_005",
+      "dataset": "crystal_golden_set",
+      "output": {
+        "valid": true,
+        "reason": null,
+        "spacegroup": 227,
+        "candidate": {
+          "lattice": [
+            [
+              4,
+              0,
+              0
+            ],
+            [
+              0,
+              4,
+              0
+            ],
+            [
+              0,
+              0,
+              4
+            ]
+          ],
+          "coords": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0.5,
+              0.5,
+              0.5
+            ]
+          ],
+          "species": [
+            "C",
+            "C"
+          ]
+        },
+        "model": "mock-llm-v1"
+      },
+      "passed": true,
+      "error": null,
+      "latency_ms": 0.05390000114857685
+    }
+  ],
+  "metrics": {
+    "per_dataset": {
+      "crystal_golden_set": {
+        "science": {
+          "invalid_structure_leak_rate": 0.0,
+          "invalid_structure_leak_count": 0,
+          "valid_candidate_rejection_rate": 0.0,
+          "spacegroup_accuracy": 1.0,
+          "invalid_total": 3,
+          "valid_total": 2
+        },
+        "safety": {
+          "zero_tolerance": {
+            "metrics": {
+              "key_exposure_count": 0,
+              "policy_regression_failures": 0,
+              "invalid_structure_leak_count": 0,
+              "unauthorized_access_leak_count": 0
+            },
+            "passed": true,
+            "violations": []
+          },
+          "case_count": 5
+        },
+        "ops": {
+          "reliability": {
+            "recovery_success_rate": 0.0,
+            "duplicate_external_call_rate": 0.0,
+            "tool_failure_degradation_correctness": 0.0,
+            "failure_injected_total": 0,
+            "tool_failure_total": 0,
+            "case_count": 5
+          },
+          "efficiency": {
+            "end_to_end_latency_ms": 0.06556000007549301,
+            "human_review_duration_ms": 0.0,
+            "cost_per_valid_candidate": 0.0,
+            "total_cost_usd": 0.0,
+            "valid_candidates": 2,
+            "case_count": 5
+          },
+          "dataset": "crystal_golden_set",
+          "case_count": 5
+        }
+      }
+    },
+    "total_cases": 5,
+    "gate": {
+      "passed": true,
+      "violations": [],
+      "zero_tolerance_passed": true,
+      "baseline_passed": true
+    }
+  },
+  "started_at": "2026-07-24T05:05:55.357126Z",
+  "completed_at": "2026-07-24T05:05:55.357964Z",
+  "baseline_version": null,
+  "failed_cases": [],
+  "publication_recommendation": "promote"
+}
