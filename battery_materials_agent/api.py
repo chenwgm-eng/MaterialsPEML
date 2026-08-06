@@ -3164,6 +3164,99 @@ async def get_candidate(candidate_id: str):
     return record.model_dump()
 
 
+# ── 0040 两层流程：候选材料状态机 / 一键生成实验单 / 工艺方案状态 ─────────
+
+class CandidateStatusRequest(BaseModel):
+    """候选材料状态迁移请求。"""
+    status: str = Field(..., description="目标状态：screening/feasible/process_planning/process_confirmed/ready_for_experiment/rejected")
+    actor_role: str = Field(default="", description="操作者角色：formulator / process_engineer")
+    owner: str = Field(default="", description="新的责任人（用户名）")
+    reason: str = Field(default="", description="迁移原因")
+
+
+@app.patch("/candidates/{candidate_id}/status",
+           dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def update_candidate_status(candidate_id: str, req: CandidateStatusRequest):
+    """更新候选材料状态（两层状态机 + 角色校验）。"""
+    from .experiment.candidate_store import IllegalCandidateTransitionError
+    try:
+        updated = app.state.candidate_store.update_status(
+            candidate_id, req.status, actor_role=req.actor_role,
+            owner=req.owner, triggered_by="user", reason=req.reason,
+        )
+    except IllegalCandidateTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return updated.model_dump()
+
+
+class OneClickExperimentRequest(BaseModel):
+    """一键生成实验单请求（配方来源 + 工艺路径双引用）。"""
+    project_id: str = ""
+    scenario_id: str = ""
+    process_id: str = Field(default="", description="工艺方案 ID（须已确认 confirmed）")
+    notes: str = ""
+
+
+@app.post("/candidates/{candidate_id}/one-click-experiment",
+          dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def create_one_click_experiment(candidate_id: str, req: OneClickExperimentRequest):
+    """一键生成实验任务单：自动关联确定的配方与已确认的工艺路径。"""
+    record = app.state.candidate_store.get(candidate_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"候选材料 {candidate_id} 不存在")
+    # 放行门禁校验：关联候选若有 release_card_required 且未通过审批，拒绝下达实验
+    cand_data = record.data or {}
+    if cand_data.get("release_card_required") and not cand_data.get("release_card_approved"):
+        raise HTTPException(
+            status_code=403,
+            detail=f"候选材料 {candidate_id} 需要通过放行卡审批后才能创建实验任务",
+        )
+    try:
+        order = agent.experiment_controller.create_order_for_candidate_and_process(
+            candidate_id=candidate_id,
+            process_id=req.process_id,
+            project_id=req.project_id,
+            scenario_id=req.scenario_id or record.scenario_id,
+            notes=req.notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    _log_research_event(
+        event_type="experiment",
+        run_id=order.order_id,
+        title=f"一键生成实验任务单：{order.order_id}",
+        summary=f"候选 {candidate_id}，工艺 {req.process_id or '未关联'}",
+        status="running",
+        payload={"order_id": order.order_id, "candidate_id": candidate_id,
+                 "process_id": req.process_id},
+    )
+    return order.model_dump()
+
+
+class ProcessSchemeStatusRequest(BaseModel):
+    """工艺方案状态迁移请求。"""
+    status: str = Field(..., description="目标状态：draft/reviewing/confirmed/abandoned")
+    owner: str = Field(default="", description="新的责任人（工艺人员用户名）")
+    require_role: str = Field(default="process_engineer", description="操作者角色（默认 process_engineer）")
+    reason: str = Field(default="", description="迁移原因")
+
+
+@app.patch("/process-schemes/{process_id}/status",
+           dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def update_process_scheme_status(process_id: str, req: ProcessSchemeStatusRequest):
+    """更新工艺方案状态（draft → reviewing → confirmed / abandoned）。"""
+    from .experiment.process_scheme_store import IllegalProcessSchemeTransitionError
+    try:
+        updated = app.state.process_scheme_store.update_status(
+            process_id, req.status, owner=req.owner,
+            triggered_by="user", reason=req.reason,
+            require_role=req.require_role,
+        )
+    except IllegalProcessSchemeTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return updated.model_dump()
+
+
 # ── 业务链路 MDM：任务 → 候选材料 → BOM 方案 → 测试任务 ─────────────
 
 @app.get("/tasks/{task_id}/candidates")
