@@ -114,6 +114,7 @@ class ExperimentOrder(BaseModel):
     project_id: str = ""
     rd_package_id: str = ""
     candidate_id: str = ""
+    process_id: str = ""  # 0040：双来源引用——关联已确认的工艺方案（ProcessScheme）
     formulation_version: str = ""
     process_version: str = ""
     test_protocol_version: str = ""
@@ -138,6 +139,7 @@ class ExperimentOrder(BaseModel):
     idempotency_key: str = ""  # 幂等键：防止重复提交创建重复任务单
 
     @field_validator('scenario_id', 'project_id', 'rd_package_id', 'candidate_id',
+                     'process_id',
                      'formulation_version', 'process_version', 'test_protocol_version',
                      'assignee', 'approved_by', 'notes', 'execution_mode', 'priority', 'status',
                      'bom_id', 'task_id', 'idempotency_key',
@@ -331,6 +333,7 @@ class ExperimentDataStore:
                     project_id TEXT,
                     rd_package_id TEXT,
                     candidate_id TEXT,
+                    process_id TEXT,
                     formulation_version TEXT,
                     process_version TEXT,
                     test_protocol_version TEXT,
@@ -354,6 +357,11 @@ class ExperimentDataStore:
                     task_id TEXT
                 )
             """))
+            # 0040 两层流程：实验单双来源引用（关联已确认工艺方案）兜底补列
+            conn.execute(text(
+                "ALTER TABLE experiment.experiment_orders "
+                "ADD COLUMN IF NOT EXISTS process_id TEXT DEFAULT ''"
+            ))
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS experiment.experiment_result_records (
                     result_id TEXT PRIMARY KEY,
@@ -548,16 +556,26 @@ class ExperimentDataStore:
             started_at=_iso(r[6]) or None, completed_at=_iso(r[7]) or None,
         ) for r in rows]
 
+    # 显式列清单（0040 新增 process_id 后，避免 SELECT * 因 ALTER TABLE 追加列导致列位置漂移）
+    _EXPERIMENT_ORDER_COLS = (
+        "order_id, project_id, rd_package_id, candidate_id, process_id, "
+        "formulation_version, process_version, test_protocol_version, execution_mode, "
+        "priority, assignee, material_requirements, procedure, required_results, "
+        "acceptance_criteria, status, created_at, approved_by, approved_at, notes, "
+        "protocol_provenance, ai_draft, provenance, scenario_id, bom_id, task_id, "
+        "idempotency_key"
+    )
+
     def save_order(self, order: "ExperimentOrder"):
         with self.engine.begin() as conn:
             conn.execute(
                 text("""INSERT INTO experiment.experiment_orders
-                (order_id, project_id, rd_package_id, candidate_id, formulation_version,
+                (order_id, project_id, rd_package_id, candidate_id, process_id, formulation_version,
                  process_version, test_protocol_version, execution_mode, priority, assignee,
                  material_requirements, procedure, required_results, acceptance_criteria,
                  status, created_at, approved_by, approved_at, notes, protocol_provenance,
                  ai_draft, provenance, scenario_id, bom_id, task_id, idempotency_key)
-                VALUES (:order_id, :project_id, :rd_package_id, :candidate_id, :formulation_version,
+                VALUES (:order_id, :project_id, :rd_package_id, :candidate_id, :process_id, :formulation_version,
                  :process_version, :test_protocol_version, :execution_mode, :priority, :assignee,
                  CAST(:material_requirements AS JSONB), :procedure,
                  CAST(:required_results AS JSONB), CAST(:acceptance_criteria AS JSONB),
@@ -569,6 +587,7 @@ class ExperimentDataStore:
                     project_id = EXCLUDED.project_id,
                     rd_package_id = EXCLUDED.rd_package_id,
                     candidate_id = EXCLUDED.candidate_id,
+                    process_id = EXCLUDED.process_id,
                     formulation_version = EXCLUDED.formulation_version,
                     process_version = EXCLUDED.process_version,
                     test_protocol_version = EXCLUDED.test_protocol_version,
@@ -598,6 +617,7 @@ class ExperimentDataStore:
                     "project_id": order.project_id or None,
                     "rd_package_id": order.rd_package_id,
                     "candidate_id": order.candidate_id or None,
+                    "process_id": order.process_id or None,
                     "formulation_version": order.formulation_version,
                     "process_version": order.process_version,
                     "test_protocol_version": order.test_protocol_version,
@@ -626,7 +646,8 @@ class ExperimentDataStore:
     def get_order(self, order_id: str) -> "ExperimentOrder | None":
         with self.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT * FROM experiment.experiment_orders WHERE order_id = :order_id"),
+                text(f"SELECT {self._EXPERIMENT_ORDER_COLS} "
+                     "FROM experiment.experiment_orders WHERE order_id = :order_id"),
                 {"order_id": order_id},
             ).fetchone()
         if row is None:
@@ -634,21 +655,22 @@ class ExperimentDataStore:
         return ExperimentOrder(
             order_id=row[0], project_id=row[1] or "", rd_package_id=row[2] or "",
             candidate_id=row[3] or "",
-            formulation_version=row[4], process_version=row[5], test_protocol_version=row[6],
-            execution_mode=row[7], priority=row[8], assignee=row[9],
-            material_requirements=_safe_json_load(row[10], default=[]),
-            procedure=_safe_json_load(row[11], default=[]),
-            required_results=_safe_json_load(row[12], default=[]),
-            acceptance_criteria=_safe_json_load(row[13], default={}),
-            status=row[14], created_at=_iso(row[15]), approved_by=row[16],
-            approved_at=_iso(row[17]) or None, notes=row[18],
-            protocol_provenance=_safe_json_load(row[19]),
-            ai_draft=bool(row[20]) if row[20] is not None else False,
-            provenance=_safe_json_load(row[21], default=[]),
-            scenario_id=row[22] if row[22] is not None else "",
-            bom_id=row[23] if len(row) > 23 and row[23] is not None else "",
-            task_id=row[24] if len(row) > 24 and row[24] is not None else "",
-            idempotency_key=row[25] if len(row) > 25 and row[25] is not None else "",
+            process_id=row[4] if len(row) > 4 and row[4] is not None else "",
+            formulation_version=row[5], process_version=row[6], test_protocol_version=row[7],
+            execution_mode=row[8], priority=row[9], assignee=row[10],
+            material_requirements=_safe_json_load(row[11], default=[]),
+            procedure=_safe_json_load(row[12], default=[]),
+            required_results=_safe_json_load(row[13], default=[]),
+            acceptance_criteria=_safe_json_load(row[14], default={}),
+            status=row[15], created_at=_iso(row[16]), approved_by=row[17],
+            approved_at=_iso(row[18]) or None, notes=row[19],
+            protocol_provenance=_safe_json_load(row[20]),
+            ai_draft=bool(row[21]) if row[21] is not None else False,
+            provenance=_safe_json_load(row[22], default=[]),
+            scenario_id=row[23] if row[23] is not None else "",
+            bom_id=row[24] if len(row) > 24 and row[24] is not None else "",
+            task_id=row[25] if len(row) > 25 and row[25] is not None else "",
+            idempotency_key=row[26] if len(row) > 26 and row[26] is not None else "",
         )
 
     def get_order_by_idempotency_key(self, key: str) -> "ExperimentOrder | None":
@@ -669,7 +691,7 @@ class ExperimentDataStore:
                     task_id: str | None = None) -> list["ExperimentOrder"]:
         """查询实验任务单列表，支持按 status / project_id / task_id 过滤。"""
         with self.engine.connect() as conn:
-            query = "SELECT * FROM experiment.experiment_orders"
+            query = f"SELECT {self._EXPERIMENT_ORDER_COLS} FROM experiment.experiment_orders"
             conditions = []
             params: dict[str, str] = {}
             if status:
@@ -688,21 +710,22 @@ class ExperimentDataStore:
         return [ExperimentOrder(
             order_id=r[0], project_id=r[1] or "", rd_package_id=r[2] or "",
             candidate_id=r[3] or "",
-            formulation_version=r[4], process_version=r[5], test_protocol_version=r[6],
-            execution_mode=r[7], priority=r[8], assignee=r[9],
-            material_requirements=_safe_json_load(r[10], default=[]),
-            procedure=_safe_json_load(r[11], default=[]),
-            required_results=_safe_json_load(r[12], default=[]),
-            acceptance_criteria=_safe_json_load(r[13], default={}),
-            status=r[14], created_at=_iso(r[15]), approved_by=r[16],
-            approved_at=_iso(r[17]) or None, notes=r[18],
-            protocol_provenance=_safe_json_load(r[19]),
-            ai_draft=bool(r[20]) if r[20] is not None else False,
-            provenance=_safe_json_load(r[21], default=[]),
-            scenario_id=r[22] if r[22] is not None else "",
-            bom_id=r[23] if len(r) > 23 and r[23] is not None else "",
-            task_id=r[24] if len(r) > 24 and r[24] is not None else "",
-            idempotency_key=r[25] if len(r) > 25 and r[25] is not None else "",
+            process_id=r[4] if len(r) > 4 and r[4] is not None else "",
+            formulation_version=r[5], process_version=r[6], test_protocol_version=r[7],
+            execution_mode=r[8], priority=r[9], assignee=r[10],
+            material_requirements=_safe_json_load(r[11], default=[]),
+            procedure=_safe_json_load(r[12], default=[]),
+            required_results=_safe_json_load(r[13], default=[]),
+            acceptance_criteria=_safe_json_load(r[14], default={}),
+            status=r[15], created_at=_iso(r[16]), approved_by=r[17],
+            approved_at=_iso(r[18]) or None, notes=r[19],
+            protocol_provenance=_safe_json_load(r[20]),
+            ai_draft=bool(r[21]) if r[21] is not None else False,
+            provenance=_safe_json_load(r[22], default=[]),
+            scenario_id=r[23] if r[23] is not None else "",
+            bom_id=r[24] if len(r) > 24 and r[24] is not None else "",
+            task_id=r[25] if len(r) > 25 and r[25] is not None else "",
+            idempotency_key=r[26] if len(r) > 26 and r[26] is not None else "",
         ) for r in rows]
 
     def save_result_record(self, record: "ExperimentResultRecord"):
@@ -1080,6 +1103,67 @@ class ExperimentController:
             order.status = ExperimentOrderStatus.DRAFT.value
         if not order.created_at:
             order.created_at = datetime.now(timezone.utc).isoformat()
+        self._store.save_order(order)
+        return order
+
+    def create_order_for_candidate_and_process(
+        self,
+        candidate_id: str,
+        process_id: str = "",
+        project_id: str = "",
+        scenario_id: str = "",
+        notes: str = "",
+    ) -> "ExperimentOrder":
+        """一键生成实验任务单：同时引用"确定的配方"与"确定的工艺路径"。
+
+        双来源校验：
+        - process_id 非空时，对应工艺方案必须已确认（confirmed），否则报错；
+        - 从已确认工艺方案回填 procedure（工艺步骤）与 raw_materials（原料清单）。
+
+        Args:
+            candidate_id: 候选材料 ID（配方来源，必填）
+            process_id: 工艺方案 ID（工艺来源，可空；空则仅关联配方）
+            project_id: 可空，归属项目
+            scenario_id: 可空，归属研发场景
+            notes: 备注
+
+        Raises:
+            ValueError: candidate_id 为空 / 工艺方案不存在或未确认
+        """
+        if not candidate_id:
+            raise ValueError("candidate_id 不能为空：一键生成实验单必须关联确定的配方")
+
+        order = ExperimentOrder(
+            order_id=f"EXP_{uuid.uuid4().hex[:10].upper()}",
+            project_id=project_id,
+            candidate_id=candidate_id,
+            process_id=process_id,
+            status=ExperimentOrderStatus.DRAFT.value,
+            ai_draft=True,
+            scenario_id=scenario_id,
+            notes=notes or "一键生成：配方来源 + 工艺路径双引用",
+        )
+
+        # 工艺双来源：回填工艺步骤与原料清单
+        if process_id:
+            try:
+                from .process_scheme_store import (ProcessSchemeStatus,
+                                                   ProcessSchemeStore)
+                scheme = ProcessSchemeStore().get(process_id)
+            except Exception as e:  # pragma: no cover - 存储层异常透传
+                raise ValueError(f"读取工艺方案 {process_id} 失败: {e}") from e
+            if scheme is None:
+                raise ValueError(f"工艺方案 {process_id} 不存在，无法作为实验单的工艺来源")
+            if scheme.status != ProcessSchemeStatus.CONFIRMED.value:
+                raise ValueError(
+                    f"工艺方案 {process_id} 状态为 {scheme.status!r}，"
+                    f"须确认（{ProcessSchemeStatus.CONFIRMED.value}）后才能下达实验"
+                )
+            order.procedure = scheme.steps or []
+            order.material_requirements = scheme.raw_materials or []
+            order.process_version = scheme.metadata.get("version", "") if scheme.metadata else ""
+            order.notes = (order.notes + "; " if order.notes else "") + f"工艺方案 {process_id}"
+
         self._store.save_order(order)
         return order
 

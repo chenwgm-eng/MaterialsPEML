@@ -8,6 +8,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 from sqlalchemy import text
+from enum import Enum
 import hashlib
 import json
 import logging
@@ -17,6 +18,57 @@ from ..db import get_engine
 from ..generation.crystal_candidate_generator import _normalize_formula
 
 logger = logging.getLogger(__name__)
+
+
+class CandidateStatus(str, Enum):
+    """候选材料两层流程状态机。
+
+    配方设计阶段（第一层，formulator 主导）：
+        screening → feasible
+    工艺深化阶段（第二层，process_engineer 主导）：
+        feasible → process_planning → process_confirmed → ready_for_experiment
+    淘汰：screening / feasible / process_planning 均可 → rejected
+    """
+    SCREENING = "screening"                    # 初筛中（配方设计人员）
+    FEASIBLE = "feasible"                      # 初筛通过，待工艺深化
+    PROCESS_PLANNING = "process_planning"      # 工艺方案制定中（工艺人员）
+    PROCESS_CONFIRMED = "process_confirmed"    # 工艺方案已确定
+    READY_FOR_EXPERIMENT = "ready_for_experiment"  # 可下达实验
+    REJECTED = "rejected"                      # 淘汰
+
+
+# 合法状态迁移图
+CANDIDATE_ALLOWED_TRANSITIONS: dict[CandidateStatus, set[CandidateStatus]] = {
+    CandidateStatus.SCREENING: {CandidateStatus.FEASIBLE, CandidateStatus.REJECTED},
+    CandidateStatus.FEASIBLE: {CandidateStatus.PROCESS_PLANNING, CandidateStatus.REJECTED},
+    CandidateStatus.PROCESS_PLANNING: {CandidateStatus.PROCESS_CONFIRMED, CandidateStatus.REJECTED},
+    CandidateStatus.PROCESS_CONFIRMED: {CandidateStatus.READY_FOR_EXPERIMENT, CandidateStatus.REJECTED},
+    CandidateStatus.READY_FOR_EXPERIMENT: set(),  # 已可下达实验，终态
+    CandidateStatus.REJECTED: set(),  # 终态
+}
+
+# 各状态对应的主导角色（用于负责人字段与权限记录）
+CANDIDATE_STATUS_ROLE: dict[CandidateStatus, str] = {
+    CandidateStatus.SCREENING: "formulator",
+    CandidateStatus.FEASIBLE: "formulator",
+    CandidateStatus.PROCESS_PLANNING: "process_engineer",
+    CandidateStatus.PROCESS_CONFIRMED: "process_engineer",
+    CandidateStatus.READY_FOR_EXPERIMENT: "process_engineer",
+    CandidateStatus.REJECTED: "",
+}
+
+
+class IllegalCandidateTransitionError(ValueError):
+    """候选材料非法状态迁移。"""
+
+    def __init__(self, from_status: str, to_status: str, reason: str = ""):
+        self.from_status = from_status
+        self.to_status = to_status
+        self.reason = reason
+        msg = f"Illegal candidate transition: {from_status} -> {to_status}"
+        if reason:
+            msg = f"{msg}. {reason}"
+        super().__init__(msg)
 
 
 def _iso(value) -> str:
@@ -43,6 +95,10 @@ class CandidateRecord(BaseModel):
     project_id: str = ""  # 业务链路：关联 projects.projects(project_id)（冗余字段，便于按项目查询）
     multi_objective_score: float = 0.0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # P2-输出：两层流程状态机字段
+    status: str = CandidateStatus.SCREENING.value  # 见 CandidateStatus
+    owner: str = ""  # 当前责任人（用户名）
+    assigned_role: str = ""  # 当前环节角色 formulator / process_engineer
     # 评测修复 P1-004：预测结果顶层字段（模型版本/置信度/预测值/预测时间），
     # 持久化于 data JSONB 内，读写时与顶层字段双向同步
     prediction: dict[str, Any] = Field(default_factory=dict)
@@ -81,6 +137,19 @@ class CandidateStore:
                 "ALTER TABLE experiment.candidates "
                 "ADD COLUMN IF NOT EXISTS content_hash TEXT"
             ))
+            # 两层流程状态机字段兜底
+            conn.execute(text(
+                "ALTER TABLE experiment.candidates "
+                "ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'screening'"
+            ))
+            conn.execute(text(
+                "ALTER TABLE experiment.candidates "
+                "ADD COLUMN IF NOT EXISTS owner TEXT DEFAULT ''"
+            ))
+            conn.execute(text(
+                "ALTER TABLE experiment.candidates "
+                "ADD COLUMN IF NOT EXISTS assigned_role TEXT DEFAULT ''"
+            ))
             conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS idx_candidates_type "
                 "ON experiment.candidates(candidate_type)"
@@ -100,6 +169,10 @@ class CandidateStore:
             conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS idx_candidates_content_hash "
                 "ON experiment.candidates(content_hash)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_candidates_status "
+                "ON experiment.candidates(status)"
             ))
 
     @staticmethod
@@ -126,13 +199,19 @@ class CandidateStore:
             row = conn.execute(
                 text("SELECT candidate_id, candidate_type, name, smiles, source, "
                      "scenario_id, task_id, project_id, "
-                     "multi_objective_score, created_at, data "
+                     "multi_objective_score, created_at, data, "
+                     "status, owner, assigned_role "
                      "FROM experiment.candidates WHERE content_hash = :content_hash"),
                 {"content_hash": content_hash},
             ).fetchone()
         if row is None:
             return None
         return self._row_to_record(row)
+
+    _SELECT_COLS = (
+        "candidate_id, candidate_type, name, smiles, source, scenario_id, task_id, "
+        "project_id, multi_objective_score, created_at, data, status, owner, assigned_role"
+    )
 
     def save(self, record: CandidateRecord) -> CandidateRecord:
         # P1-004：prediction 顶层字段同步进 data JSONB，保证持久化后读回一致
@@ -157,10 +236,11 @@ class CandidateStore:
             conn.execute(
                 text("""INSERT INTO experiment.candidates
                 (candidate_id, candidate_type, name, smiles, source, scenario_id,
-                 task_id, project_id, multi_objective_score, created_at, data, content_hash)
+                 task_id, project_id, multi_objective_score, created_at, data, content_hash,
+                 status, owner, assigned_role)
                 VALUES (:candidate_id, :candidate_type, :name, :smiles, :source, :scenario_id,
                  :task_id, :project_id, :multi_objective_score, :created_at, CAST(:data AS JSONB),
-                 :content_hash)
+                 :content_hash, :status, :owner, :assigned_role)
                 ON CONFLICT (candidate_id) DO UPDATE SET
                     candidate_type = EXCLUDED.candidate_type,
                     name = EXCLUDED.name,
@@ -172,7 +252,10 @@ class CandidateStore:
                     multi_objective_score = EXCLUDED.multi_objective_score,
                     created_at = EXCLUDED.created_at,
                     data = EXCLUDED.data,
-                    content_hash = EXCLUDED.content_hash
+                    content_hash = EXCLUDED.content_hash,
+                    status = EXCLUDED.status,
+                    owner = EXCLUDED.owner,
+                    assigned_role = EXCLUDED.assigned_role
                 """),
                 {
                     "candidate_id": record.candidate_id,
@@ -188,6 +271,9 @@ class CandidateStore:
                     "created_at": record.created_at,
                     "data": json.dumps(record.data, ensure_ascii=False),
                     "content_hash": content_hash,
+                    "status": record.status or CandidateStatus.SCREENING.value,
+                    "owner": record.owner or "",
+                    "assigned_role": record.assigned_role or "",
                 },
             )
         return record
@@ -195,9 +281,7 @@ class CandidateStore:
     def get(self, candidate_id: str) -> CandidateRecord | None:
         with self.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT candidate_id, candidate_type, name, smiles, source, "
-                     "scenario_id, task_id, project_id, "
-                     "multi_objective_score, created_at, data "
+                text(f"SELECT {self._SELECT_COLS} "
                      "FROM experiment.candidates WHERE candidate_id = :candidate_id"),
                 {"candidate_id": candidate_id},
             ).fetchone()
@@ -228,9 +312,7 @@ class CandidateStore:
                 conditions.append("project_id = :project_id")
                 params["project_id"] = project_id
             query = (
-                "SELECT candidate_id, candidate_type, name, smiles, source, "
-                "scenario_id, task_id, project_id, "
-                "multi_objective_score, created_at, data "
+                f"SELECT {self._SELECT_COLS} "
                 "FROM experiment.candidates"
             )
             if conditions:
@@ -246,6 +328,86 @@ class CandidateStore:
                 {"candidate_id": candidate_id},
             )
             return cur.rowcount > 0
+
+    def update_status(self, candidate_id: str, to_status: str, actor_role: str = "",
+                      owner: str = "", triggered_by: str = "system",
+                      reason: str = "") -> CandidateRecord:
+        """更新候选材料状态，强制校验两层状态机迁移图与角色归属。
+
+        角色校验（采用角色）：
+            screening → feasible / rejected     配方设计人员（formulator）
+            feasible  → process_planning / rejected   交棒给工艺人员（process_engineer）
+            process_planning → process_confirmed / rejected   工艺人员（process_engineer）
+            process_confirmed → ready_for_experiment / rejected   工艺人员（process_engineer）
+
+        各状态对应的允许角色见 CANDIDATE_STATUS_ROLE。
+
+        Args:
+            candidate_id: 候选材料 ID
+            to_status: 目标状态（screening / feasible / process_planning /
+                       process_confirmed / ready_for_experiment / rejected）
+            actor_role: 操作者角色（formulator / process_engineer），传入则强制校验
+            owner: 新的责任人（用户名）
+            triggered_by: 触发主体标识
+            reason: 迁移原因
+
+        Raises:
+            IllegalCandidateTransitionError: 非法迁移或角色不符
+        """
+        record = self.get(candidate_id)
+        if record is None:
+            raise IllegalCandidateTransitionError(
+                "UNKNOWN", to_status, f"Candidate {candidate_id!r} not found",
+            )
+
+        from_status = record.status or CandidateStatus.SCREENING.value
+        try:
+            from_enum = CandidateStatus(from_status)
+            to_enum = CandidateStatus(to_status)
+        except ValueError as e:
+            raise IllegalCandidateTransitionError(from_status, to_status, str(e)) from e
+
+        allowed = CANDIDATE_ALLOWED_TRANSITIONS.get(from_enum, set())
+        if to_enum not in allowed:
+            allowed_str = [s.value for s in allowed] if allowed else "none (terminal state)"
+            raise IllegalCandidateTransitionError(
+                from_status, to_status,
+                f"Allowed transitions from {from_enum.value}: {allowed_str}",
+            )
+
+        # 角色校验：目标状态对应的主导角色
+        expected_role = CANDIDATE_STATUS_ROLE.get(to_enum, "")
+        if actor_role and expected_role and actor_role != expected_role:
+            raise IllegalCandidateTransitionError(
+                from_status, to_status,
+                f"状态 {to_enum.value} 须由 {expected_role} 角色执行，当前角色 {actor_role!r}",
+            )
+
+        with self.engine.begin() as conn:
+            if owner:
+                conn.execute(
+                    text("UPDATE experiment.candidates SET status = :status, "
+                         "owner = :owner, assigned_role = :assigned_role "
+                         "WHERE candidate_id = :candidate_id"),
+                    {
+                        "status": to_status,
+                        "owner": owner,
+                        "assigned_role": expected_role,
+                        "candidate_id": candidate_id,
+                    },
+                )
+            else:
+                conn.execute(
+                    text("UPDATE experiment.candidates SET status = :status, "
+                         "assigned_role = :assigned_role "
+                         "WHERE candidate_id = :candidate_id"),
+                    {
+                        "status": to_status,
+                        "assigned_role": expected_role,
+                        "candidate_id": candidate_id,
+                    },
+                )
+        return self.get(candidate_id)  # type: ignore[return-value]
 
     def _row_to_record(self, row) -> CandidateRecord:
         # 防御性类型转换：旧表数据可能存在 None / 类型错位
@@ -288,4 +450,7 @@ class CandidateStore:
             created_at=_iso(row[9]) if len(row) > 9 else "",
             prediction=prediction_val,
             data=data_val,
+            status=_str(row[11]) if len(row) > 11 else CandidateStatus.SCREENING.value,
+            owner=_str(row[12]) if len(row) > 12 else "",
+            assigned_role=_str(row[13]) if len(row) > 13 else "",
         )
