@@ -36,8 +36,6 @@ from .experiment.sample_store import Sample, SampleStatus, SampleStore, SampleTr
 from .experiment.candidate_store import CandidateRecord, CandidateStore
 from .experiment.idea_store import Idea, IdeaStatus, IdeaStore
 from .agent_team.agents.experiment_analyst import ExperimentAnalystAgent
-from .agent_team.agents.battery_life import LearnerAgent, InterpreterAgent, OracleAgent
-from .battery.cycle_database import BatteryCycleDatabase
 from .agent_team.agents.literature_researcher import LiteratureResearcherAgent
 from .knowledge import (
     get_claim_store,
@@ -79,12 +77,14 @@ from .control_plane.tool_catalog import ToolCatalog
 from .control_plane.tool_gateway import ToolGateway
 from .control_plane.policy_engine import PolicyEngine
 from .control_plane.policy_store import PolicyStore
-from .control_plane.run_manager import Run, RunManager, RunStatus
+from .control_plane.run_manager import Run as ControlPlaneRun, RunManager, RunStatus as ControlPlaneRunStatus
 from .control_plane.budget import BudgetManager, BudgetScope, BudgetEnvelope
 from .control_plane.observability import ObservabilityService
 from .control_plane.memory_service import MemoryService, MemoryCardType
 from .control_plane.provider_registry import ProviderRegistry
 from .evals.runner import EvalRunner
+from .evals.coe_audit import CoeAuditor
+from .ai_assistant import AiSessionStore
 
 # 后台任务引用集：避免 asyncio.create_task 创建的任务被 GC 回收，并集中管理生命周期
 _background_tasks: set[asyncio.Task] = set()
@@ -130,6 +130,50 @@ app.include_router(_release_card_router)
 app.include_router(_value_realization_router)
 app.include_router(_data_ingest_router)
 app.include_router(_mapping_router)
+
+# ── 原生科学服务路由（Phase 0 — 新架构，无历史数据负担） ──
+from .scientific_routes.scientific_runs import router as _scientific_runs_router
+from .scientific_routes.evidence import router as _evidence_router
+from .scientific_routes.artifacts import router as _artifacts_router
+from .scientific_routes.approvals import router as _approvals_router
+app.include_router(_scientific_runs_router)
+app.include_router(_evidence_router)
+app.include_router(_artifacts_router)
+app.include_router(_approvals_router)
+
+# ── Phase 1 原生科学服务路由（MPA, Chemical, Structure, Formulation） ──
+from .scientific_routes.mpa_routes import router as _mpa_router
+from .scientific_routes.chemical_routes import router as _chemical_router
+from .scientific_routes.structure_routes import router as _structure_router
+from .scientific_routes.formulation_routes import router as _formulation_router
+app.include_router(_mpa_router)
+app.include_router(_chemical_router)
+app.include_router(_structure_router)
+app.include_router(_formulation_router)
+
+# ── Phase 2 原生科学服务路由（MolecularSim, Battery, Synthesis, Process） ──
+from .scientific_routes.molecular_simulation_routes import router as _molecular_simulation_router
+from .scientific_routes.battery_modeling_routes import router as _battery_modeling_router
+from .scientific_routes.synthesis_planning_routes import router as _synthesis_planning_router
+from .scientific_routes.process_modeling_routes import router as _process_modeling_router
+app.include_router(_molecular_simulation_router)
+app.include_router(_battery_modeling_router)
+app.include_router(_synthesis_planning_router)
+app.include_router(_process_modeling_router)
+
+# ── Phase 3: 高级原生科学服务路由 ──
+from .scientific_routes.reaction_network_routes import router as _reaction_network_router
+from .scientific_routes.wavefunction_analysis_routes import router as _wavefunction_analysis_router
+from .scientific_routes.fluid_simulation_routes import router as _fluid_simulation_router
+from .scientific_routes.molecular_docking_routes import router as _molecular_docking_router
+app.include_router(_reaction_network_router)
+app.include_router(_wavefunction_analysis_router)
+app.include_router(_fluid_simulation_router)
+app.include_router(_molecular_docking_router)
+
+# ── 工作流混编执行路由 ──
+from .scientific_routes.workflow_routes import router as _workflow_router
+app.include_router(_workflow_router)
 
 # ── 能力契约门禁装饰器（用于直接 API 端点） ──
 # 模块级单例，避免每次调用都新建 CapabilityRegistry
@@ -237,6 +281,7 @@ _observability_service: ObservabilityService | None = None
 _memory_service: MemoryService | None = None
 _provider_registry: ProviderRegistry | None = None
 _eval_runner: EvalRunner | None = None
+_coe_auditor: "CoeAuditor | None" = None
 
 _frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 _frontend_index = _frontend_dist / "index.html"
@@ -274,6 +319,7 @@ def _init_control_plane():
         golden_set_dir=config.eval.golden_set_dir,
         report_dir=config.eval.report_dir,
     )
+    _coe_auditor = CoeAuditor(report_dir=config.eval.report_dir)
     logger.info(
         "Control Plane initialized (shadow_mode=%s, policy_version=%s)",
         config.control_plane.shadow_mode,
@@ -301,7 +347,7 @@ _SPA_API_NAMESPACES = frozenset({
     "discover", "synthesis", "candidates", "experiments", "samples",
     "equipment", "tools", "budgets", "mappings", "agents", "auth",
     "users", "settings", "materials", "topology", "orchestration",
-    "research", "formula-design", "prediction", "battery-life", "workbench",
+    "research", "formula-design", "prediction", "workbench",
     "committees", "approvals", "my-tasks", "eval-center",
     "technology-intelligence", "properties", "agent-events", "metrics",
 })
@@ -556,6 +602,15 @@ async def startup():
             _scp_adapters, _scp_audit_store,
         )
 
+    # 工艺深化编排服务（Phase B 第二层：SCP 优先 + 本地回退）
+    from .experiment.process_deepening_service import ProcessDeepeningService
+    app.state.process_deepening_service = ProcessDeepeningService(
+        process_scheme_store=app.state.process_scheme_store,
+        candidate_store=app.state.candidate_store,
+        scp_client_pool=_scp_client_pool if config.scp.enabled else None,
+        scp_catalog=_scp_catalog if config.scp.enabled else None,
+    )
+
     # 初始化 SKILL 基础设施
     from .mcp_tools.skill_catalog import SkillCatalog
     from .mcp_tools.skill_executor import SkillExecutor
@@ -576,6 +631,8 @@ async def startup():
         from .committee.repository import CommitteeRepository
         from .committee.event_store import CommitteeEventStore
         from .committee.executor import CommitteeExecutor
+        from .committee.claim_verifier import ClaimVerifier
+        from .domain.runtime.execution_kernel import ScientificExecutionKernel
 
         _committee_repository = CommitteeRepository()
         _committee_event_store = CommitteeEventStore()
@@ -599,7 +656,7 @@ async def startup():
             policy=_committee_policy,
             thinker=CommitteeThinker(),
             doer=CommitteeDoer(),
-            verifier=CommitteeVerifier(),
+            verifier=CommitteeVerifier(claim_verifier=ClaimVerifier(ScientificExecutionKernel())),
             repository=_committee_repository,
             event_store=_committee_event_store,
             executor=_committee_executor,
@@ -825,6 +882,45 @@ async def startup():
     except Exception as e:
         logger.warning("历史样品数据迁移失败: %s", e)
 
+    # ── 启动 CoE Audit 每日凌晨定时审计 ──
+    try:
+        from datetime import datetime as _dt, timezone, time as _time, timedelta as _timedelta
+
+        async def _daily_coe_audit():
+            """每日凌晨 01:00 触发一次证据链完整性审计。"""
+            while True:
+                now = _dt.now()
+                target = now.replace(hour=1, minute=0, second=0, microsecond=0)
+                if now >= target:
+                    target += _timedelta(days=1)
+                await asyncio.sleep((target - now).total_seconds())
+                try:
+                    report = _coe_auditor.run(limit=100)
+                    logger.info(
+                        "每日 CoE Audit 完成: integrity=%s report=%s",
+                        report.get("metrics", {}).get("integrity_score"),
+                        report.get("report_path"),
+                    )
+                except Exception as e:
+                    logger.warning("每日 CoE Audit 失败: %s", e)
+
+        _audit_task = asyncio.create_task(_daily_coe_audit())
+        _background_tasks.add(_audit_task)
+        _audit_task.add_done_callback(_background_tasks.discard)
+        logger.info("CoE Audit 每日定时任务已启动（每日 01:00）")
+    except Exception as e:
+        logger.warning("CoE Audit 定时任务启动失败 (non-fatal): %s", e)
+
+    # ── 启动原生科学服务 CPU Worker ──
+    try:
+        from .services.registry import setup_cpu_worker
+        from .workers.cpu_worker import start_worker
+        setup_cpu_worker()
+        start_worker()
+        logger.info("Scientific CPU Worker started with all 12 native services")
+    except Exception as e:
+        logger.warning("Scientific CPU Worker startup failed (non-fatal): %s", e)
+
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -843,6 +939,14 @@ async def shutdown():
             await agent.synthesis_planner.aclose()
         except Exception as e:
             logger.warning("关闭 SynthesisPlanner 连接池失败: %s", e)
+
+    # 停止科学服务 CPU Worker
+    try:
+        from .workers.cpu_worker import stop_worker
+        stop_worker()
+        logger.info("Scientific CPU Worker stopped")
+    except Exception as e:
+        logger.warning("Scientific CPU Worker stop failed (non-fatal): %s", e)
 
 
 @app.exception_handler(Exception)
@@ -1075,6 +1179,7 @@ class ExperimentOrderRequest(BaseModel):
     project_id: str = ""
     rd_package_id: str = ""
     candidate_id: str = ""
+    process_id: str = ""  # 0040：双来源引用——关联已确认的工艺方案（ProcessScheme）
     formulation_version: str = ""
     process_version: str = ""
     test_protocol_version: str = ""
@@ -1820,6 +1925,96 @@ async def get_ecml_next_round(run_id: str):
     return suggestions
 
 
+class ECMLRunRoundRequest(BaseModel):
+    """启动一轮贝叶斯优化推荐（产出推荐后停在复核门，不自动下发）。
+
+    模型/采集函数/探索强度等策略参数由课题负责人在策略面板配置；
+    num_candidates 控制本轮推荐候选数量。
+    """
+    material_family: str = ""
+    acquisition: str = "ei"  # ei | ucb | pi | ehvi
+    explore: float = 0.5  # 0=纯利用, 1=纯探索
+    model_family: str = ""  # gp | gbt | mlp，空则自动推荐
+    budget: float | None = None  # 本轮预算硬约束
+    include_cross_project: bool = False  # 是否纳入跨项目历史数据
+    project_id: str = ""
+    objectives: list[dict] = Field(default_factory=list)  # 多目标配置
+    num_candidates: int = 10  # 本轮推荐候选数量
+
+
+class ECMLConfirmRoundRequest(BaseModel):
+    """课题负责人复核确认下发：为采纳候选创建实验任务并推进状态机。"""
+    adopted: list = Field(default_factory=list)  # [{formula, candidate_id, name}] 或 ["formula"]
+
+
+@app.get("/ecml/runs/{run_id}/pool-stats")
+async def get_ecml_pool_stats(
+    run_id: str,
+    material_family: str = "",
+    target_property: str = "",
+):
+    """训练池统计预览：按"材料体系+目标属性"维度聚合，供策略配置面板展示。"""
+    try:
+        return await asyncio.to_thread(
+            agent.ecml.pool_stats,
+            run_id,
+            material_family or None,
+            target_property or None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/ecml/runs/{run_id}/rounds")
+async def start_ecml_round(run_id: str, req: ECMLRunRoundRequest):
+    """启动一轮 BO 推荐，产出推荐后停在"待复核门"，不自动下发实验。"""
+    try:
+        return await asyncio.to_thread(
+            agent.ecml.run_bayesian_round,
+            run_id,
+            family=req.material_family or None,
+            acquisition=req.acquisition,
+            explore=req.explore,
+            model_family_override=req.model_family or None,
+            budget=req.budget,
+            include_cross_project=req.include_cross_project,
+            project_id=req.project_id,
+            objectives=req.objectives,
+            num_candidates=req.num_candidates,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/ecml/runs/{run_id}/rounds")
+async def list_ecml_rounds(run_id: str):
+    """列出 run 下所有 Round 记录（不含完整快照，仅元信息）。"""
+    try:
+        return await asyncio.to_thread(agent.ecml.list_rounds, run_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/ecml/rounds/{round_id}")
+async def get_ecml_round(round_id: str):
+    """获取单个 Round 完整记录（含训练池快照、推荐、实测回填）。"""
+    rnd = await asyncio.to_thread(agent.ecml.get_round, round_id)
+    if rnd is None:
+        raise HTTPException(status_code=404, detail=f"Round {round_id} 不存在")
+    return rnd
+
+
+@app.post("/ecml/rounds/{round_id}/confirm")
+async def confirm_ecml_round(round_id: str, req: ECMLConfirmRoundRequest):
+    """课题负责人确认下发：为采纳候选创建实验任务，推进状态机。"""
+    try:
+        return await asyncio.to_thread(
+            agent.ecml.confirm_round, round_id, req.adopted
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 class ECMLResumeDataRequest(BaseModel):
     """提交真实实验数据以唤醒处于 WAITING_FOR_DATA 的 ECML run。
 
@@ -2008,18 +2203,18 @@ async def discover_polymer(req: DiscoverRequest):
         num_candidates=req.num_candidates,
     )
     # 补充 ai_meta（每个候选 + 顶层）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     candidates = result.get("candidates", []) if isinstance(result, dict) else []
     for c in candidates:
         if not c.get("ai_meta"):
             c["ai_meta"] = {}
         c["ai_meta"]["input_snapshot_hash"] = input_snapshot_hash
         c["ai_meta"]["model_version"] = "internlm-v1"
-        c["ai_meta"]["generated_at"] = _dt.now().isoformat()
+        c["ai_meta"]["generated_at"] = _dt.now(timezone.utc).isoformat()
     if isinstance(result, dict):
         result.setdefault("ai_meta", {})["input_snapshot_hash"] = input_snapshot_hash
         result.setdefault("ai_meta", {})["model_version"] = "internlm-v1"
-        result.setdefault("ai_meta", {})["generated_at"] = _dt.now().isoformat()
+        result.setdefault("ai_meta", {})["generated_at"] = _dt.now(timezone.utc).isoformat()
     _store_candidates(
         app.state.candidate_store, result, "polymer", req.scenario_id,
         project_id=req.project_id, task_id=req.task_id,
@@ -2511,14 +2706,14 @@ async def discover_agent_generate(req: AgentGenerateRequest):
                 c["release_card_id"] = card_id
 
     # 补充 ai_meta（每个候选 + 顶层）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     for c in candidates:
         if not c.get("ai_meta"):
             c["ai_meta"] = {}
         c["ai_meta"]["input_snapshot_hash"] = input_snapshot_hash
         c["ai_meta"]["model_version"] = agent_model
         c["ai_meta"]["agent_id"] = agent_def.id
-        c["ai_meta"]["generated_at"] = _dt.now().isoformat()
+        c["ai_meta"]["generated_at"] = _dt.now(timezone.utc).isoformat()
 
     result = {
         "candidates": candidates,
@@ -2703,7 +2898,7 @@ async def discover_agent_generate_async(req: AgentGenerateRequest):
                         c["release_card_id"] = card_id
 
             # AI 元信息
-            from datetime import datetime as _dt
+            from datetime import datetime as _dt, timezone
             input_snapshot_hash = _compute_input_snapshot({
                 "agent_id": agent_id, "agent_model": agent_model,
                 "task_title": req.task_title, "deliverable": req.deliverable,
@@ -2716,7 +2911,7 @@ async def discover_agent_generate_async(req: AgentGenerateRequest):
                 c["ai_meta"]["input_snapshot_hash"] = input_snapshot_hash
                 c["ai_meta"]["model_version"] = agent_model
                 c["ai_meta"]["agent_id"] = agent_def.id
-                c["ai_meta"]["generated_at"] = _dt.now().isoformat()
+                c["ai_meta"]["generated_at"] = _dt.now(timezone.utc).isoformat()
 
             result = {
                 "candidates": candidates,
@@ -3112,13 +3307,13 @@ async def discover_generate(req: GenerateRequest):
         logger.warning("SCP 校验层异常: %s", e)
 
     # 在候选结果中补充 ai_meta（已有则补充，不覆盖已有字段）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     for c in candidates:
         if not c.get("ai_meta"):
             c["ai_meta"] = {}
         c["ai_meta"]["input_snapshot_hash"] = input_snapshot_hash
         c["ai_meta"]["model_version"] = "internlm-v1"
-        c["ai_meta"]["generated_at"] = _dt.now().isoformat()
+        c["ai_meta"]["generated_at"] = _dt.now(timezone.utc).isoformat()
 
     # 放行门禁：human_review_required 的结果自动创建 Release Card 进入审批队列
     for c in candidates:
@@ -3255,6 +3450,86 @@ async def update_process_scheme_status(process_id: str, req: ProcessSchemeStatus
     except IllegalProcessSchemeTransitionError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     return updated.model_dump()
+
+
+class ProcessDeepeningRequest(BaseModel):
+    """工艺深化请求（process_engineer 角色，SCP 优先 + 本地回退）。"""
+    candidate_id: str = Field(..., description="候选材料 ID")
+    owner: str = Field(default="", description="工艺人员用户名")
+    process_id: str = Field(default="", description="既有工艺方案 ID（留空则新建/复用候选草稿）")
+    max_routes: int = Field(default=5, ge=1, le=20, description="最大候选路线数")
+    max_depth: int = Field(default=3, ge=1, le=8, description="逆合成搜索深度")
+    notes: str = Field(default="", description="深化说明")
+
+
+@app.post("/candidates/{candidate_id}/process-deepening",
+          dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def create_process_deepening(candidate_id: str, req: ProcessDeepeningRequest):
+    """对候选配方执行工艺深化（第二层工艺深化阶段）。
+
+    高级能力（合成路径规划 / DFT 校验）采用 SCP 优先 + 本地回退策略，
+    产出/更新工艺方案（ProcessScheme），能力来源记录于 evidence_refs。
+    """
+    service = getattr(app.state, "process_deepening_service", None)
+    if service is None:
+        raise HTTPException(status_code=503, detail="工艺深化服务未初始化")
+    try:
+        scheme = await service.deepen(
+            candidate_id=candidate_id,
+            owner=req.owner,
+            triggered_by="user",
+            max_routes=req.max_routes,
+            max_depth=req.max_depth,
+            process_id=req.process_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    _log_research_event(
+        event_type="process_deepening",
+        run_id=scheme.process_id,
+        title=f"工艺深化：候选 {candidate_id}",
+        summary=req.notes or f"生成 {len(scheme.routes)} 条候选工艺路线",
+        status="running",
+        payload={"candidate_id": candidate_id, "process_id": scheme.process_id,
+                 "routes": len(scheme.routes)},
+    )
+    return scheme.model_dump()
+
+
+# ── 工艺人员工作台：初筛通过的候选配方与工艺方案 ───────────────────
+
+@app.get("/process-engineer/workbench",
+         dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def process_engineer_workbench(status: str = "", limit: int = 100):
+    """工艺人员工作台：列出进入工艺深化流水线的候选配方及其工艺方案。
+
+    属于候选状态机第二层（feasible → process_planning → process_confirmed）。
+    可按候选状态过滤；每个候选附带其工艺方案列表（routes / evidence_refs / status）。
+    """
+    from .experiment.candidate_store import CandidateStatus
+    records = app.state.candidate_store.list_all()
+    # 工艺深化流水线状态：初筛通过后的候选
+    pipeline = {
+        CandidateStatus.FEASIBLE.value,
+        CandidateStatus.PROCESS_PLANNING.value,
+        CandidateStatus.PROCESS_CONFIRMED.value,
+        CandidateStatus.READY_FOR_EXPERIMENT.value,
+    }
+    items = []
+    for r in records:
+        if r.status not in pipeline:
+            continue
+        if status and r.status != status:
+            continue
+        schemes = app.state.process_scheme_store.list_by_candidate(r.candidate_id)
+        items.append({
+            "candidate": r.model_dump(),
+            "process_schemes": [s.model_dump() for s in schemes],
+            "scheme_count": len(schemes),
+        })
+        if len(items) >= limit:
+            break
+    return {"items": items, "count": len(items), "pipeline_statuses": sorted(pipeline)}
 
 
 # ── 业务链路 MDM：任务 → 候选材料 → BOM 方案 → 测试任务 ─────────────
@@ -3688,11 +3963,11 @@ async def create_bom_from_route(candidate_id: str, req: BomFromRouteRequest):
         ) from exc
 
     # 补充 ai_meta（用于 AI 输出溯源）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     ai_meta = {
         "input_snapshot_hash": input_snapshot_hash,
         "model_version": "internlm-v1",
-        "generated_at": _dt.now().isoformat(),
+        "generated_at": _dt.now(timezone.utc).isoformat(),
     }
 
     return {
@@ -4230,6 +4505,62 @@ async def test_tool_availability(tool_name: str, request: Request):
     }
 
 
+# ── 智能体工具调用端点（决策 7-A：业务活动通过 AgentProxy 调用工具） ──
+
+class AgentToolInvokeRequest(BaseModel):
+    """通过智能体调用工具请求。
+
+    设计理念：业务活动/前端 UI 不直接调用服务，而是指定匹配的智能体与能力，
+    由 AgentProxy 完成 智能体→主工具选择→白名单→执行 的完整链路。
+    """
+    agent_id: str = Field(..., description="智能体 ID，如 builtin_battery_oracle / builtin_synthesis_planner")
+    capability: str = Field(..., description="能力标签，如 sci_mpa / sci_synthesis_planning")
+    params: dict = Field(default_factory=dict, description="工具入参（project_id + 服务参数）")
+    activity_id: str = Field(default="", description="业务活动 ID（可选）")
+    timeout: float = Field(default=180.0, description="超时秒数")
+
+
+@app.post("/v1/agent-tools/invoke", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def invoke_agent_tool(req: AgentToolInvokeRequest):
+    """通过匹配的智能体调用工具（含 12 个原生科学服务工具 sci_*）。
+
+    返回 AgentInvocationResult：
+    {invocation_id, agent_id, tool_id, capability, success, used_fallback,
+     fallback_from, sync_mode, result, error, duration_ms}
+    """
+    if _agent_proxy is None:
+        raise HTTPException(status_code=503, detail="AgentProxy 未初始化")
+    from dataclasses import asdict
+    try:
+        result = await asyncio.to_thread(
+            _agent_proxy.invoke_tool,
+            req.agent_id,
+            req.capability,
+            req.params,
+            req.activity_id,
+            req.timeout,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"智能体工具调用异常: {e}")
+    return asdict(result)
+
+
+@app.get("/v1/agent-tools/agents/{agent_id}/tools", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def list_agent_tools(agent_id: str):
+    """返回指定智能体可调用的工具列表（能力关联 + 白名单）。"""
+    if _agent_proxy is None:
+        raise HTTPException(status_code=503, detail="AgentProxy 未初始化")
+    tool_ids = _agent_proxy.get_agent_tool_whitelist(agent_id)
+    store = _activity_mapping_store
+    tools = []
+    if store is not None:
+        for tid in tool_ids:
+            reg = store.get_tool_registration(tid)
+            if reg:
+                tools.append(reg.model_dump())
+    return {"agent_id": agent_id, "tools": tools, "total": len(tools)}
+
+
 # --- New endpoints for progressive UI ---
 
 @app.get("/stats")
@@ -4379,11 +4710,11 @@ async def plan_synthesis(req: SynthesisPlanRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     # 补充 ai_meta（用于 AI 输出溯源）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     ai_meta = {
         "input_snapshot_hash": input_snapshot_hash,
         "model_version": "internlm-v1",
-        "generated_at": _dt.now().isoformat(),
+        "generated_at": _dt.now(timezone.utc).isoformat(),
     }
     if not routes:
         return {"routes": [], "count": 0, "ai_meta": ai_meta}
@@ -4424,13 +4755,13 @@ async def plan_multiple_routes(req: MultiSynthesisPlanRequest):
     # 补充 ai_meta（用于 AI 输出溯源）
     # planner 返回 {routes, count, best_route, ...} dict，端点补充 ai_meta 后直接透传，
     # 不能按 list 索引（否则 KeyError: 0）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     return {
         **routes,
         "ai_meta": {
             "input_snapshot_hash": input_snapshot_hash,
             "model_version": "internlm-v1",
-            "generated_at": _dt.now().isoformat(),
+            "generated_at": _dt.now(timezone.utc).isoformat(),
         },
     }
 
@@ -4967,14 +5298,14 @@ async def plan_synthesis_async_task(req: SynthesisAsyncRequest):
         space_group=(req.space_group.strip() if req.space_group else ""),
     ))
     # 补充 ai_meta（用于 AI 输出溯源）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     return {
         "task_id": task_id,
         "status": "pending",
         "ai_meta": {
             "input_snapshot_hash": input_snapshot_hash,
             "model_version": "internlm-v1",
-            "generated_at": _dt.now().isoformat(),
+            "generated_at": _dt.now(timezone.utc).isoformat(),
         },
     }
 
@@ -5178,11 +5509,11 @@ async def ecml_run_step(req: ECMLRunStepRequest):
         "scenario_id": req.scenario_id,
     })
     # 补充 ai_meta（用于 AI 输出溯源）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     ai_meta = {
         "input_snapshot_hash": input_snapshot_hash,
         "model_version": "internlm-v1",
-        "generated_at": _dt.now().isoformat(),
+        "generated_at": _dt.now(timezone.utc).isoformat(),
     }
 
     # 标记为运行中，供 GET /ecml/runs/{run_id} 立即可查
@@ -5764,13 +6095,12 @@ async def _call_llm_provider(
             raise RuntimeError("AI 引擎（InternLM）未启用或未配置 API Key")
         from .llm.schemas import ChatMessage, ChatRequest
         from .llm.internlm_provider import InternLMProvider
-        internlm_cfg = cfg.internlm
-        original_thinking = internlm_cfg.thinking_mode
-        internlm_cfg.thinking_mode = False  # 测试对话关闭深度思考
-        provider_inst = InternLMProvider(internlm_cfg)
+        # 不修改全局配置：用 model_copy 派生一份关闭深度思考的配置，避免变异共享 cfg。
+        chat_cfg = cfg.internlm.model_copy(update={"thinking_mode": False})
+        provider_inst = InternLMProvider(chat_cfg)
         try:
             chat_req = ChatRequest(
-                model=internlm_cfg.model,
+                model=chat_cfg.model,
                 messages=[ChatMessage(role=m["role"], content=m["content"]) for m in messages],
                 temperature=0.7,
                 max_tokens=1024,
@@ -5778,7 +6108,6 @@ async def _call_llm_provider(
             resp = await provider_inst.complete(chat_req)
             return resp.content
         finally:
-            internlm_cfg.thinking_mode = original_thinking
             close_fn = getattr(provider_inst, "close", None)
             if close_fn:
                 try:
@@ -6109,11 +6438,11 @@ async def analyze_task(req: AnalyzeTaskRequest):
     })
     plan = await _orchestrator.analyze_task(req.target, req.constraints)
     # 补充 ai_meta（用于 AI 输出溯源）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     result = plan.model_dump()
     result.setdefault("ai_meta", {})["input_snapshot_hash"] = input_snapshot_hash
     result.setdefault("ai_meta", {})["model_version"] = "internlm-v1"
-    result.setdefault("ai_meta", {})["generated_at"] = _dt.now().isoformat()
+    result.setdefault("ai_meta", {})["generated_at"] = _dt.now(timezone.utc).isoformat()
     return result
 
 
@@ -6133,11 +6462,11 @@ async def execute_plan(req: ExecutePlanRequest):
         "steps": req.steps,
     })
     # 补充 ai_meta（用于 AI 输出溯源）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     ai_meta = {
         "input_snapshot_hash": input_snapshot_hash,
         "model_version": "internlm-v1",
-        "generated_at": _dt.now().isoformat(),
+        "generated_at": _dt.now(timezone.utc).isoformat(),
     }
 
     # 预先创建 record，获取 record_id（避免竞态条件）
@@ -6745,10 +7074,10 @@ async def create_formula(request: Request):
             )
 
         # 补充 ai_meta（用于 AI 输出溯源）
-        from datetime import datetime as _dt
+        from datetime import datetime as _dt, timezone
         result.setdefault("ai_meta", {})["input_snapshot_hash"] = input_snapshot_hash
         result.setdefault("ai_meta", {})["model_version"] = "internlm-v1"
-        result.setdefault("ai_meta", {})["generated_at"] = _dt.now().isoformat()
+        result.setdefault("ai_meta", {})["generated_at"] = _dt.now(timezone.utc).isoformat()
 
         formula = FormulaVersion(
             target_material=target_name,
@@ -7418,6 +7747,7 @@ async def cross_scale_predict(req: CrossScaleRequest):
 
     # 若前端指定了 agent_id，校验该 agent 是否具备 property_prediction 能力
     a_actual_id: str | None = None
+    a_actual_name: str | None = None
     if req.agent_id:
         try:
             _require_agent_team()
@@ -7432,12 +7762,15 @@ async def cross_scale_predict(req: CrossScaleRequest):
                 )
             # 用实际 agent id 回填，避免前端传入空值
             a_actual_id = agent_def.id or req.agent_id
+            # 可读展示名（供 result.executed_by 使用，避免向前端暴露内部标识符）
+            a_actual_name = agent_def.name or a_actual_id
         except HTTPException:
             raise
         except Exception as exc:  # noqa: BLE001
             # agent_team 未启用时不阻断，仅记录日志
             import logging
             a_actual_id = req.agent_id
+            a_actual_name = req.agent_id
             logging.getLogger(__name__).warning("agent_id 校验跳过: %s", exc)
 
     # 计算输入参数哈希快照（用于 AI 输出溯源）
@@ -7453,18 +7786,22 @@ async def cross_scale_predict(req: CrossScaleRequest):
     try:
         engine = CrossScaleEngine(agent=a)
         result = await engine.run_cross_scale(material, scales, agent_id=a_actual_id)
+        # executed_by 保持稳定 agent 标识符（与合成等其他路径一致），
+        # 可读展示名单独用 executed_by_name 提供，避免同一字段语义分叉
+        if a_actual_name:
+            result["executed_by_name"] = a_actual_name
     finally:
         # 恢复原来的 model_type，避免污染全局状态
         if overridden:
             predictor.model_type = original_model_type
 
     # 补充 ai_meta（用于 AI 输出溯源）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     if not isinstance(result, dict):
         result = {"value": result}
     result.setdefault("ai_meta", {})["input_snapshot_hash"] = input_snapshot_hash
     result.setdefault("ai_meta", {})["model_version"] = "internlm-v1"
-    result.setdefault("ai_meta", {})["generated_at"] = _dt.now().isoformat()
+    result.setdefault("ai_meta", {})["generated_at"] = _dt.now(timezone.utc).isoformat()
 
     # 0021：若关联候选，持久化预测结果到 candidate_artifacts
     if req.candidate_id and result is not None:
@@ -7727,6 +8064,7 @@ async def create_experiment_order(req: ExperimentOrderRequest):
         project_id=req.project_id,
         rd_package_id=req.rd_package_id,
         candidate_id=req.candidate_id,
+        process_id=req.process_id,
         formulation_version=req.formulation_version,
         process_version=req.process_version,
         test_protocol_version=req.test_protocol_version,
@@ -8933,13 +9271,13 @@ async def decompose_project(req: ProjectDecomposeRequest):
     if not tasks:
         raise HTTPException(status_code=502, detail="AI 未能生成有效任务，请重试或调整目标描述")
     # 补充 ai_meta（用于 AI 输出溯源）
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone
     return {
         "tasks": tasks,
         "ai_meta": {
             "input_snapshot_hash": input_snapshot_hash,
             "model_version": agent_model or "internlm-v1",
-            "generated_at": _dt.now().isoformat(),
+            "generated_at": _dt.now(timezone.utc).isoformat(),
         },
     }
 
@@ -11193,9 +11531,20 @@ async def list_papers(
     source_tier: str = "",
     limit: int = 50,
     offset: int = 0,
+    semantic: bool = False,
 ):
-    """检索文献资产（支持关键词/来源/可信度筛选）。"""
+    """检索文献资产（支持关键词/来源/可信度筛选；semantic=true 走 pgvector 语义检索）。
+
+    语义检索依赖 pgvector 扩展 + embedding vector 列 + InternLM embeddings 接口，
+    任一不可用时退化为空检索（不静默回退关键词）。
+    """
     store = get_paper_store()
+    if semantic:
+        from .knowledge.vector_search import semantic_paper_search
+        papers = await asyncio.to_thread(
+            semantic_paper_search, query, source, source_tier, limit,
+        )
+        return {"papers": papers, "count": len(papers), "total": len(papers), "semantic": True}
     papers = await asyncio.to_thread(
         store.search, query, source, source_tier, limit, offset
     )
@@ -11387,101 +11736,6 @@ async def extract_claims(req: ExtractClaimsRequest):
         papers, material["canonical_name"]
     )
     return result
-
-
-# ===========================================================================
-# 电池寿命预测工作流 API（G4：Learner-Interpreter-Oracle 三 Agent 协作）
-# ===========================================================================
-
-_battery_learner = LearnerAgent()
-_battery_interpreter = InterpreterAgent()
-_battery_oracle = OracleAgent()
-_battery_cycle_db = BatteryCycleDatabase()
-
-
-class BatteryLifeRequest(BaseModel):
-    formula: str = ""
-    smiles: str = ""
-    cycle_data: list[dict] = Field(default_factory=list)  # [{cycle, capacity, ...}]
-    future_cycles: int = 500
-
-
-def _run_battery_life_workflow(req: BatteryLifeRequest) -> dict:
-    """同步执行三 Agent 协作流程（供 asyncio.to_thread 调用）。"""
-    formula = (req.formula or req.smiles or "").strip()
-
-    # Step 1: Learner 学习衰减模式
-    learning_result = _battery_learner.learn(formula, req.cycle_data)
-
-    # Step 2: Interpreter 解释机理
-    interpretation = _battery_interpreter.interpret(learning_result)
-
-    # Step 3: Oracle 预测寿命
-    prediction = _battery_oracle.predict(learning_result, req.future_cycles)
-
-    # 基准对比：从循环基准数据库查询同化学式材料
-    reference = _battery_cycle_db.get_reference(formula)
-
-    return {
-        "formula": formula,
-        "future_cycles": req.future_cycles,
-        "steps": [
-            {
-                "agent_id": LearnerAgent.AGENT_ID,
-                "agent_name": LearnerAgent.AGENT_NAME,
-                "stage": "learn",
-                "result": learning_result,
-            },
-            {
-                "agent_id": InterpreterAgent.AGENT_ID,
-                "agent_name": InterpreterAgent.AGENT_NAME,
-                "stage": "interpret",
-                "result": interpretation,
-            },
-            {
-                "agent_id": OracleAgent.AGENT_ID,
-                "agent_name": OracleAgent.AGENT_NAME,
-                "stage": "predict",
-                "result": prediction,
-            },
-        ],
-        "learning": learning_result,
-        "interpretation": interpretation,
-        "prediction": prediction,
-        "reference": reference,
-        "summary": " | ".join([
-            learning_result.get("summary", ""),
-            interpretation.get("summary", ""),
-            prediction.get("summary", ""),
-        ]),
-    }
-
-
-@app.post("/workflows/battery_life")
-async def run_battery_life_workflow(req: BatteryLifeRequest):
-    """电池寿命预测工作流：Learner → Interpreter → Oracle 三 Agent 协作。
-
-    1. Learner.learn()：从循环数据拟合指数衰减模型
-    2. Interpreter.interpret()：解释衰减机理
-    3. Oracle.predict()：外推预测循环寿命
-    返回完整工作流结果（含基准数据库对比）。
-    """
-    if not req.cycle_data:
-        raise HTTPException(status_code=400, detail="cycle_data 不能为空")
-    try:
-        return await asyncio.to_thread(_run_battery_life_workflow, req)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"电池寿命预测工作流执行失败: {e}")
-
-
-@app.get("/battery/cycle-database")
-async def list_battery_cycle_database(material_type: str = ""):
-    """查询电池循环基准数据库（供前端基准对比下拉选择）。"""
-    if material_type:
-        materials = _battery_cycle_db.search(material_type)
-    else:
-        materials = _battery_cycle_db.list_all()
-    return {"materials": materials, "count": len(materials)}
 
 
 # ===========================================================================
@@ -12313,7 +12567,7 @@ async def list_control_plane_runs(
                 ts_dt = (ts_str if isinstance(ts_str, datetime) else datetime.fromisoformat(ts_str)) if ts_str else datetime.now(timezone.utc)
             except Exception:
                 ts_dt = datetime.now(timezone.utc)
-            runs.append(Run(
+            runs.append(ControlPlaneRun(
                 run_id=eid,
                 run_type="ecml",
                 status=ecml_status,
@@ -12331,11 +12585,11 @@ async def list_control_plane_runs(
     # P1-2：合并统一 Agent 调用事件，控制平面运行队列直接消费事件表
     try:
         if _agent_event_log is not None:
-            from datetime import datetime as _dt
+            from datetime import datetime as _dt, timezone
             _agent_status_map = {
-                "success": RunStatus.SUCCEEDED,
-                "failed": RunStatus.FAILED,
-                "timeout": RunStatus.FAILED,
+                "success": ControlPlaneRunStatus.SUCCEEDED,
+                "failed": ControlPlaneRunStatus.FAILED,
+                "timeout": ControlPlaneRunStatus.FAILED,
             }
             for ev in _agent_event_log.list_events(limit=100):
                 ts_str = ev.get("invoked_at", "")
@@ -12343,10 +12597,10 @@ async def list_control_plane_runs(
                     ts_dt = _dt.fromisoformat(ts_str) if ts_str else _dt.now(timezone.utc)
                 except Exception:
                     ts_dt = _dt.now(timezone.utc)
-                ev_status = _agent_status_map.get(ev.get("status", ""), RunStatus.SUCCEEDED)
+                ev_status = _agent_status_map.get(ev.get("status", ""), ControlPlaneRunStatus.SUCCEEDED)
                 if run_status is not None and ev_status != run_status:
                     continue
-                runs.append(Run(
+                runs.append(ControlPlaneRun(
                     run_id=f"evt_{ev['event_id']}",
                     run_type="agent",
                     parent_run_id=ev.get("related_run_id") or None,
@@ -12367,11 +12621,11 @@ async def list_control_plane_runs(
     # 按 run_id 去重：ecml_run 类事件与上方 ECML 运行记录同源，不重复入队。
     try:
         if _research_event_stream is not None:
-            from datetime import datetime as _dt2
+            from datetime import datetime as _dt2, timezone
             _revt_status_map = {
-                "success": RunStatus.SUCCEEDED,
-                "failed": RunStatus.FAILED,
-                "running": RunStatus.RUNNING,
+                "success": ControlPlaneRunStatus.SUCCEEDED,
+                "failed": ControlPlaneRunStatus.FAILED,
+                "running": ControlPlaneRunStatus.RUNNING,
             }
             for ev in _research_event_stream.list_events(limit=100):
                 dedup_key = ev.get("run_id") or f"revt_{ev['event_id']}"
@@ -12382,10 +12636,10 @@ async def list_control_plane_runs(
                     ts_dt = _dt2.fromisoformat(ts_str) if ts_str else _dt2.now(timezone.utc)
                 except Exception:
                     ts_dt = _dt2.now(timezone.utc)
-                ev_status = _revt_status_map.get(ev.get("status", ""), RunStatus.SUCCEEDED)
+                ev_status = _revt_status_map.get(ev.get("status", ""), ControlPlaneRunStatus.SUCCEEDED)
                 if run_status is not None and ev_status != run_status:
                     continue
-                runs.append(Run(
+                runs.append(ControlPlaneRun(
                     run_id=dedup_key,
                     run_type=ev.get("event_type", "research"),
                     status=ev_status,
@@ -12805,6 +13059,44 @@ async def promote_eval(data: dict, request: Request):
         role, eval_run_id, run.target_type, run.target_id, run.target_version,
     )
     return promotion
+
+
+@app.post("/evals/audit")
+async def run_coe_audit(data: dict | None = None, request: Request = None):
+    """手动触发 CoE Audit「证据链完整性」审计 (admin only)。
+
+    立即审计最近已产出的声明证据链，返回审计报告（含报告路径）。
+    """
+    role = _user_role_from_request(request)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="此操作需要 admin 权限")
+    data = data or {}
+    try:
+        limit = int(data.get("limit", 100))
+    except (TypeError, ValueError):
+        limit = 100
+    if limit <= 0 or limit > 1000:
+        limit = 100
+    try:
+        report = _coe_auditor.run(limit=limit)
+    except Exception as e:
+        logger.error("CoE Audit failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    return report
+
+
+@app.get("/evals/audit")
+async def list_coe_audits(request: Request = None):
+    """列出 evals/reports 下的 CoE 审计报告（admin only）。"""
+    role = _user_role_from_request(request)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="此操作需要 admin 权限")
+    reports = []
+    report_dir = _coe_auditor.report_dir if _coe_auditor else None
+    if report_dir and report_dir.is_dir():
+        for fname in sorted(report_dir.glob("audit-*.json"), reverse=True)[:50]:
+            reports.append({"file": fname.name, "path": str(fname)})
+    return {"audit_reports": reports, "count": len(reports)}
 
 
 # ── Task 9: Hybrid Orchestrator & Routing Admin API ────────────────
@@ -14349,6 +14641,300 @@ async def set_mdm_document_active(document_id: str, is_active: bool = Query(...)
     if item is None:
         raise HTTPException(status_code=404, detail="记录不存在")
     return item.model_dump()
+
+
+# ===========================================================================
+# AI 助手（Copilot）路由 — 右侧悬浮抽屉的薄封装后端
+# 能力：会话 CRUD + 消息持久化 + NDJSON 流式对话（复用现有 LLM/Agent 薄封装）
+# ===========================================================================
+from fastapi.responses import StreamingResponse  # noqa: E402
+
+
+def _get_ai_store():
+    """惰性初始化 AiSessionStore（挂载在 app.state，避免 import 期依赖 DB）。"""
+    if not hasattr(app.state, "ai_store"):
+        app.state.ai_store = AiSessionStore()
+    return app.state.ai_store
+
+
+class AiCreateSessionRequest(BaseModel):
+    """创建 AI 助手会话请求。"""
+    title: str = "新会话"
+    project_id: str = ""
+    mode: str = "global"   # global / task（可聚焦）
+    focus: dict = Field(default_factory=dict)    # 聚焦：{agent_id?, task?, ...}
+    context: dict = Field(default_factory=dict)  # 当前页上下文感知 + @提及资源
+
+
+class AiSendRequest(BaseModel):
+    """发送 AI 消息请求。"""
+    message: str = Field(..., min_length=1, max_length=8000)  # 超长消息会放大 prompt 并污染会话
+    context: dict = Field(default_factory=dict)  # 本次消息附带的页面上下文/@提及
+
+
+@app.post("/ai/sessions")
+async def ai_create_session(req: AiCreateSessionRequest, user: User = Depends(require_login)):
+    """创建 AI 助手会话（user_id 隔离 + project_id 项目隔离）。"""
+    store = _get_ai_store()
+    return store.create_session(
+        user_id=user.user_id,
+        project_id=req.project_id,
+        title=req.title,
+        mode=req.mode,
+        focus=req.focus,
+        context=req.context,
+    )
+
+
+@app.get("/ai/sessions")
+async def ai_list_sessions(
+    user: User = Depends(require_login),
+    project_id: str = "",
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    """列出当前用户会话；project_id 非空时做项目隔离。"""
+    store = _get_ai_store()
+    sessions = store.list_sessions(user_id=user.user_id, project_id=project_id, limit=limit)
+    return {"sessions": sessions, "count": len(sessions)}
+
+
+@app.delete("/ai/sessions/{session_id}")
+async def ai_delete_session(session_id: str, user: User = Depends(require_login)):
+    """删除会话及其全部消息（仅限本人）。"""
+    store = _get_ai_store()
+    session = store.get_session(session_id)
+    if session is None or session["user_id"] != user.user_id:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    store.delete_session(session_id)
+    return {"ok": True}
+
+
+@app.get("/ai/sessions/{session_id}/messages")
+async def ai_list_messages(
+    session_id: str,
+    user: User = Depends(require_login),
+    limit: int = Query(default=200, ge=1, le=1000),
+):
+    """列出会话消息（仅限本人）。"""
+    store = _get_ai_store()
+    session = store.get_session(session_id)
+    if session is None or session["user_id"] != user.user_id:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    messages = store.list_messages(session_id, limit=limit)
+    return {"messages": messages, "count": len(messages)}
+
+
+class AiFeedbackRequest(BaseModel):
+    """消息反馈请求。"""
+    value: int = Field(..., ge=-1, le=1)  # 1 有帮助 / -1 没帮助 / 0 取消
+
+
+@app.post("/ai/messages/{message_id}/feedback")
+async def ai_message_feedback(message_id: str, req: AiFeedbackRequest, user: User = Depends(require_login)):
+    """持久化单条消息的用户反馈（仅限本人会话内的消息）。"""
+    store = _get_ai_store()
+    msg = store.get_message(message_id)
+    if msg is None:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    session = store.get_session(msg["session_id"])
+    if session is None or session["user_id"] != user.user_id:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    store.update_message_feedback(message_id, req.value)
+    return {"ok": True, "value": req.value}
+
+
+def _build_copilot_messages(session: dict) -> list[dict]:
+    """构造 Copilot 对话消息：system（人设 + 上下文 + 聚焦）+ 历史 + 当前问题。
+
+    薄封装：聚焦 agent 时沿用该 agent 人设；否则为通用研发助手。
+    """
+    focus = session.get("focus") or {}
+    context = session.get("context") or {}
+    system_parts = [
+        "你是「MaterialsPEML」新材料研发平台内置的 AI 研发助手（Copilot）。",
+        "能力边界：默认可读当前页面上下文与平台数据；涉及执行/写入操作时需得到用户确认，不擅自改动平台数据。",
+        "回复要求：简洁、专业、使用中文；引用平台数据时标注来源；不确定时明确说明，不臆造。",
+    ]
+    # 聚焦模式：有 agent_id 时以该智能体人设作答
+    agent = None
+    if focus.get("agent_id") and _registry is not None:
+        agent = _registry.get_agent(focus["agent_id"])
+    if agent:
+        persona = f"你是「{agent.name}」。{agent.description or ''}"
+        if getattr(agent, "expertise", None):
+            persona += f"。专长领域：{'、'.join(agent.expertise)}"
+        system_parts[0] = persona
+    if focus.get("task"):
+        system_parts.append(f"当前聚焦任务：{focus['task']}")
+    # 当前页面上下文
+    page = context.get("page") or {}
+    if page:
+        system_parts.append(
+            f"当前页面上下文：页面={page.get('title', '')}（路径 {page.get('path', '')}），"
+            f"描述={page.get('description', '')}"
+        )
+    if context.get("project"):
+        system_parts.append(f"当前项目：{context['project']}")
+    mentions = context.get("mentions") or []
+    if mentions:
+        desc = "；".join(
+            f"[{m.get('type', '资源')}] {m.get('name', '')}：{(m.get('snippet') or '')[:120]}"
+            for m in mentions[:5]
+        )
+        system_parts.append(f"用户提及的资源：{desc}")
+    return [{"role": "system", "content": "\n".join(system_parts)}]
+
+
+def _build_conv_messages(
+    session: dict,
+    history: list[dict],
+    current_user_msg_id: str,
+    current_message: str,
+) -> list[dict]:
+    """构造 Copilot 对话消息：system + 历史（最近 20 条）+ 当前问题。
+
+    关键：当前用户消息已先写入存储并出现在 history 中，必须按 message_id 排除，
+    否则会在 prompt 中重复出现（修复回归点）。
+    """
+    messages = _build_copilot_messages(session)
+    for m in history[-20:]:
+        if m["message_id"] == current_user_msg_id:
+            continue
+        if m["role"] in ("user", "assistant") and m["content"]:
+            messages.append({"role": m["role"], "content": m["content"]})
+    messages.append({"role": "user", "content": current_message})
+    return messages
+
+
+def _resolve_attempts(session: dict) -> list[tuple[str, str | None, str]]:
+    """解析 LLM 调用链尝试序列：聚焦 agent 时双模型；否则 通用 LLM → InternLM 回退。
+
+    通用分支必须返回 ("llm", None) 而非 ("", None)，否则 _call_llm_provider 会把
+    空 provider 解析为 internlm，导致回退链失效（修复回归点）。
+    """
+    focus = session.get("focus") or {}
+    attempts: list[tuple[str, str | None, str]] = []
+    if focus.get("agent_id") and _registry is not None:
+        agent = _registry.get_agent(focus["agent_id"])
+        if agent:
+            attempts = [(agent.provider, agent.llm_model, agent.name)]
+            if agent.provider_secondary:
+                attempts.append((agent.provider_secondary, agent.llm_model_secondary, agent.name))
+    if not attempts:
+        attempts = [("llm", None, ""), ("internlm", None, "")]
+    return attempts
+
+
+@app.post("/ai/sessions/{session_id}/messages")
+async def ai_send_message(session_id: str, req: AiSendRequest, user: User = Depends(require_login)):
+    """发送一条消息并流式返回回复（NDJSON：start / delta / done / error）。
+
+    薄封装：优先复用现有 LLM/Agent 双模型调用链；聚焦 agent 时以其人设作答，
+    否则为通用 Copilot（通用 LLM 失败自动回退 InternLM）。
+    """
+    store = _get_ai_store()
+    session = store.get_session(session_id)
+    if session is None or session["user_id"] != user.user_id:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="消息不能为空")
+
+    cfg = get_config()
+    # 会话维度 context 与本次消息 context 合并（本次优先）
+    merged_context = {**(session.get("context") or {}), **(req.context or {})}
+    session["context"] = merged_context
+
+    user_msg = store.add_message(session_id, "user", req.message)
+    asst_msg = store.add_message(session_id, "assistant", "", status="streaming")
+
+    # 构造消息（system + 历史去重 + 当前问题）与调用链尝试序列（见纯函数 _build_conv_messages / _resolve_attempts）
+    history = store.list_messages(session_id, limit=200)
+    messages = _build_conv_messages(session, history, user_msg["message_id"], req.message)
+    attempts = _resolve_attempts(session)
+
+    async def _stream_reply():
+        """生成器：start →（回填完成后 分块 delta）→ done；异常时发 error。
+
+        说明：当前为薄封装对话，回复在 provider 侧同步完成后分块回放（打字机效果），
+        NDJSON 传输层确实是流式的；未做 token 级增量生成（需 provider 支持流式接口）。
+        meta 不含置信度——无真实信号支撑时不下发无依据的数值化置信度。
+        """
+        try:
+            yield json.dumps({"type": "start", "message_id": asst_msg["message_id"]}, ensure_ascii=False) + "\n"
+        except Exception:
+            logger.warning("AI 助手：发送 start 事件失败（连接可能已断开）")
+            return
+        meta = {
+            "provider": "",
+            "model": "",
+            "fallback_used": False,
+            "duration_ms": 0,
+            "sources": [],
+            "chips": [],
+        }
+        t0 = time.monotonic()
+        reply = ""
+        provider = ""
+        actual_model = ""
+        fallback_used = False
+        last_error = ""
+        for idx, (prov, mdl, _agent_name) in enumerate(attempts):
+            try:
+                reply = await _call_llm_provider(prov, mdl, messages, cfg)
+                provider = (prov or "").lower() or ("llm" if mdl else "internlm")
+                actual_model = mdl or provider
+                fallback_used = idx > 0
+                break
+            except Exception as e:
+                last_error = f"{type(e).__name__}: {e}"
+                logger.warning("AI 助手：第 %d 次尝试失败（%s）", idx + 1, last_error)
+                if idx == 0 and len(attempts) > 1:
+                    continue
+                # 全部尝试失败
+                store.update_message_status(asst_msg["message_id"], "error")
+                try:
+                    yield json.dumps(
+                        {"type": "error", "message_id": asst_msg["message_id"], "detail": f"对话失败（{last_error}）"},
+                        ensure_ascii=False,
+                    ) + "\n"
+                except Exception:
+                    logger.warning("AI 助手：发送 error 事件失败（连接可能已断开）")
+                return
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        # 回填完整回复
+        store.update_message_status(asst_msg["message_id"], "done", reply)
+        meta.update({
+            "provider": provider,
+            "model": actual_model,
+            "fallback_used": fallback_used,
+            "duration_ms": duration_ms,
+        })
+        # 分块发送（打字机效果）
+        chunk_size = 24
+        for i in range(0, len(reply), chunk_size):
+            piece = reply[i : i + chunk_size]
+            try:
+                yield json.dumps({"type": "delta", "content": piece}, ensure_ascii=False) + "\n"
+            except Exception:
+                logger.warning("AI 助手：发送 delta 事件中断（连接可能已断开）")
+                break
+        # 仅当会话仍是默认标题时，用首条消息作为标题，避免后续消息污染会话名
+        default_title = (session.get("title") or "").strip() in ("", "新会话")
+        store.touch_session(session_id, title=req.message[:40] if default_title else None)
+        try:
+            yield json.dumps(
+                {"type": "done", "message_id": asst_msg["message_id"], "reply": reply, "meta": meta},
+                ensure_ascii=False,
+            ) + "\n"
+        except Exception:
+            logger.warning("AI 助手：发送 done 事件失败（连接可能已断开）")
+            pass
+
+    return StreamingResponse(
+        _stream_reply(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 if _frontend_dist.is_dir():
