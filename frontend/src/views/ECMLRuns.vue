@@ -76,6 +76,7 @@
         :row-selection="{ selectedRowKeys, onChange: (keys) => (selectedRowKeys = keys) }"
         :scroll="{ x: 1400 }"
         row-key="run_id"
+        @row-click="(record) => viewRun(record)"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'is_complete'">

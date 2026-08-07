@@ -483,7 +483,10 @@ async function fetchOrders() {
 async function fetchProjects() {
   try {
     projectList.value = await listProjects()
-  } catch { projectList.value = [] }
+  } catch {
+    projectList.value = []
+    message.error('项目列表加载失败，请稍后重试')
+  }
 }
 
 async function fetchCandidates() {

@@ -1,9 +1,19 @@
 <template>
   <div class="experiments">
     <div class="page-header">
-      <h1 class="page-title">实验数据</h1>
-      <p class="page-subtitle">查询、筛选与可视化湿实验测量记录</p>
-      <p class="page-usage-hint">说明：数据来自 experiment_result_records 表；可按样品、批次、实验类型、来源、操作员等维度筛选</p>
+      <div class="header-main">
+        <div class="header-text">
+          <h1 class="page-title">实验数据</h1>
+          <p class="page-subtitle">查询、筛选与可视化湿实验测量记录</p>
+          <p class="page-usage-hint">说明：数据来自 experiment_result_records 表；可按样品、批次、实验类型、来源、操作员等维度筛选</p>
+        </div>
+        <div class="header-actions">
+          <a-button type="primary" @click="goToNewExperiment">
+            <template #icon><PlusOutlined /></template>
+            新建实验任务
+          </a-button>
+        </div>
+      </div>
     </div>
 
     <!-- Filter -->
@@ -445,6 +455,11 @@ const experimentsStore = useExperimentsStore()
 const route = useRoute()
 const router = useRouter()
 const isMounted = ref(true)
+
+// 新建实验任务：进入实验工作台并打开创建入口
+function goToNewExperiment() {
+  router.push('/experiment-workbench?create=1')
+}
 
 // 内容 Tab 与高级查询开关
 const activeTab = ref('records')
@@ -911,6 +926,17 @@ onUnmounted(() => {
 
 .page-header {
   margin-bottom: 12px;
+}
+
+.header-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.header-actions {
+  flex-shrink: 0;
 }
 
 .card-title-row {

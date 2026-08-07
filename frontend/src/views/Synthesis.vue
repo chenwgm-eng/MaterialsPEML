@@ -226,10 +226,10 @@
         <div class="synthesis-main">
           <a-card class="input-card" :bordered="false">
             <a-form layout="horizontal" :label-col="{ span: 4 }" :wrapper-col="{ span: 18 }">
-              <a-form-item label="目标分子 SMILES" extra="输入目标分子的 SMILES 表示，例如 CCO（乙醇）或 c1ccccc1（苯）">
+              <a-form-item label="目标分子 SMILES" extra="输入目标分子的 SMILES 表示，例如 C1COC(=O)O1（碳酸乙烯酯）或 C(=C)F（偏氟乙烯）">
                 <a-input
                   v-model:value="smiles"
-                  placeholder="例如 CCO"
+                  placeholder="例如 C1COC(=O)O1"
                   allow-clear
                   class="smiles-input"
                   @press-enter="promptPlan"
@@ -498,7 +498,7 @@ const currentRoute = useRoute()
 const router = useRouter()
 const LAST_SMILES_KEY = 'battery_synthesis:last_smiles'
 const currentScenarioId = ref('')
-const smiles = ref(currentRoute.query.smiles || currentRoute.query.formula || 'CCO')
+const smiles = ref(currentRoute.query.smiles || currentRoute.query.formula || 'C1COC(=O)O1')
 const serviceError = ref('')
 const isFormulaNotSmiles = computed(() => !!currentRoute.query.formula && !currentRoute.query.smiles)
 const routes = ref([])
@@ -710,10 +710,10 @@ const scatterRef = ref(null)
 let scatterChart = null
 
 const templates = [
-  { label: '乙醇', smiles: 'CCO' },
-  { label: '异丙醇', smiles: 'CC(C)O' },
-  { label: '环己烷', smiles: 'C1CCCCC1' },
-  { label: '环氧乙烷', smiles: 'C1CO1' },
+  { label: '碳酸乙烯酯', smiles: 'C1COC(=O)O1' },
+  { label: '碳酸二甲酯', smiles: 'COC(=O)OC' },
+  { label: '偏氟乙烯', smiles: 'C(=C)F' },
+  { label: '苯乙烯', smiles: 'C=Cc1ccccc1' },
 ]
 
 function isValidSmiles(s) {

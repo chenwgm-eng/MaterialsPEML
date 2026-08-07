@@ -150,7 +150,7 @@
               <a-button @click="resetForm">重置</a-button>
             </div>
             <div v-if="execMode === 'agent' && selectedService" class="agent-mode-hint">
-              将通过「{{ agentForService(selectedService.id)?.agent_id }}」智能体调用
+              将通过「{{ agentDisplayName(agentForService(selectedService.id)?.agent_id) }}」智能体调用
               <code>{{ agentForService(selectedService.id)?.capability }}</code> 工具执行
             </div>
 
@@ -163,7 +163,7 @@
                 </a-tag>
               </div>
               <div class="result-meta" v-if="lastResult.agentInfo">
-                <span>Agent: {{ lastResult.agentInfo.agent_id }} → 工具: {{ lastResult.agentInfo.tool_id }}</span>
+                <span>Agent: {{ agentDisplayName(lastResult.agentInfo.agent_id) }} → 工具: {{ lastResult.agentInfo.tool_id }}</span>
                 <span v-if="lastResult.agentInfo.used_fallback" class="fallback-tag">已回退</span>
               </div>
               <div class="result-meta" v-else-if="lastResult.runId">
@@ -299,6 +299,7 @@ import { listCandidates } from '@/api/candidates'
 import ServiceCatalog from './scientific/ServiceCatalog.vue'
 import TaskRunDetail from './TaskRunDetail.vue'
 import EvidenceCard from './EvidenceCard.vue'
+import { agentDisplayName } from '@/constants/agentNames'
 
 const simpleImage = Empty.PRESENTED_IMAGE_SIMPLE
 const route = useRoute()

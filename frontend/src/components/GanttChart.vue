@@ -395,9 +395,7 @@ function getStageForAction(action) {
 function goToTask(task) {
   const stage = getStageForAction(task.action)
   const route = stage?.route || '/workbench'
-  const query = {}
-  if (task.material_scope) query.material_scope = task.material_scope
-  if (task.target_properties) query.target_properties = task.target_properties
+  const query = { project_id: task.project_id || props.project?.project_id, task_id: task.task_id }
   router.push({ path: route, query })
 }
 </script>

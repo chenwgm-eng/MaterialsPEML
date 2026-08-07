@@ -244,8 +244,6 @@ import {
   AccountBookOutlined,
   ImportOutlined,
   ApiOutlined,
-  HistoryOutlined,
-  ThunderboltOutlined,
   HomeOutlined,
   BellOutlined,
   DeploymentUnitOutlined,
@@ -413,21 +411,17 @@ const menuGroups = computed(() => {
         { path: '/my-tasks', title: '我的待办', icon: markRaw(BellOutlined) },
       ],
     },
-    // ── 2. 项目空间（以项目空间串联，减少跨菜单查找）──
+    // ── 2. 项目空间（收敛为 5 项：项目管理/材料设计/合成路径/配方与工艺/实验闭环迭代）──
     {
       title: '项目空间',
       icon: markRaw(ProjectOutlined),
       zone: 'research',
       items: [
         { path: '/projects', title: '项目管理', icon: markRaw(ProjectOutlined) },
-        { path: '/projects/new', title: '项目新建', icon: markRaw(PlusOutlined) },
-        { path: '/workbench', title: '候选材料设计', icon: markRaw(ExperimentOutlined) },
-        { path: '/prediction', title: '性质预测', icon: markRaw(LineChartOutlined) },
+        { path: '/workbench', title: '材料设计', icon: markRaw(ExperimentOutlined) },
         { path: '/synthesis', title: '合成路径', icon: markRaw(ShareAltOutlined) },
         { path: '/formula-design', title: '配方与工艺', icon: markRaw(ExperimentOutlined) },
-        { path: '/ecml', title: '实验闭环迭代', icon: markRaw(SyncOutlined) },
-        { path: '/ecml/runs', title: '迭代历史', icon: markRaw(HistoryOutlined) },
-        { path: '/battery-life', title: '性能寿命预测', icon: markRaw(ThunderboltOutlined) },
+        { path: '/ecml/runs', title: '实验闭环迭代', icon: markRaw(SyncOutlined) },
       ],
     },
     // ── 3. 实验与数据（按实验执行对象组织）──

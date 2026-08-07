@@ -54,6 +54,9 @@
             <template #icon><ReloadOutlined /></template>
           </a-button>
         </a-tooltip>
+        <a-button size="small" class="prediction-link" @click="goToPrediction">
+          性质预测
+        </a-button>
       </div>
 
       <!-- Agent 行：智能体信息卡 + 模式切换 + 生成按钮（已抽取为子组件） -->
@@ -566,6 +569,11 @@ function onReset() {
   discoveryStore.clearCandidates()
 }
 
+// 跳转到性质预测页
+function goToPrediction() {
+  router.push('/prediction')
+}
+
 function onSelectCandidate(item) {
   selectedCandidate.value = item
 }
@@ -808,6 +816,10 @@ onMounted(async () => {
 
 .num-input {
   width: 140px;
+  flex-shrink: 0;
+}
+
+.prediction-link {
   flex-shrink: 0;
 }
 
