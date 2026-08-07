@@ -1101,6 +1101,7 @@ class ECMLRunStepRequest(BaseModel):
     parent_run_id: str = ""  # 可选：父轮次 run_id，启动下一轮时传入形成迭代链
     scenario_id: str = ""  # 可选：关联研发场景 ID
     task_id: str = ""  # 可选：关联 projects.tasks(task_id)，供 stage-status 反查
+    project_id: str = ""  # 可选：关联研发项目 ID，用于"本项目/跨项目"数据隔离
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -1736,7 +1737,7 @@ async def discover(req: DiscoverRequest):
     target_props = req.target_properties if req.target_properties else None
     state = await asyncio.to_thread(
         agent.ecml.run, req.target, req.target_property, req.max_iterations, req.run_id,
-        target_props, req.parent_run_id, req.scenario_id,
+        target_props, req.parent_run_id, req.scenario_id, req.task_id, req.project_id,
     )
     summary = agent.ecml.get_summary(state)
     summary["run_id"] = state.run_id
@@ -5430,7 +5431,7 @@ def _set_ecml_run_status(run_id: str, status: dict) -> None:
 
 async def _run_ecml_background(run_id: str, target: str, target_property: str,
                                 max_iterations: int, target_props, parent_run_id,
-                                scenario_id, task_id):
+                                scenario_id, task_id, project_id=""):
     """后台运行 ECML 闭环，360 秒超时保护（与 engine 内部 300s 优雅超时协调）。
 
     成功时由 state_store 落盘；超时/失败时更新内存状态供轮询查询。
@@ -5439,7 +5440,7 @@ async def _run_ecml_background(run_id: str, target: str, target_property: str,
         await asyncio.wait_for(
             asyncio.to_thread(
                 agent.ecml.run, target, target_property, max_iterations, run_id,
-                target_props, parent_run_id, scenario_id, task_id,
+                target_props, parent_run_id, scenario_id, task_id, project_id,
             ),
             timeout=360,
         )
@@ -5522,7 +5523,7 @@ async def ecml_run_step(req: ECMLRunStepRequest):
     # 启动后台任务
     _spawn_background(_run_ecml_background(
         run_id, req.target, req.target_property, req.max_iterations,
-        target_props, req.parent_run_id, req.scenario_id, req.task_id,
+        target_props, req.parent_run_id, req.scenario_id, req.task_id, req.project_id,
     ))
 
     return {"run_id": run_id, "status": "running", "message": "ECML 运行已启动，请轮询状态", "ai_meta": ai_meta}

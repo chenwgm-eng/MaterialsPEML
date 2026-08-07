@@ -18,6 +18,8 @@ from battery_materials_agent.agent_team.research_event_stream import (
     EVENT_TYPE_LABELS,
     ResearchEventStream,
 )
+from battery_materials_agent.auth.user_store import UserRole
+from tests.conftest import attach_test_auth
 from battery_materials_agent.config import AgentConfig
 
 
@@ -160,7 +162,8 @@ def client():
         # startup 被跳过后，端点依赖的 candidate_store 需手动挂载
         app.state.candidate_store = agent.candidate_store
 
-        with TestClient(app) as c:
+        headers = attach_test_auth(app, role=UserRole.PROJECT_MANAGER)
+        with TestClient(app, headers=headers) as c:
             yield c
         app.router.on_startup[:] = saved_startup
         app.state.synthesis_task_store = None

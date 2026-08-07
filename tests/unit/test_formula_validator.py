@@ -1,7 +1,5 @@
 """P1-1 候选材料化学式合法性校验引擎 与 下一轮推荐质量门禁 的单元测试。"""
 
-import asyncio
-
 import pytest
 
 from battery_materials_agent.ecml.ecml_engine import (
@@ -152,7 +150,7 @@ class TestNextRoundQualityGate:
         )
         store.save("r1", state.target, state.target_property, state)
 
-        result = asyncio.run(engine.generate_next_round("r1"))
+        result = engine.generate_next_round("r1")
         names = [c["name"] for c in result["next_candidates"]]
         # Ac 变体被拦截，不出现在推荐池
         assert not any(n.startswith("Ac") for n in names)
@@ -175,7 +173,7 @@ class TestNextRoundQualityGate:
         )
         store.save("r2", state.target, state.target_property, state)
 
-        result = asyncio.run(engine.generate_next_round("r2"))
+        result = engine.generate_next_round("r2")
         for c in result["next_candidates"]:
             assert not c["name"].startswith("variant_")
             assert not c["name"].startswith("exploration_")
@@ -199,6 +197,6 @@ class TestNextRoundQualityGate:
         )
         store.save("r3", state.target, state.target_property, state)
 
-        result = asyncio.run(engine.generate_next_round("r3"))
+        result = engine.generate_next_round("r3")
         assert result["batch_quality_warning"]
         assert "模型推理失效" in result["batch_quality_warning"]

@@ -591,6 +591,7 @@ class ECMLState(BaseModel):
     iteration_id: int = 1  # 当前迭代轮次（跨 run 的迭代链）
     parent_run_id: str = ""  # 父轮次 run_id，用于迭代链追溯
     scenario_id: str = ""  # P0-001：关联研发场景 ID
+    project_id: str = ""  # 业务链路：关联研发项目 ID，用于"本项目/跨项目"数据隔离
     task_id: str = ""  # 业务链路：关联 projects.tasks(task_id)，由 0009 迁移新增列
     next_round_suggestions: dict[str, Any] = Field(default_factory=dict)  # 下一轮候选建议
     external_invocation_ids: list[str] = Field(default_factory=list)
@@ -785,7 +786,8 @@ class ECMLEngine:
             target_properties: list[dict] | None = None,
             parent_run_id: str = "",
             scenario_id: str = "",
-            task_id: str = "") -> ECMLState:
+            task_id: str = "",
+            project_id: str = "") -> ECMLState:
         """运行 ECML 闭环。
 
         run_id 可选：传入已有的 run_id 可恢复中断的运行；否则生成新 ID。
@@ -819,10 +821,13 @@ class ECMLEngine:
                 # 断点恢复时若传入了 task_id，补充写入（避免历史 run 缺 task_id）
                 if task_id and not state.task_id:
                     state.task_id = task_id
+                # 断点恢复时若传入了 project_id，补充写入（避免历史 run 缺 project_id）
+                if project_id and not state.project_id:
+                    state.project_id = project_id
             else:
-                state = self._create_new_state(run_id, target_property, max_iterations, parent_run_id, scenario_id, task_id)
+                state = self._create_new_state(run_id, target_property, max_iterations, parent_run_id, scenario_id, task_id, project_id)
         else:
-            state = self._create_new_state(run_id, target_property, max_iterations, parent_run_id, scenario_id, task_id)
+            state = self._create_new_state(run_id, target_property, max_iterations, parent_run_id, scenario_id, task_id, project_id)
 
         # 将 execution_profile 存入 state
         state.execution_profile = execution_profile.value
@@ -932,7 +937,7 @@ class ECMLEngine:
 
     def _create_new_state(self, run_id: str, target_property: str, max_iterations: int,
                           parent_run_id: str = "", scenario_id: str = "",
-                          task_id: str = "") -> ECMLState:
+                          task_id: str = "", project_id: str = "") -> ECMLState:
         new_id = run_id or f"ecml_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
         iteration_id = 1
         if parent_run_id and self.state_store is not None:
@@ -950,6 +955,7 @@ class ECMLEngine:
             scenario_id=scenario_id,
             iteration_id=iteration_id,
             task_id=task_id,
+            project_id=project_id,
         )
 
     def _persist(self, state: ECMLState, target: str, target_property: str) -> ECMLState:
@@ -2973,4 +2979,187 @@ class ECMLEngine:
                 "全部候选预测值为 0，疑似模型推理失效，建议降级到基线模型重新计算"
                 if batch_quality == "all_zero_predictions" else ""
             ),
+        }
+
+    # ─────────────────── 贝叶斯优化推荐（决策引擎） ───────────────────
+    def _candidate_pool(self, state: ECMLState) -> list[dict]:
+        """构造待评分候选池：复用本轮已生成候选；不足时用 next-round 探索候选补充。"""
+        pool = list(state.candidates or [])
+        is_polymer = "polymer" in (state.material_branch or "").lower()
+        if len(pool) < 5:
+            try:
+                nr = self.generate_next_round(state.run_id)
+                for c in (nr.get("next_candidates") or []):
+                    if c.get("formula") or c.get("smiles"):
+                        pool.append(c)
+                    if len(pool) >= 10:
+                        break
+            except Exception:
+                logger.warning("Failed to enrich candidate pool", exc_info=True)
+        return pool[:40]
+
+    def run_bayesian_round(
+        self,
+        run_id: str,
+        family: str | None = None,
+        acquisition: str = "ei",
+        explore: float = 0.5,
+        model_family_override: str | None = None,
+        budget: float | None = None,
+        include_cross_project: bool = False,
+        project_id: str = "",
+        objectives: list[dict] | None = None,
+        num_candidates: int = 10,
+    ) -> dict:
+        """装配训练池 → 拟合代理模型 → 采集函数评分 → 写 Round 记录（待复核）。
+
+        返回给前端的推荐结果。多目标（objectives 非空且 >1）走 EHVI。
+        """
+        from .bo import BayesianOptimizer, ObjectiveMeta, classify_family
+        from .rounds_store import RoundStore
+
+        state = self.state_store.load(run_id)
+        if state is None:
+            raise ValueError(f"Run {run_id} not found")
+
+        # 持久化 project_id 到 state，供"本项目/跨项目"数据隔离端到端成立
+        if project_id and state.project_id != project_id:
+            state.project_id = project_id
+            try:
+                self.state_store.save(state.run_id, state.target, state.target_property, state)
+            except Exception:
+                pass
+
+        target_property = state.target_property
+        family = family or classify_family(state.target)
+        pool = self._candidate_pool(state)
+
+        opt = BayesianOptimizer(engine=self.state_store.engine)
+        objectives_meta = None
+        # 未显式传入 objectives 时，回退到 run 状态里持久化的多目标配置（state.target_properties）
+        objectives = objectives or state.target_properties
+        if objectives and len(objectives) > 1:
+            objectives_meta = [
+                ObjectiveMeta(property=o.get("property", target_property), direction=o.get("direction", "maximize"), weight=o.get("weight", 1.0))
+                for o in objectives
+            ]
+        rec = opt.recommend(
+            family=family,
+            property_name=target_property,
+            candidates=pool,
+            acquisition=acquisition,
+            explore=explore,
+            objectives=objectives_meta,
+            budget=budget,
+            model_family_override=model_family_override,
+            include_cross_project=include_cross_project,
+            project_id=state.project_id or project_id,
+            num_candidates=num_candidates,
+        )
+
+        round_no = (state.iteration or 0) + 1
+        store = RoundStore(engine=self.state_store.engine)
+        round_id = store.create_round(
+            run_id=run_id,
+            round_no=round_no,
+            target=state.target,
+            target_property=target_property,
+            material_family=family,
+            status="pending_review",
+            train_pool_snapshot=rec.pool,
+            model_meta=rec.model,
+            acquisition_meta=rec.acquisition,
+            recommended=rec.candidates,
+            model_metrics=rec.model_metrics,
+        )
+        return {
+            "round_id": round_id,
+            "round_no": round_no,
+            "status": "pending_review",
+            "recommended": rec.candidates,
+            "reasoning": rec.reasoning,
+            "model": rec.model,
+            "acquisition": rec.acquisition,
+            "pool": rec.pool,
+            "model_metrics": rec.model_metrics,
+        }
+
+    def pool_stats(
+        self, run_id: str, family: str | None = None, property_name: str | None = None
+    ) -> dict:
+        """训练池统计预览（策略配置面板展示“当前材料体系+属性有多少条有效数据”）。
+
+        数据聚合维度 = 材料体系 + 目标属性，项目只是查询过滤标签而非隔离边界。
+        """
+        from .bo import BayesianOptimizer, classify_family
+
+        state = self.state_store.load(run_id)
+        if state is None:
+            raise ValueError(f"Run {run_id} not found")
+        prop = property_name or state.target_property
+        fam = family or classify_family(state.target)
+        opt = BayesianOptimizer(engine=self.state_store.engine)
+        pool = opt.build_pool(fam, prop)
+        return {
+            "family": fam,
+            "property_name": prop,
+            "stats": pool.stats,
+            "quality_report": pool.quality_report,
+        }
+
+    def list_rounds(self, run_id: str) -> list[dict]:
+        from .rounds_store import RoundStore
+        return RoundStore(engine=self.state_store.engine).list_rounds(run_id)
+
+    def get_round(self, round_id: str) -> dict | None:
+        from .rounds_store import RoundStore
+        return RoundStore(engine=self.state_store.engine).get_round(round_id)
+
+    def confirm_round(self, round_id: str, adopted: list[dict | str] | None = None) -> dict:
+        """课题负责人复核确认后下发：为采纳候选创建实验任务，并推进状态机。"""
+        from .rounds_store import RoundStore
+
+        store = RoundStore(engine=self.state_store.engine)
+        rnd = store.get_round(round_id)
+        if rnd is None:
+            raise ValueError(f"Round {round_id} not found")
+
+        adopted_list = adopted or []
+        created_orders: list[str] = []
+        if self.experiment_controller is not None and adopted_list:
+            try:
+                from ..experiment.experiment_controller import ExperimentOrder
+                for item in adopted_list:
+                    cand = item if isinstance(item, dict) else {"formula": str(item)}
+                    formula = cand.get("formula") or cand.get("smiles") or ""
+                    if not formula:
+                        continue
+                    order_id = f"ORD-BO-{round_id[:8]}-{len(created_orders) + 1}"
+                    try:
+                        order = ExperimentOrder(
+                            order_id=order_id,
+                            candidate_id=cand.get("candidate_id", ""),
+                            execution_mode="MANUAL_ENTRY",
+                            status="APPROVED",
+                            priority="P2",
+                            notes=f"BO 复核下发（round={round_id}）",
+                            ai_draft=True,
+                        )
+                        self.experiment_controller._store.save_order(order)
+                        created_orders.append(order_id)
+                    except Exception:
+                        logger.warning("Failed to create order for %s", formula, exc_info=True)
+            except Exception:
+                logger.warning("Failed to create experiment orders for round %s", round_id, exc_info=True)
+
+        store.update_status(
+            round_id,
+            status="in_execution",
+            review_actions={"adopted": adopted_list, "created_orders": created_orders},
+        )
+        return {
+            "round_id": round_id,
+            "status": "in_execution",
+            "created_orders": created_orders,
+            "adopted": len(adopted_list),
         }

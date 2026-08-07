@@ -89,20 +89,25 @@ class FakeBinding:
 
 
 class FakeSCPClientPool:
-    def __init__(self, succeed=True):
+    def __init__(self, succeed=True, invalid_data=False):
         self._succeed = succeed
+        # invalid_data：返回 status=success 但数据不符合能力语义（如绑定错工具）
+        self._invalid_data = invalid_data
 
     async def call_tool(self, server_id, tool_name, arguments, server_url=None):
-        if self._succeed:
-            return {
-                "status": "success",
-                "data": {"routes": [{
-                    "route_id": "SCP-R1",
-                    "steps": [{"reaction_smiles": "A>>B"}],
-                    "confidence": 0.9,
-                }]},
-            }
-        return {"status": "error", "error": "fake scp failure"}
+        if not self._succeed:
+            return {"status": "error", "error": "fake scp failure"}
+        if self._invalid_data:
+            # 合成路径规划返回了无 routes 的数据；DFT 返回了无 overall_status 的数据
+            return {"status": "success", "data": {"weight": 180.2, "cas": "64-17-5"}}
+        return {
+            "status": "success",
+            "data": {"routes": [{
+                "route_id": "SCP-R1",
+                "steps": [{"reaction_smiles": "A>>B"}],
+                "confidence": 0.9,
+            }]},
+        }
 
 
 @pytest.fixture
@@ -217,6 +222,136 @@ class TestProcessDeepening:
         finally:
             from sqlalchemy import text
             with candidate_store.engine.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM experiment.candidates WHERE candidate_id = :cid"),
+                    {"cid": cid},
+                )
+
+    async def test_scp_invalid_response_falls_back_local(self, candidate_store,
+                                                         process_store, ensure_candidate):
+        """回归：SCP 返回 status=success 但数据不符合能力语义时应回退本地。
+
+        绑定错工具（如 SMILESToWeight / SMILESToCAS）时，SCP 会返回"成功"但数据
+        无合成路径/DFT 语义。此时不得记录虚假的 scp 成功来源，也不得与本地成功
+        来源同时出现（AI 透明度要求）。
+        """
+        svc = ProcessDeepeningService(
+            process_scheme_store=process_store,
+            candidate_store=candidate_store,
+            synthesis_planner=FakeSynthesisPlanner(),
+            scp_client_pool=FakeSCPClientPool(succeed=True, invalid_data=True),
+            scp_catalog=FakeSCPCatalog(enabled=True),
+        )
+        scheme = await svc.deepen(ensure_candidate, owner="proc_engineer")
+
+        # 路线来自本地回退
+        assert len(scheme.routes) >= 1
+        # 合成路径规划：必须记录 scp failed（语义不符），不能有 scp success
+        plan_ev = [e for e in scheme.evidence_refs
+                   if e.get("capability") == "synthesis_planning"]
+        assert not any(e.get("status") == "success" and e.get("source") == "scp"
+                       for e in plan_ev)
+        assert any(e.get("status") == "failed" and "语义" in e.get("detail", "")
+                   for e in plan_ev)
+        # 本地成功来源存在
+        assert any(e.get("source") == "local" and e.get("status") == "success"
+                   for e in plan_ev)
+
+    async def test_dft_scp_attempts_recorded_in_evidence(self, candidate_store,
+                                                         process_store, ensure_candidate):
+        """回归：DFT 校验的 SCP 尝试（无论成败）必须记录进 evidence_refs。"""
+        svc = ProcessDeepeningService(
+            process_scheme_store=process_store,
+            candidate_store=candidate_store,
+            synthesis_planner=FakeSynthesisPlanner(),
+            scp_client_pool=FakeSCPClientPool(succeed=True, invalid_data=True),
+            scp_catalog=FakeSCPCatalog(enabled=True),
+        )
+        scheme = await svc.deepen(ensure_candidate, owner="proc_engineer")
+
+        dft_ev = [e for e in scheme.evidence_refs
+                  if e.get("capability") == "dft_verification"]
+        # 至少存在一条 DFT 来源记录（SCP 尝试或本地成功）
+        assert dft_ev
+        # SCP 返回的 DFT 数据无 overall_status → 应记录失败的 scp 尝试
+        assert any(e.get("source") == "scp" and e.get("status") == "failed"
+                   for e in dft_ev)
+        # 本地回退成功后记录了 local 成功
+        assert any(e.get("source") == "local" and e.get("status") == "success"
+                   for e in dft_ev)
+
+    async def test_dft_scp_success_used_and_recorded(self, candidate_store,
+                                                     process_store, ensure_candidate):
+        """回归：SCP 返回符合 DFT 语义的数据时，采用 SCP 结果并记录 scp 成功来源。"""
+        class _DftSCPClientPool(FakeSCPClientPool):
+            async def call_tool(self, server_id, tool_name, arguments, server_url=None):
+                if arguments.get("route") is not None:
+                    # DFT 校验：返回符合 overall_status 语义的数据
+                    return {"status": "success", "data": {
+                        "route_id": arguments["route"].get("route_id", ""),
+                        "overall_status": "passed",
+                        "original_confidence": 0.9,
+                        "adjusted_confidence": 0.95,
+                        "method": "scp-dft",
+                    }}
+                return {"status": "success", "data": {"routes": [{
+                    "route_id": "SCP-R1", "steps": [], "confidence": 0.9}]}}
+
+        svc = ProcessDeepeningService(
+            process_scheme_store=process_store,
+            candidate_store=candidate_store,
+            synthesis_planner=FakeSynthesisPlanner(),
+            scp_client_pool=_DftSCPClientPool(succeed=True),
+            scp_catalog=FakeSCPCatalog(enabled=True),
+        )
+        scheme = await svc.deepen(ensure_candidate, owner="proc_engineer")
+
+        dft_ev = [e for e in scheme.evidence_refs
+                  if e.get("capability") == "dft_verification"]
+        # 存在 scp 成功的 DFT 来源
+        assert any(e.get("source") == "scp" and e.get("status") == "success"
+                   for e in dft_ev)
+        # SCP 成功时不应再回退本地（不出现 local 成功）
+        assert not any(e.get("source") == "local" and e.get("status") == "success"
+                       for e in dft_ev)
+
+    async def test_deepen_advances_candidate_to_process_planning(self, candidate_store,
+                                                                 process_store):
+        """回归：工艺深化开始时，候选应从 feasible 交棒到 process_planning。
+
+        否则后续"确认工艺方案"会尝试 feasible → process_confirmed 而非法。
+        """
+        cid = _unique_id("PDS-HAND")
+        candidate_store.save(CandidateRecord(
+            candidate_id=cid, candidate_type="polymer", name=f"hand-{cid}",
+            smiles="CCO", source="test", status="feasible", owner="formulator",
+            assigned_role="formulator",
+        ))
+        try:
+            svc = ProcessDeepeningService(
+                process_scheme_store=process_store,
+                candidate_store=candidate_store,
+                synthesis_planner=FakeSynthesisPlanner(),
+            )
+            await svc.deepen(cid, owner="proc_engineer")
+            rec = candidate_store.get(cid)
+            assert rec.status == "process_planning"
+            assert rec.assigned_role == "process_engineer"
+            assert rec.owner == "proc_engineer"
+
+            # 且此刻可合法执行"确认工艺方案"：process_planning → process_confirmed
+            candidate_store.update_status(
+                cid, "process_confirmed", actor_role="process_engineer",
+                owner="proc_engineer", reason="回归：确认工艺方案",
+            )
+            assert candidate_store.get(cid).status == "process_confirmed"
+        finally:
+            from sqlalchemy import text
+            with candidate_store.engine.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM experiment.process_schemes WHERE candidate_id = :cid"),
+                    {"cid": cid},
+                )
                 conn.execute(
                     text("DELETE FROM experiment.candidates WHERE candidate_id = :cid"),
                     {"cid": cid},

@@ -16,3 +16,11 @@ export const getProcessEngineerWorkbench = (status = '') =>
 /** 对候选配方执行工艺深化（SCP 优先 + 本地回退），产出/更新工艺方案 */
 export const runProcessDeepening = (candidateId, data) =>
   client.post(`/candidates/${candidateId}/process-deepening`, data)
+
+/** 更新候选材料状态（Phase A 两层状态机：feasible → process_planning → ... → ready_for_experiment） */
+export const updateCandidateStatus = (candidateId, data) =>
+  client.patch(`/candidates/${candidateId}/status`, data)
+
+/** 更新工艺方案状态（draft → reviewing → confirmed / abandoned） */
+export const updateProcessSchemeStatus = (processId, data) =>
+  client.patch(`/process-schemes/${processId}/status`, data)

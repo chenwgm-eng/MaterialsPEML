@@ -104,9 +104,26 @@
               <a-button
                 type="primary"
                 :loading="deepeningLoading"
+                :disabled="schemes.some((s) => s.status === 'confirmed') && selected.status === 'process_confirmed'"
                 @click="runDeepening"
               >
                 <ThunderboltOutlined /> 执行工艺深化
+              </a-button>
+              <a-button
+                v-if="!schemes.some((s) => s.status === 'confirmed') && schemes.length"
+                type="primary"
+                :loading="confirmingScheme"
+                @click="confirmProcessScheme"
+              >
+                <CheckCircleOutlined /> 确认工艺方案
+              </a-button>
+              <a-button
+                v-if="selected.status === 'process_confirmed'"
+                type="primary"
+                :loading="advancingCandidate"
+                @click="advanceCandidateStatus"
+              >
+                <ArrowRightOutlined /> 推进至可实验
               </a-button>
               <span class="action-hint">
                 将调用对应高级能力（SCP 优先 / 本地回退）规划合成路径并做 DFT 可行性校验
@@ -463,10 +480,12 @@ import {
   SyncOutlined,
   InfoCircleOutlined,
   SafetyCertificateOutlined,
+  CheckCircleOutlined,
+  ArrowRightOutlined,
 } from '@ant-design/icons-vue'
 import { getReactionNetwork, verifyRouteWithDFT } from '@/api/experiments'
 import { planSynthesisAsync, getSynthesisTask, createManualRoute } from '@/api/synthesis'
-import { getProcessEngineerWorkbench, runProcessDeepening } from '@/api/candidates'
+import { getProcessEngineerWorkbench, runProcessDeepening, updateCandidateStatus, updateProcessSchemeStatus } from '@/api/candidates'
 import { listAgents } from '@/api/agents'
 import { useMdmDict } from '@/utils/mdmDict'
 import { getUserId } from '@/api/client'
@@ -586,6 +605,67 @@ async function runDeepening() {
     message.error((err?.response?.data?.detail) || '工艺深化失败，请稍后重试', 6)
   } finally {
     deepeningLoading.value = false
+  }
+}
+
+// 确认工艺方案（draft → reviewing → confirmed），并同步推进候选状态到 process_confirmed
+const confirmingScheme = ref(false)
+async function confirmProcessScheme() {
+  if (!selected.value || !schemes.value.length) return
+  confirmingScheme.value = true
+  try {
+    const latestScheme = schemes.value[0]
+    // 工艺方案状态机：draft → reviewing → confirmed（须逐级迁移）
+    if (latestScheme.status !== 'reviewing') {
+      await updateProcessSchemeStatus(latestScheme.process_id, {
+        status: 'reviewing',
+        owner: currentOwner,
+        require_role: 'process_engineer',
+        reason: '工艺方案进入评审',
+      })
+    }
+    await updateProcessSchemeStatus(latestScheme.process_id, {
+      status: 'confirmed',
+      owner: currentOwner,
+      require_role: 'process_engineer',
+      reason: '工艺方案已确认',
+    })
+    // 同步推进候选状态：process_planning → process_confirmed
+    await updateCandidateStatus(selected.value.candidate_id, {
+      status: 'process_confirmed',
+      actor_role: 'process_engineer',
+      owner: currentOwner,
+      reason: '工艺方案已确认',
+    })
+    message.success('工艺方案已确认，候选已推进至『工艺已确认』')
+    await loadWorkbench()
+  } catch (err) {
+    const detail = err?.response?.data?.detail
+    message.error(typeof detail === 'string' ? detail : '确认工艺方案失败，请稍后重试', 6)
+  } finally {
+    confirmingScheme.value = false
+  }
+}
+
+// 推进候选状态：process_confirmed → ready_for_experiment（可下达实验）
+const advancingCandidate = ref(false)
+async function advanceCandidateStatus() {
+  if (!selected.value) return
+  advancingCandidate.value = true
+  try {
+    await updateCandidateStatus(selected.value.candidate_id, {
+      status: 'ready_for_experiment',
+      actor_role: 'process_engineer',
+      owner: currentOwner,
+      reason: '工艺方案已确认，推进至可下达实验',
+    })
+    message.success('候选已推进至『可下达实验』状态')
+    await loadWorkbench()
+  } catch (err) {
+    const detail = err?.response?.data?.detail
+    message.error(typeof detail === 'string' ? detail : '推进失败，请稍后重试', 6)
+  } finally {
+    advancingCandidate.value = false
   }
 }
 

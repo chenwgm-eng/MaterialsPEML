@@ -364,6 +364,8 @@ class SemanticScholarRetriever(WebAPIRetriever):
             title = _normalize_text(item.get("title"))
             if not title:
                 continue
+            if _is_non_peer_review_title(title):
+                continue
             authors = []
             for author in item.get("authors", []) or []:
                 name = _normalize_text(author.get("name"))
@@ -438,6 +440,8 @@ class CrossrefRetriever(WebAPIRetriever):
             title = _normalize_text(titles[0]) if titles else ""
             if not title:
                 continue
+            if _is_non_peer_review_title(title):
+                continue
             authors = []
             for author in item.get("author", []) or []:
                 given = author.get("given", "")
@@ -472,6 +476,353 @@ class CrossrefRetriever(WebAPIRetriever):
         import os
         key = os.getenv(env_name, "").strip()
         return key or None
+
+
+class ArxivRetriever(WebAPIRetriever):
+    """arXiv API 检索（生物医药 / 化学 / 材料预印本）。
+
+    复用 Biomni 项目 `biomni/tool/literature.py::query_arxiv` 的检索思路，
+    输出改为结构化字段以便接入知识图谱与入库。公开 API 无需 key。
+    """
+
+    async def search(self, query: str, limit: int = 10) -> list[dict]:
+        if not query or not query.strip():
+            return []
+
+        def _search() -> list[dict]:
+            import arxiv
+
+            client = arxiv.Client()
+            search = arxiv.Search(
+                query=query,
+                max_results=max(limit, 1),
+                sort_by=arxiv.SortCriterion.Relevance,
+            )
+            papers: list[dict] = []
+            for paper in client.results(search):
+                title = _normalize_text(paper.title)
+                if not title:
+                    continue
+                authors = [_normalize_text(a.name) for a in paper.authors if a.name and a.name.strip()]
+                year = 0
+                if paper.published is not None:
+                    year = _to_int(getattr(paper.published, "year", 0))
+                if year < 1900 or year > 2100:
+                    year = 0
+                papers.append({
+                    "title": title,
+                    "authors": authors,
+                    "journal": _normalize_text(paper.journal_ref),
+                    "year": year,
+                    "abstract": _normalize_text(paper.summary),
+                    "doi": _normalize_text(paper.doi),
+                    "keywords": [],
+                    "url": _normalize_text(paper.entry_id),
+                    "source": "arxiv",
+                    "score": 0,
+                })
+                if len(papers) >= limit:
+                    break
+            return papers
+
+        try:
+            return await asyncio.to_thread(_search)
+        except ImportError:
+            logger.warning("未安装 arxiv 库，跳过 arXiv 检索")
+            return []
+        except Exception as e:
+            logger.warning("arXiv API 检索失败: %s", e)
+            return []
+
+
+class PubmedRetriever(WebAPIRetriever):
+    """PubMed API 检索（生物医药文献）。
+
+    复用 Biomni 项目 `biomni/tool/literature.py::query_pubmed` 的检索思路
+    （含简化查询重试），输出改为结构化字段。公开 API 无需 key，
+    需提供可用的联系邮箱（PUBMED_EMAIL，缺省用占位邮箱）。
+    """
+
+    async def search(self, query: str, limit: int = 10) -> list[dict]:
+        if not query or not query.strip():
+            return []
+
+        def _search() -> list[dict]:
+            import os
+
+            from pymed import PubMed
+
+            email = os.getenv("PUBMED_EMAIL", "").strip() or "battery-materials@example.com"
+            pubmed = PubMed(tool="BatteryPEML", email=email)
+            papers: list[dict] = []
+            max_retries = 3
+
+            # 查询字符串用于重试；PubMed 对中文/复杂查询可能返回空，逐步简化
+            cur_query = query
+            for attempt in range(max_retries):
+                try:
+                    articles = list(pubmed.query(cur_query, max_results=max(limit, 1)))
+                except Exception as e:
+                    logger.warning("PubMed 查询失败（%s）: %s", cur_query, e)
+                    articles = []
+                if articles:
+                    break
+                # 简化查询：去掉最后一个词
+                tokens = cur_query.split()
+                if len(tokens) <= 1:
+                    break
+                cur_query = " ".join(tokens[:-1])
+
+            for article in articles[:limit]:
+                title = _normalize_text(getattr(article, "title", None))
+                if not title:
+                    continue
+                authors = []
+                for a in (getattr(article, "authors", None) or []):
+                    name = _normalize_text(getattr(a, "name", None) or getattr(a, "lastname", "") + " " + getattr(a, "initials", ""))
+                    if name:
+                        authors.append(name)
+                year = 0
+                pub_date = getattr(article, "publication_date", None)
+                if pub_date is not None:
+                    year = _to_int(getattr(pub_date, "year", 0))
+                if year < 1900 or year > 2100:
+                    year = 0
+                papers.append({
+                    "title": title,
+                    "authors": authors,
+                    "journal": _normalize_text(getattr(article, "journal", None)),
+                    "year": year,
+                    "abstract": _normalize_text(getattr(article, "abstract", None)),
+                    "doi": _normalize_text(getattr(article, "doi", None)),
+                    "keywords": [],
+                    "url": _normalize_text(
+                        getattr(article, "pubmed_url", None)
+                        or f"https://pubmed.ncbi.nlm.nih.gov/{getattr(article, 'pubmed_id', '')}"
+                    ),
+                    "source": "pubmed",
+                    "score": 0,
+                })
+                if len(papers) >= limit:
+                    break
+            return papers
+
+        try:
+            return await asyncio.to_thread(_search)
+        except ImportError:
+            logger.warning("未安装 pymed 库，跳过 PubMed 检索")
+            return []
+        except Exception as e:
+            logger.warning("PubMed API 检索失败: %s", e)
+            return []
+
+
+class GoogleScholarRetriever(WebAPIRetriever):
+    """Google Scholar 检索源（scholarly 库）。
+
+    作为补充检索源，可靠度标记为 ``low``，且**默认关闭**（由环境变量
+    ``GOOGLE_SCHOLAR_ENABLED`` 控制，默认 false）。scholarly 依赖 Google
+    搜索结果页，稳定性较差，因此异常时静默降级为空结果，不影响主检索流。
+
+    中文查询由 ``LiteratureResearcherAgent`` 统一转译为英文后再调用本检索器。
+    """
+
+    def __init__(self, enabled: bool | None = None):
+        import os as _os
+
+        if enabled is None:
+            enabled = (
+                _os.getenv("GOOGLE_SCHOLAR_ENABLED", "false").strip().lower() in ("1", "true", "yes")
+            )
+        self._enabled = enabled
+
+    async def search(self, query: str, limit: int = 10) -> list[dict]:
+        if not self._enabled or not query or not query.strip():
+            return []
+        if not _is_ascii(query):
+            logger.info("Google Scholar 跳过非英文查询: %r", query)
+            return []
+
+        def _search() -> list[dict]:
+            from scholarly import scholarly  # type: ignore
+
+            papers: list[dict] = []
+            search_query = scholarly.search_pubs(query)
+            for _ in range(max(limit, 1)):
+                try:
+                    pub = next(search_query)
+                except StopIteration:
+                    break
+                except Exception as e:  # noqa: BLE001
+                    logger.debug("Google Scholar 单条解析失败: %s", e)
+                    continue
+                title = _normalize_text(pub.get("bib", {}).get("title"))
+                if not title:
+                    continue
+                authors = _to_string_list(pub.get("bib", {}).get("author"))
+                year = _to_int(pub.get("bib", {}).get("pub_year"))
+                if year < 1900 or year > 2100:
+                    year = 0
+                papers.append({
+                    "title": title,
+                    "authors": authors,
+                    "journal": _normalize_text(pub.get("bib", {}).get("venue")),
+                    "year": year,
+                    "abstract": _normalize_text(pub.get("bib", {}).get("abstract")),
+                    "doi": _normalize_text(pub.get("pub_url", "")),
+                    "keywords": [],
+                    "url": _normalize_text(pub.get("pub_url")),
+                    "source": "google_scholar",
+                    "score": 0,
+                })
+                if len(papers) >= limit:
+                    break
+            return papers
+
+        try:
+            return await asyncio.to_thread(_search)
+        except ImportError:
+            logger.warning("未安装 scholarly 库，跳过 Google Scholar 检索")
+            return []
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Google Scholar 检索失败: %s", e)
+            return []
+
+
+class WebContentRetriever:
+    """全文内容抽取 — 对检索结果抓取网页正文 / PDF 全文。
+
+    复用 Biomni 项目 `extract_url_content` / `extract_pdf_content` 思路：
+    - 从 DOI 推导 `https://doi.org/{doi}` 并跟随重定向到出版商页面。
+    - HTML 页面：剥离 script/style/标签后提取正文。
+    - PDF 链接：若已安装 pypdf / PyPDF2 则提取文本，否则跳过。
+
+    安全与稳定性：
+    - SSRF 防护：仅允许 http/https，拦截环回 / 内网 / 链路本地 / 保留地址。
+    - 内容大小上限：超过 2MB 丢弃，避免内存占用。
+    - 超时熔断：单次抓取超时即放弃，不影响摘要级结果返回。
+
+    行为由环境变量控制：
+    - `FULL_TEXT_EXTRACT_ENABLED`（默认 false）：是否启用全文抽取。
+    - `FULL_TEXT_EXTRACT_TIMEOUT`（默认 30s）：单次抓取超时。
+    """
+
+    _MAX_BYTES = 2 * 1024 * 1024  # 2MB
+
+    @staticmethod
+    def _default_timeout() -> float:
+        import os
+        raw = os.getenv("FULL_TEXT_EXTRACT_TIMEOUT", "30")
+        try:
+            return max(1.0, float(raw))
+        except ValueError:
+            return 30.0
+
+    @staticmethod
+    def _is_safe_url(url: str) -> bool:
+        from urllib.parse import urlparse
+
+        try:
+            import ipaddress
+            parsed = urlparse(url)
+        except Exception:
+            return False
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        if hostname.lower() in ("localhost",) or hostname.lower().endswith(".local"):
+            return False
+        try:
+            addr = ipaddress.ip_address(hostname)
+        except ValueError:
+            addr = None
+        if addr is not None:
+            return not (addr.is_private or addr.is_loopback or addr.is_link_local
+                        or addr.is_reserved or addr.is_multicast)
+        return True
+
+    @staticmethod
+    def _doi_url(doi: str) -> str:
+        doi = (doi or "").strip()
+        if not doi:
+            return ""
+        return f"https://doi.org/{doi}"
+
+    @staticmethod
+    def _extract_html_text(html: str) -> str:
+        text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
+        text = re.sub(r"<[^>]+>", " ", text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    @staticmethod
+    def _extract_pdf_text(content: bytes) -> str:
+        try:
+            from pypdf import PdfReader  # type: ignore
+        except ImportError:
+            try:
+                from PyPDF2 import PdfReader  # type: ignore
+            except ImportError:
+                return ""
+        try:
+            import io
+            reader = PdfReader(io.BytesIO(content))
+            parts = [page.extract_text() or "" for page in reader.pages]
+            return " ".join(parts).strip()
+        except Exception:
+            return ""
+
+    async def extract_one(self, doi: str, timeout: float) -> dict:
+        """抓取单篇 DOI 对应页面/PDF 的全文。失败返回 error 标记，不抛异常。"""
+        url = self._doi_url(doi)
+        if not url:
+            return {"full_text": "", "full_text_available": False, "full_text_error": "missing_doi"}
+        if not self._is_safe_url(url):
+            return {"full_text": "", "full_text_available": False, "full_text_error": "unsafe_url"}
+        try:
+            async with httpx.AsyncClient(
+                follow_redirects=True,
+                timeout=timeout,
+                headers={"User-Agent": "BatteryPEML/1.0 (mailto:battery-materials@example.com)"},
+            ) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                content = resp.content
+            if len(content) > self._MAX_BYTES:
+                return {"full_text": "", "full_text_available": False, "full_text_error": "content_too_large"}
+            ctype = resp.headers.get("content-type", "").lower()
+            if "pdf" in ctype or url.lower().endswith(".pdf"):
+                text = self._extract_pdf_text(content)
+            else:
+                text = self._extract_html_text(content.decode("utf-8", errors="ignore"))
+            if not text:
+                return {"full_text": "", "full_text_available": False, "full_text_error": "empty_content"}
+            return {"full_text": text, "full_text_available": True, "full_text_error": ""}
+        except Exception as e:  # noqa: BLE001
+            return {"full_text": "", "full_text_available": False, "full_text_error": str(e)[:200]}
+
+    async def extract(self, papers: list[dict], timeout: float | None = None) -> list[dict]:
+        """对一批文献抓取全文，就地更新每篇的 full_text / full_text_available / full_text_error。
+
+        多篇并行抓取，单篇受超时熔断；某篇失败不影响其余结果。
+        """
+        if not papers:
+            return papers
+        timeout = timeout or self._default_timeout()
+        tasks = [
+            asyncio.wait_for(self.extract_one(p.get("doi", ""), min(timeout, 15.0)), timeout=timeout)
+            for p in papers
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for paper, res in zip(papers, results):
+            if isinstance(res, Exception):
+                paper["full_text_available"] = False
+                paper["full_text"] = ""
+                paper["full_text_error"] = "timeout_or_error"
+            elif isinstance(res, dict):
+                paper.update(res)
+        return papers
 
 
 class LocalKnowledgeBaseRetriever:
@@ -859,6 +1210,15 @@ def _to_string_list(value: Any) -> list[str]:
     return []
 
 
+def _is_ascii(text: str) -> bool:
+    """判断文本是否全部为 ASCII 字符（用于 Google Scholar 等仅支持英文的源）。"""
+    try:
+        text.encode("ascii")
+        return True
+    except (UnicodeEncodeError, AttributeError):
+        return False
+
+
 def _to_int(value: Any) -> int:
     if isinstance(value, int):
         return value
@@ -868,6 +1228,25 @@ def _to_int(value: Any) -> int:
         except ValueError:
             return 0
     return 0
+
+
+# 非正式条目标题前缀（审稿评论 / 勘误 / 撤稿等），不计入文献证据。
+# 仅匹配前缀模式，避免误伤标题含 "Review" 的正式综述论文。
+NON_PEER_REVIEW_PREFIXES: tuple[str, ...] = (
+    "review for",
+    "comment on",
+    "erratum",
+    "corrigendum",
+    "retraction",
+)
+
+
+def _is_non_peer_review_title(title: str) -> bool:
+    """判断标题是否命中非正式条目前缀（不区分大小写）。"""
+    t = (title or "").strip().lower()
+    if not t:
+        return False
+    return any(t.startswith(p) for p in NON_PEER_REVIEW_PREFIXES)
 
 
 def _paper_id(paper: dict) -> str:
@@ -970,9 +1349,12 @@ class LiteratureResearcherAgent:
     _SOURCE_CONFIDENCE: dict[str, str] = {
         "crossref": CONFIDENCE_HIGH,
         "semantic_scholar": CONFIDENCE_HIGH,
-        "template": CONFIDENCE_HIGH,
+        "arxiv": CONFIDENCE_HIGH,
+        "pubmed": CONFIDENCE_HIGH,
+        "template": CONFIDENCE_MEDIUM,
         "local_kb": CONFIDENCE_HIGH,
         "scp": CONFIDENCE_MEDIUM,
+        "google_scholar": CONFIDENCE_LOW,
         "llm_generated": CONFIDENCE_LOW,
     }
 
@@ -1065,12 +1447,25 @@ class LiteratureResearcherAgent:
         if enable_scp:
             self._retrievers.append(SCPRetriever(tool_registry))
         if enable_web_api:
-            self._retrievers.extend([SemanticScholarRetriever(), CrossrefRetriever()])
+            self._retrievers.extend([
+                SemanticScholarRetriever(),
+                CrossrefRetriever(),
+                ArxivRetriever(),
+                PubmedRetriever(),
+                GoogleScholarRetriever(),
+            ])
         if enable_local_kb:
             self._retrievers.append(LocalKnowledgeBaseRetriever())
 
         self._template_retriever = TemplateLibraryRetriever()
         self._enable_template_fallback = enable_template_fallback
+
+        # 全文内容抽取：由 FULL_TEXT_EXTRACT_ENABLED 控制（默认关闭）
+        import os as _os
+        self._web_content = WebContentRetriever()
+        self._enable_full_text = (
+            _os.getenv("FULL_TEXT_EXTRACT_ENABLED", "false").strip().lower() in ("1", "true", "yes")
+        )
 
     def _translate_query(self, query: str) -> str | None:
         """若查询包含中文，返回基于关键词映射的英文查询，便于外部学术 API/SCP 检索。"""
@@ -1114,7 +1509,10 @@ class LiteratureResearcherAgent:
         tasks = []
         for r in self._retrievers:
             # WebAPI / SCP 对英文检索更友好；LLM 与本地知识库保留原始查询
-            use_translated = translated and isinstance(r, (SemanticScholarRetriever, CrossrefRetriever, SCPRetriever))
+            use_translated = translated and isinstance(
+                r,
+                (SemanticScholarRetriever, CrossrefRetriever, SCPRetriever, ArxivRetriever, PubmedRetriever, GoogleScholarRetriever),
+            )
             q = translated if use_translated else query
             tasks.append(asyncio.wait_for(r.search(q, limit), timeout=per_source_timeout))
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -1143,6 +1541,11 @@ class LiteratureResearcherAgent:
         logger.info("各检索源结果数: %s, 去重后总数: %d", source_counts, len(all_papers))
 
         if all_papers:
+            # 全文内容抽取：仅当启用时触发，对**所有**去重后的结果抓取全文；
+            # 失败/超时不影响摘要级结果返回
+            if self._enable_full_text:
+                logger.info("全文抽取已启用，对 %d 篇结果抓取全文", len(all_papers))
+                all_papers = await self._web_content.extract(all_papers)
             # LLM/SCP 结果默认按返回顺序，年份较新的优先；补充相关度简单排序
             all_papers.sort(key=lambda p: (-(p.get("score", 0) or 0), -p.get("year", 0)))
             return all_papers[:limit]
@@ -1193,7 +1596,8 @@ class LiteratureResearcherAgent:
         nodes: dict[str, dict] = {}
         edges: dict[tuple[str, str, str], dict] = {}
 
-        def add_node(node_id: str, label: str, node_type: str, source: str, confidence: str):
+        def add_node(node_id: str, label: str, node_type: str, source: str, confidence: str,
+                 content: str | None = None, full_text_available: bool = False):
             if node_id not in nodes:
                 nodes[node_id] = {
                     "id": node_id,
@@ -1209,6 +1613,11 @@ class LiteratureResearcherAgent:
                 }
             nodes[node_id]["properties"]["papers"] += 1
             nodes[node_id]["properties"]["sources"].add(source)
+            # 全文内容抽取结果：写入节点 content 并标记可用（供图谱落库审计）
+            if content:
+                nodes[node_id]["properties"]["content"] = content
+            if full_text_available:
+                nodes[node_id]["properties"]["full_text_available"] = True
             # 若已有节点置信度较低，则升级为较高置信度（外部来源优先）
             if (self._SOURCE_CONFIDENCE.get(nodes[node_id]["properties"]["confidence"], "low") == "low"
                     and confidence in (self.CONFIDENCE_HIGH, self.CONFIDENCE_MEDIUM)):
@@ -1233,6 +1642,8 @@ class LiteratureResearcherAgent:
             paper_title = paper.get("title", "")
             paper_source = paper.get("source", "unknown")
             paper_confidence = self._SOURCE_CONFIDENCE.get(paper_source, "low")
+            paper_full_text = paper.get("full_text", "") if paper.get("full_text_available") else ""
+            paper_full_text_ok = bool(paper.get("full_text_available"))
 
             paper_materials = self._match_entities(text, self._MATERIAL_KEYWORDS)
             paper_properties = self._match_entities(text, self._PROPERTY_KEYWORDS)
@@ -1241,19 +1652,24 @@ class LiteratureResearcherAgent:
             paper_institutions = self._match_entities(text, self._INSTITUTION_KEYWORDS)
 
             for m in paper_materials:
-                add_node(m, m, self.ENTITY_MATERIAL, paper_source, paper_confidence)
+                add_node(m, m, self.ENTITY_MATERIAL, paper_source, paper_confidence,
+                         content=paper_full_text, full_text_available=paper_full_text_ok)
                 nodes[m]["properties"]["paper_titles"].append(paper_title)
             for p in paper_properties:
-                add_node(p, p, self.ENTITY_PROPERTY, paper_source, paper_confidence)
+                add_node(p, p, self.ENTITY_PROPERTY, paper_source, paper_confidence,
+                         content=paper_full_text, full_text_available=paper_full_text_ok)
                 nodes[p]["properties"]["paper_titles"].append(paper_title)
             for meth in paper_methods:
-                add_node(meth, meth, self.ENTITY_METHOD, paper_source, paper_confidence)
+                add_node(meth, meth, self.ENTITY_METHOD, paper_source, paper_confidence,
+                         content=paper_full_text, full_text_available=paper_full_text_ok)
                 nodes[meth]["properties"]["paper_titles"].append(paper_title)
             for app in paper_applications:
-                add_node(app, app, self.ENTITY_APPLICATION, paper_source, paper_confidence)
+                add_node(app, app, self.ENTITY_APPLICATION, paper_source, paper_confidence,
+                         content=paper_full_text, full_text_available=paper_full_text_ok)
                 nodes[app]["properties"]["paper_titles"].append(paper_title)
             for inst in paper_institutions:
-                add_node(inst, inst, self.ENTITY_INSTITUTION, paper_source, paper_confidence)
+                add_node(inst, inst, self.ENTITY_INSTITUTION, paper_source, paper_confidence,
+                         content=paper_full_text, full_text_available=paper_full_text_ok)
                 nodes[inst]["properties"]["paper_titles"].append(paper_title)
 
             for m in paper_materials:
@@ -1295,6 +1711,11 @@ class LiteratureResearcherAgent:
             abstract = paper.get("abstract", "")
             keywords = " ".join(paper.get("keywords", []))
             authors = " ".join(paper.get("authors", []))
+            # 若已抓取全文，优先使用全文做实体抽取（更完整）
+            if paper.get("full_text_available"):
+                full_text = paper.get("full_text", "")
+                if full_text:
+                    return f"{title} {full_text} {authors}".lower()
         else:
             title = getattr(paper, "title", "")
             abstract = getattr(paper, "abstract", "")

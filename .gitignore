@@ -91,3 +91,14 @@ scripts/db_corruption_*.csv
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ===== 运行产物 / LAMMPS / 调试脚本 =====
+.cache/
+input.in
+log.lammps
+trajectory.dump
+check_libs.py
+diag_tmp.py
+test_scientific_results*.json
+test_scientific_services*.py
+0.9.3

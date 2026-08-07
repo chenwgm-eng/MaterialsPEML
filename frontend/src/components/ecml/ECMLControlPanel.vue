@@ -63,17 +63,17 @@
           />
           <span class="input-hint">支持多目标帕累托加权优化，权重自动归一化</span>
         </a-form-item>
-        <div v-if="form.multi_objective_props.length > 0" class="mo-grid">
+        <div v-if="form.multi_objective_props.length > 0" class="mo-grid" :class="{ 'mo-no-weights': hideObjectiveWeights }">
           <div class="mo-header">
             <span class="mo-col-prop">属性</span>
-            <span class="mo-col-weight">权重</span>
+            <span v-if="!hideObjectiveWeights" class="mo-col-weight">权重</span>
             <span class="mo-col-dir">方向</span>
             <span class="mo-col-min">最小约束</span>
             <span class="mo-col-max">最大约束</span>
           </div>
           <div v-for="prop in form.multi_objective_props" :key="prop" class="mo-row">
             <span class="mo-col-prop">{{ multiObjectiveLabel(prop) }}</span>
-            <span class="mo-col-weight">
+            <span v-if="!hideObjectiveWeights" class="mo-col-weight">
               <a-input-number v-model:value="multiObjectiveConfig[prop].weight" :min="0" :max="1" :step="0.1" size="small" style="width: 80px" />
             </span>
             <span class="mo-col-dir">
@@ -90,6 +90,7 @@
             </span>
           </div>
         </div>
+        <a-alert v-if="hideObjectiveWeights" type="info" show-icon message="已切换 EHVI（超体积改进）策略：权重字段自动隐藏，优化基于帕累托前沿而非加权求和" style="margin-top: 8px" />
       </div>
     </a-form>
   </a-card>
@@ -109,6 +110,8 @@ const props = defineProps({
   multiObjectiveOptions: { type: Array, default: () => [] },
   // 多目标配置对象（reactive，父组件持有，子组件直接绑定嵌套属性）
   multiObjectiveConfig: { type: Object, required: true },
+  // EHVI 策略下隐藏权重字段（超体积改进基于帕累托前沿，权重无效）
+  hideObjectiveWeights: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['run', 'cancel', 'run-again'])
@@ -189,6 +192,11 @@ function iterFormatter(value) {
   grid-template-columns: 1.4fr 1fr 1.2fr 1fr 1fr;
   align-items: center;
   gap: 8px;
+}
+
+.multi-objective-editor .mo-grid.mo-no-weights .mo-header,
+.multi-objective-editor .mo-grid.mo-no-weights .mo-row {
+  grid-template-columns: 1.4fr 1.2fr 1fr 1fr;
 }
 
 .multi-objective-editor .mo-grid .mo-header {

@@ -25,15 +25,31 @@ def store(tmp_path):
 
 @pytest.fixture(autouse=True)
 def _cleanup_experiment_data():
-    """每个测试前后清理 experiment_result_records 与 experiment_orders，避免 FK 与跨测试污染。"""
+    """每个测试前后清理 experiment_orders 及其关联行，避免 FK 与跨测试污染。
+
+    experiment_orders 被多张表经 RESTRICT 外键引用（result_records / samples /
+    notifications / analysis_results / status_transitions / test_tasks），
+    删除订单前必须先清理这些引用行，否则触发外键违规。order_snapshots 为
+    CASCADE 会自动随之删除。
+    """
     from battery_materials_agent.db import get_engine
     engine = get_engine()
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM experiment.experiment_result_records"))
-        conn.execute(text("DELETE FROM experiment.experiment_orders WHERE order_id LIKE 'EXP_%'"))
+    _delete_exp_rows(engine)
     yield
+    _delete_exp_rows(engine)
+
+
+def _delete_exp_rows(engine):
+    """删除引用 EXP_% 订单的关联行，再删除订单本身。"""
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM experiment.experiment_result_records"))
+        conn.execute(text("DELETE FROM experiment.samples WHERE source_order_id LIKE 'EXP_%'"))
+        conn.execute(text("DELETE FROM experiment.notifications WHERE order_id LIKE 'EXP_%'"))
+        conn.execute(text("DELETE FROM experiment.analysis_results WHERE order_id LIKE 'EXP_%'"))
+        conn.execute(text(
+            "DELETE FROM experiment.experiment_order_status_transitions "
+            "WHERE order_id LIKE 'EXP_%'"))
+        conn.execute(text("DELETE FROM experiment.test_tasks WHERE order_id LIKE 'EXP_%'"))
         conn.execute(text("DELETE FROM experiment.experiment_orders WHERE order_id LIKE 'EXP_%'"))
 
 
@@ -48,7 +64,7 @@ def test_manual_entry_adapter():
     record = adapter.normalize({
         "experiment_order_id": "EXP_001",
         "sample_id": "SMP_001",
-        "property_name": "ionic_conductivity",
+        "property_name": "prop.ionic_conductivity",
         "value": "0.005",
         "unit": "S/cm",
         "uploaded_by": "test_user",
@@ -63,8 +79,9 @@ def test_qc_valid_data(qc_engine):
     """完整数据 QC 检查通过。"""
     record = ExperimentResultRecord(
         result_id="RES_001",
+        experiment_order_id="EXP_001",
         sample_id="SMP_001",
-        property_name="ionic_conductivity",
+        property_name="prop.ionic_conductivity",
         value=0.005,
         unit="S/cm",
     )
@@ -78,7 +95,7 @@ def test_qc_missing_field(qc_engine):
     record = ExperimentResultRecord(
         result_id="RES_002",
         sample_id="",
-        property_name="ionic_conductivity",
+        property_name="prop.ionic_conductivity",
         value=0.005,
         unit="S/cm",
     )
@@ -92,7 +109,7 @@ def test_qc_out_of_range(qc_engine):
     record = ExperimentResultRecord(
         result_id="RES_003",
         sample_id="SMP_001",
-        property_name="ionic_conductivity",
+        property_name="prop.ionic_conductivity",
         value=999999.0,
         unit="S/cm",
     )
@@ -118,20 +135,26 @@ def test_unit_converter():
 
 def test_full_pipeline(store, qc_engine):
     """完整管道：录入 -> QC -> 确认。"""
-    # 0. 先创建 experiment_order，满足 experiment_result_orders.order_id FK 约束
+    # 0. 先创建 experiment_order 与 sample，满足 result_records 的 FK 约束
+    #    （fk_results_order / fk_results_sample）
     from battery_materials_agent.db import get_engine
     with get_engine().begin() as conn:
         conn.execute(text(
             "INSERT INTO experiment.experiment_orders (order_id, status) "
             "VALUES (:order_id, 'approved') ON CONFLICT (order_id) DO NOTHING"
         ), {"order_id": "EXP_001"})
+        conn.execute(text(
+            "INSERT INTO experiment.samples (sample_id, name, source_order_id, status) "
+            "VALUES (:sample_id, :name, :order_id, 'available') "
+            "ON CONFLICT (sample_id) DO NOTHING"
+        ), {"sample_id": "SMP_001", "name": "SMP_001", "order_id": "EXP_001"})
 
     # 1. 录入
     record = ExperimentResultRecord(
         result_id="RES_FULL_001",
         experiment_order_id="EXP_001",
         sample_id="SMP_001",
-        property_name="ionic_conductivity",
+        property_name="prop.ionic_conductivity",
         value=0.005,
         unit="S/cm",
         uploaded_by="test_user",

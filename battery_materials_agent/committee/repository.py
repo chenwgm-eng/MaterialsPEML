@@ -219,9 +219,11 @@ class CommitteeRepository:
                 text(
                     """INSERT INTO committee.committee_evidence
                        (evidence_id, case_id, source_type, source_name, capability,
-                        status, value_summary_json, raw_artifact_ref, provenance_json, created_at)
+                        status, value_summary_json, raw_artifact_ref, provenance_json,
+                        verification, confidence, created_at)
                        VALUES (:evidence_id, :case_id, :source_type, :source_name, :capability,
-                               :status, :value_summary_json, :raw_artifact_ref, :provenance_json, :created_at)
+                               :status, :value_summary_json, :raw_artifact_ref, :provenance_json,
+                               :verification, :confidence, :created_at)
                        ON CONFLICT (evidence_id) DO UPDATE SET
                            case_id = EXCLUDED.case_id,
                            source_type = EXCLUDED.source_type,
@@ -231,6 +233,8 @@ class CommitteeRepository:
                            value_summary_json = EXCLUDED.value_summary_json,
                            raw_artifact_ref = EXCLUDED.raw_artifact_ref,
                            provenance_json = EXCLUDED.provenance_json,
+                           verification = EXCLUDED.verification,
+                           confidence = EXCLUDED.confidence,
                            created_at = EXCLUDED.created_at"""
                 ),
                 {
@@ -243,6 +247,8 @@ class CommitteeRepository:
                     "value_summary_json": json.dumps(evidence.value),
                     "raw_artifact_ref": json.dumps(evidence.provenance),
                     "provenance_json": json.dumps(evidence.provenance),
+                    "verification": evidence.verification,
+                    "confidence": evidence.confidence,
                     "created_at": evidence.created_at.isoformat(),
                 },
             )
@@ -266,11 +272,25 @@ class CommitteeRepository:
                 capability=row["capability"],
                 status=row["status"],
                 value=_safe_json(row["value_summary_json"], {}),
+                confidence=row.get("confidence"),
+                verification=row.get("verification", "verified"),
                 provenance=_safe_json(row["provenance_json"], {}),
                 created_at=_to_datetime(row["created_at"]),
             )
             for row in rows
         ]
+
+    def get_scientific_evidence_source_tiers(self) -> list[str]:
+        """读取 scientific_kernel.evidence 中全部证据包的来源层级（三级信任分层）。
+
+        返回 source_type 取值列表（real_engine / builtin_library / llm_generated），
+        供 CoE Audit 校验来源层级是否进入受控的三级体系。
+        """
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT source_type FROM scientific_kernel.evidence")
+            ).fetchall()
+        return [r[0] for r in rows]
 
     # ── Verdicts ─────────────────────────────────────────────
 

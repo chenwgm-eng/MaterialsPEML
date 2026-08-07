@@ -119,6 +119,7 @@ def test_qc_rule_result_to_dict():
 def _valid_record() -> ExperimentResultRecord:
     return ExperimentResultRecord(
         result_id="R_VALID",
+        experiment_order_id="EO_001",
         sample_id="SMP_001",
         property_name="ionic_conductivity",
         value=0.005,

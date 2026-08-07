@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from battery_materials_agent.ecml.ecml_engine import ECMLState, ECMLStateStore
+from battery_materials_agent.auth.user_store import UserRole
+from tests.conftest import attach_test_auth
 
 
 @pytest.fixture
@@ -126,7 +128,12 @@ def client():
         from battery_materials_agent.api import app
         import battery_materials_agent.api as api_module
 
+        headers = attach_test_auth(app, role=UserRole.ADMIN)
         with TestClient(app) as c:
+            # startup 会重建全局 agent 并重置 user_store，必须在 TestClient 启动后
+            # 重新挂载测试用户，否则受角色保护端点（如 bulk-delete）将返回 401
+            headers = attach_test_auth(app, role=UserRole.ADMIN)
+            c.headers.update(headers)
             # startup 会重建全局 agent，必须在 TestClient 启动后再替换为隔离存储
             api_module.agent.ecml.state_store = ECMLStateStore(
                 db_path=os.path.join(tmpdir, "ecml_states.db")
@@ -178,23 +185,23 @@ class TestBulkDeleteAPI:
             _save_run(store, f"t{i}", "test")
         _save_run(store, "keep", "LiCoO2")
 
-        resp = client.post("/ecml/runs/bulk-delete", json={"run_ids": ["t0", "t1", "t2"]})
+        resp = client.post("/api/ecml/runs/bulk-delete", json={"run_ids": ["t0", "t1", "t2"]})
         assert resp.status_code == 200
         assert resp.json()["deleted"] == 3
 
-        runs = client.get("/ecml/runs?limit=50").json()["runs"]
+        runs = client.get("/api/ecml/runs?limit=50").json()["runs"]
         assert len(runs) == 1
         assert runs[0]["run_id"] == "keep"
 
     def test_bulk_delete_empty_rejected(self, client):
-        resp = client.post("/ecml/runs/bulk-delete", json={"run_ids": []})
+        resp = client.post("/api/ecml/runs/bulk-delete", json={"run_ids": []})
         assert resp.status_code == 400
 
     def test_bulk_delete_writes_audit_log(self, client):
         import battery_materials_agent.api as api_module
         store = api_module.agent.ecml.state_store
         _save_run(store, "t0", "test")
-        client.post("/ecml/runs/bulk-delete", json={"run_ids": ["t0"]})
+        client.post("/api/ecml/runs/bulk-delete", json={"run_ids": ["t0"]})
 
         resp = client.get("/audit/logs?module=ecml&limit=10")
         assert resp.status_code == 200
@@ -206,6 +213,6 @@ class TestBulkDeleteAPI:
         store = api_module.agent.ecml.state_store
         _save_run(store, "t0", "test")
         _save_run(store, "p0", "LiCoO2")
-        runs = {r["run_id"]: r for r in client.get("/ecml/runs?limit=50").json()["runs"]}
+        runs = {r["run_id"]: r for r in client.get("/api/ecml/runs?limit=50").json()["runs"]}
         assert runs["t0"]["run_source"] == "test"
         assert runs["p0"]["run_source"] == "production"

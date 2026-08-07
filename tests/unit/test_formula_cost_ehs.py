@@ -100,8 +100,8 @@ def _make_agent_stub():
     recipe = SimpleNamespace(
         bom={"RM-001": 0.8, "RM-002": 0.2},
         bop=[
-            {"step": "混料", "equipment": "双行星搅拌机", "temp_C": 60, "time_min": 120, "rpm": 300},
-            {"step": "烘烤", "equipment": "真空烘箱", "temp_C": 80, "time_min": 240},
+            {"step": "混料", "equipment": "双行星搅拌机", "temperature": 60, "duration_min": 120, "rpm": 300},
+            {"step": "烘烤", "equipment": "真空烘箱", "temperature": 80, "duration_min": 240},
         ],
         equipment="双行星搅拌机",
     )
@@ -110,14 +110,14 @@ def _make_agent_stub():
 
     agent.compliance_node = MagicMock()
     agent.compliance_node.evaluate = MagicMock(return_value=SimpleNamespace(
-        is_passed=True, warnings=[], fatal_errors=[], estimated_cost_per_kg=100.0,
+        is_passed=True, warnings=[], fatal_errors=[], estimated_unit_cost=100.0,
     ))
 
     specs = {
-        "RM-001": _make_spec(material_id="RM-001", name="PEO", cost_per_kg=85.0,
-                             inventory_kg=500.0, supplier="国泰华荣"),
-        "RM-002": _make_spec(material_id="RM-002", name="LiTFSI", cost_per_kg=450.0,
-                             inventory_kg=100.0, supplier="国泰华荣"),
+        "RM-001": _make_spec(material_id="RM-001", name="PEO", unit_cost=85.0,
+                             inventory_quantity=500.0, supplier="国泰华荣"),
+        "RM-002": _make_spec(material_id="RM-002", name="LiTFSI", unit_cost=450.0,
+                             inventory_quantity=100.0, supplier="国泰华荣"),
     }
     agent.raw_material_db = MagicMock()
     agent.raw_material_db.get_spec = MagicMock(side_effect=lambda mid: specs.get(mid))
@@ -149,7 +149,7 @@ def test_design_formula_cost_breakdown():
     assert abs(sum(b["subtotal"] for b in breakdown) - result["process_cost"]) < 1e-6
     # 总成本口径保持一致
     assert abs(result["material_cost"] + result["process_cost"]
-               - result["total_cost_per_kg"]) < 1e-6
+               - result["total_unit_cost"]) < 1e-6
 
 
 def test_design_formula_ehs_profiles():

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ..synthesis.synthesis_planner import SynthesisPlanner
-from .candidate_store import CandidateStore, CandidateRecord
+from .candidate_store import CandidateStore, CandidateRecord, CandidateStatus
 from .process_scheme_store import ProcessScheme, ProcessSchemeStore, ProcessSchemeStatus
 
 logger = logging.getLogger(__name__)
@@ -99,12 +99,29 @@ class ProcessDeepeningService:
         scheme.evidence_refs.extend(dft_bundle)
 
         # 4) 落库：状态保持 draft（工艺人员在深化中），记录责任人
-        scheme.owner = owner or scheme.owner or record.assigned_role
+        # owner 回退顺序：显式 owner → 既有 scheme.owner → 候选 owner（用户名），
+        # 不回退到角色名（assigned_role），避免把角色名误当用户名。
+        scheme.owner = owner or scheme.owner or record.owner or ""
         scheme.updated_at = _now()
         if scheme.process_id:
             self.process_scheme_store.update(scheme)
         else:
             self.process_scheme_store.create(scheme)
+
+        # 5) 交棒给工艺人员：feasible → process_planning（仅当候选仍处于待深化状态）。
+        #    否则后续"确认工艺方案"需走 feasible → process_confirmed，而该迁移非法。
+        if record.status == CandidateStatus.FEASIBLE.value:
+            try:
+                self.candidate_store.update_status(
+                    candidate_id,
+                    CandidateStatus.PROCESS_PLANNING.value,
+                    actor_role="process_engineer",
+                    owner=owner or record.owner or "",
+                    triggered_by=triggered_by,
+                    reason="工艺人员介入，进入工艺深化阶段",
+                )
+            except Exception as e:  # noqa: BLE001 - 状态推进失败不应阻断深化落库
+                logger.warning("工艺深化：候选 %s 状态推进失败（忽略）%s", candidate_id, e)
         return scheme
 
     # ── 内部：方案装载 ─────────────────────────────────────
@@ -178,7 +195,9 @@ class ProcessDeepeningService:
         """对每条路线做 DFT 可行性校验并回写 confidence。"""
         evidence_refs: list[dict[str, Any]] = []
         for route in routes:
-            dft = await self._verify_dft_single(route)
+            dft, scp_refs = await self._verify_dft_single(route)
+            # 合并该路线的 SCP 尝试记录（成功/失败均须可追溯）
+            evidence_refs.extend(scp_refs)
             if dft is not None:
                 route["dft"] = dft
                 evidence_refs.append({
@@ -194,8 +213,15 @@ class ProcessDeepeningService:
                 })
         return evidence_refs
 
-    async def _verify_dft_single(self, route: dict[str, Any]) -> dict[str, Any] | None:
-        """单条路线 DFT 校验：SCP 优先，失败回退本地。"""
+    async def _verify_dft_single(
+        self, route: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+        """单条路线 DFT 校验：SCP 优先，失败回退本地。
+
+        Returns:
+            (dft_result, scp_evidence_refs)：dft_result 为 None 表示校验失败；
+            scp_evidence_refs 记录本条路线的所有 SCP 尝试，须由调用方合并。
+        """
         temp_refs: list[dict[str, Any]] = []
         scp_result = await self._call_scp_capability(
             capability="dft_verification",
@@ -206,7 +232,7 @@ class ProcessDeepeningService:
         )
         if scp_result is not None and scp_result.get("overall_status"):
             scp_result["source"] = "scp"
-            return scp_result
+            return scp_result, temp_refs
 
         # 本地回退
         try:
@@ -214,10 +240,10 @@ class ProcessDeepeningService:
             result["source"] = "local"
             result["provider"] = "SynthesisPlanner"
             result["method"] = result.get("method", "template-based DFT estimate")
-            return result
+            return result, temp_refs
         except Exception as e:  # noqa: BLE001
             logger.warning("工艺深化：本地 DFT 校验失败 %s", e)
-            return None
+            return None, temp_refs
 
     # ── 内部：SCP 能力调用 ─────────────────────────────────
 
@@ -256,6 +282,32 @@ class ProcessDeepeningService:
                 })
                 continue
             if raw.get("status") == "success" and raw.get("data"):
+                data = raw.get("data")
+                # 能力语义校验：仅接受结构符合该能力语义的数据。
+                # 若 SCP 返回了"成功"但数据不符合（如绑定错工具 SMILESToWeight/CAS），
+                # 视为失败并回退本地，避免记录虚假的 scp 成功来源。
+                if capability == "synthesis_planning" and not self._validate_synthesis_routes(data):
+                    evidence_refs.append({
+                        "capability": capability,
+                        "source": "scp",
+                        "provider": binding.provider or "",
+                        "tool": binding_name,
+                        "status": "failed",
+                        "detail": "SCP 返回数据不符合合成路径规划语义",
+                        "at": _now(),
+                    })
+                    continue
+                if capability == "dft_verification" and not self._validate_dft_results(data):
+                    evidence_refs.append({
+                        "capability": capability,
+                        "source": "scp",
+                        "provider": binding.provider or "",
+                        "tool": binding_name,
+                        "status": "failed",
+                        "detail": "SCP 返回数据不符合 DFT 验证语义",
+                        "at": _now(),
+                    })
+                    continue
                 evidence_refs.append({
                     "capability": capability,
                     "source": "scp",
@@ -265,7 +317,7 @@ class ProcessDeepeningService:
                     "detail": f"SCP {binding_name} 调用成功",
                     "at": _now(),
                 })
-                return raw.get("data")
+                return data
             evidence_refs.append({
                 "capability": capability,
                 "source": "scp",
@@ -276,6 +328,24 @@ class ProcessDeepeningService:
                 "at": _now(),
             })
         return None
+
+    @staticmethod
+    def _validate_synthesis_routes(data: Any) -> bool:
+        """验证合成路径规划结果是否包含有效 routes（与 _normalize_scp_routes 形态一致）。"""
+        if not isinstance(data, dict):
+            return False
+        inner = (
+            data.get("routes")
+            or (data.get("result") or {}).get("routes")
+            or data.get("data", {}).get("routes")
+            or []
+        )
+        return isinstance(inner, list) and len(inner) > 0
+
+    @staticmethod
+    def _validate_dft_results(data: Any) -> bool:
+        """验证 DFT 校验结果是否包含 overall_status。"""
+        return isinstance(data, dict) and bool(data.get("overall_status"))
 
     @staticmethod
     def _normalize_scp_routes(scp_data: Any, target_smiles: str) -> list[dict[str, Any]]:

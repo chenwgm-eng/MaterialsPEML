@@ -41,6 +41,7 @@ class EvidenceItem(BaseModel):
     capability: str = ""
     status: Literal["success", "failed", "unknown"] = "unknown"
     value: dict = Field(default_factory=dict)
+    verification: str = "verified"  # verified | unverified（ClaimVerifier 就地标记，落库）
     confidence: float | None = None
     applicability: str | None = None
     provenance: dict = Field(default_factory=dict)

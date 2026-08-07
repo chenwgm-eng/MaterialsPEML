@@ -17,6 +17,7 @@ from sqlalchemy import text
 from battery_materials_agent.agent import BatteryMaterialsAgent
 from battery_materials_agent.config import AgentConfig
 from battery_materials_agent.synthesis.task_store import SynthesisTaskStore
+from tests.conftest import attach_test_auth
 
 
 @pytest.fixture
@@ -135,7 +136,11 @@ def client():
             db_path=os.path.join(tmpdir, "synthesis_tasks.db")
         )
 
+        headers = attach_test_auth(app)
         with TestClient(app) as c:
+            # startup 会重建全局 agent 并重置 user_store，启动后需重新挂载测试用户
+            headers = attach_test_auth(app)
+            c.headers.update(headers)
             yield c
         app.state.synthesis_task_store = None
 

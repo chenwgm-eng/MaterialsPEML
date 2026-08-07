@@ -277,7 +277,11 @@ class PlausibilityChecker:
 
     def check_rules(self, record: ExperimentResultRecord) -> list[QCRuleResult]:
         results: list[QCRuleResult] = []
+        # 规范化属性名：DB 中以 prop.* 存储，范围配置用裸名（如 ionic_conductivity），
+        # 统一去前缀匹配，避免 canonical 属性 ID 落入通用兜底范围。
         prop = record.property_name
+        if prop and prop.startswith("prop."):
+            prop = prop[len("prop."):]
         value = record.value
 
         if prop in self._ranges_cfg:

@@ -6,6 +6,7 @@ import os
 from fastapi.testclient import TestClient
 from battery_materials_agent.agent import BatteryMaterialsAgent
 from battery_materials_agent.config import AgentConfig
+from tests.conftest import attach_test_auth
 
 
 @pytest.fixture
@@ -18,14 +19,18 @@ def client():
         from battery_materials_agent.api import app
         app.dependency_overrides = {}
 
-        @app.on_event("startup")
-        async def override_startup():
-            pass
-
         import battery_materials_agent.api as api_module
         api_module.agent = agent
 
-        with TestClient(app) as c:
+        # 原始 startup() 会初始化并覆盖 app.state.user_store（真实 UserStore），
+        # attach_test_auth 在 TestClient 进入前调用会被覆盖。on_event 按注册顺序执行，
+        # 此 override 在原始 startup 之后运行，重新挂载测试用户存储。
+        @app.on_event("startup")
+        async def override_startup():
+            attach_test_auth(app)
+
+        headers = attach_test_auth(app)
+        with TestClient(app, headers=headers) as c:
             yield c
 
 

@@ -478,7 +478,6 @@ class CommitteeCoordinator:
             all_evidence.extend(evidence)
 
             for e in evidence:
-                await asyncio.to_thread(self.repository.save_evidence, e)
                 await asyncio.to_thread(
                     self.event_store.append,
                     case.case_id, "evidence_collected",
@@ -493,6 +492,11 @@ class CommitteeCoordinator:
                 await asyncio.to_thread(self.repository.update_case_status, case.case_id, CaseStatus.FAILED)
                 await asyncio.to_thread(self.event_store.append, case.case_id, "case_failed", {"reason": str(e)})
                 raise
+
+            # 核验后再持久化：确保 ClaimVerifier 就地标记的 verification/confidence 落库
+            for e in evidence:
+                await asyncio.to_thread(self.repository.save_evidence, e)
+
             await asyncio.to_thread(self.repository.save_verdict, verdict)
             await asyncio.to_thread(
                 self.event_store.append,

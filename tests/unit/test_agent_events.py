@@ -24,6 +24,7 @@ from battery_materials_agent.committee.enums import (
 )
 from battery_materials_agent.committee.event_store import CommitteeEventStore
 from battery_materials_agent.committee.repository import CommitteeRepository
+from tests.conftest import attach_test_auth
 from battery_materials_agent.committee.triggers import (
     SYNTHESIS_FAILURE_STREAK_THRESHOLD,
     trigger_candidate_quality_case,
@@ -343,7 +344,8 @@ def client():
             db_path=os.path.join(tmpdir, "synthesis_tasks.db")
         )
 
-        with TestClient(app) as c:
+        headers = attach_test_auth(app)
+        with TestClient(app, headers=headers) as c:
             yield c
         app.router.on_startup[:] = saved_startup
         app.state.synthesis_task_store = None

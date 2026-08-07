@@ -487,6 +487,7 @@ class BatteryMaterialsAgent:
                 process_cost_breakdown.append({
                     "step": s["step"],
                     "equipment": s["equipment"],
+                    "duration_h": round(hours, 2),
                     "duration": round(hours, 2),
                     "depreciation_cost": round(depreciation, 2),
                     "energy_cost": round(energy, 2),
@@ -553,6 +554,7 @@ class BatteryMaterialsAgent:
                 "process_cost": round(process_cost, 2),
                 "process_cost_breakdown": process_cost_breakdown,
                 "total_unit_cost": round(total_unit_cost, 2),
+                "total_cost_per_kg": round(total_unit_cost, 2),
                 "ehs": ehs,
                 "is_passed": report.is_passed,
                 "warnings": report.warnings,

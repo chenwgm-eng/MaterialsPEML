@@ -12,10 +12,25 @@ from .scorecards import SCORECARD_REGISTRY
 class CommitteeVerifier:
     """Evaluates committee cases using scorecards and produces verdicts."""
 
-    def __init__(self, scorecards: dict | None = None):
+    def __init__(self, scorecards: dict | None = None, claim_verifier=None):
         self.scorecards = scorecards or {
             key: cls()
             for key, cls in SCORECARD_REGISTRY.items()
+        }
+        self.claim_verifier = claim_verifier
+
+    def _run_claim_verification(self, evidence: list[EvidenceItem]) -> dict | None:
+        """若注入了核验器，在评分前对 success 证据做真实性核验并就地标记。
+
+        返回 describe 用 provenance 片段（无核验器时返回 None）。
+        """
+        if self.claim_verifier is None:
+            return None
+        checks = self.claim_verifier.apply(evidence)
+        failures = [c for c in checks if c.applicable and not c.verified]
+        return {
+            "count": len(failures),
+            "failures": [c.reason for c in failures],
         }
 
     def evaluate(
@@ -26,6 +41,10 @@ class CommitteeVerifier:
     ) -> CommitteeVerdict:
         """Run the appropriate scorecard and return a verdict."""
         try:
+            # 声明核验：评分前对 success 证据做 run 记录真实性核验并就地标记
+            claim_verification = self._run_claim_verification(evidence)
+            has_claim_failures = bool(claim_verification and claim_verification["count"])
+
             scorecard = self.scorecards.get(case.committee_type.value)
             if scorecard is None:
                 return self.escalate(case, f"No scorecard for committee type: {case.committee_type.value}")
@@ -64,6 +83,12 @@ class CommitteeVerifier:
                 decision = Decision.REQUEST_EVIDENCE
                 result["blocking_reasons"] = result.get("blocking_reasons", []) + [f"score_below_threshold: {result['score']:.2f} < {threshold}"]
 
+            warnings = list(result.get("warnings", []))
+            prov = {"method": "scorecard", "committee_type": case.committee_type.value}
+            if claim_verification is not None:
+                prov["claim_verification"] = claim_verification
+                if has_claim_failures:
+                    warnings.append("claim_unverified: 部分证据未通过真实性核验")
             return CommitteeVerdict(
                 verdict_id=f"verdict-{case.case_id}",
                 case_id=case.case_id,
@@ -73,9 +98,9 @@ class CommitteeVerifier:
                     "passed": result["passed"],
                 },
                 blocking_reasons=result.get("blocking_reasons", []),
-                warnings=result.get("warnings", []),
+                warnings=warnings,
                 required_actions=[],
-                verifier_provenance={"method": "scorecard", "committee_type": case.committee_type.value},
+                verifier_provenance=prov,
                 created_at=datetime.now(timezone.utc),
             )
         except Exception as exc:

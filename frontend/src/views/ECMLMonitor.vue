@@ -44,9 +44,26 @@
       :prerequisites-met="prerequisitesMet"
       :multi-objective-options="multiObjectiveOptions"
       :multi-objective-config="multiObjectiveConfig"
+      :hide-objective-weights="hideObjectiveWeights"
       @run="onRun"
       @cancel="onCancel"
       @run-again="onRunAgain"
+    />
+
+    <!-- 贝叶斯优化决策引擎：策略配置 + 训练池统计 + 运行态可视化 + 复核下发 -->
+    <ECMLStrategyPanel
+      :run-id="currentRunId"
+      :target="form.target"
+      :target-property="form.target_property"
+      :pool-stats="boRound?.pool"
+      @start="onStrategyStart"
+      @acquisition-change="(v) => (currentAcquisition = v)"
+    />
+
+    <ECMLRoundResult
+      :round="boRound"
+      :current-scenario-id="currentScenarioId"
+      @confirmed="onRoundConfirmed"
     />
 
     <!-- 失败状态提示 -->
@@ -789,8 +806,11 @@ import RadarChart from '@/components/RadarChart.vue'
 import ResearchContextBanner from '@/components/ResearchContextBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ECMLControlPanel from '@/components/ecml/ECMLControlPanel.vue'
+import ECMLStrategyPanel from '@/components/ecml/ECMLStrategyPanel.vue'
+import ECMLRoundResult from '@/components/ecml/ECMLRoundResult.vue'
 import ECMLCommitteePanel from '@/components/ecml/ECMLCommitteePanel.vue'
 import ECMLResultOverview from '@/components/ecml/ECMLResultOverview.vue'
+import { startECMLRound, listECMLRounds, getECMLRound, confirmECMLRound } from '@/api/ecml'
 
 const ecmlStore = useECMLStore()
 const route = useRoute()
@@ -1166,6 +1186,41 @@ watch(ecmlOrderId, async (orderId) => {
 
 // currentRunId declared here (before the watch that uses it) to avoid TDZ errors
 const currentRunId = computed(() => route.query.run_id || ecmlStore.state?.run_id || '')
+
+// ---- 贝叶斯优化 Round 决策引擎（一期/二期：策略启动 → 复核下发）----
+const boRound = ref(null) // 当前最新一轮 BO 推荐结果
+
+// 当前采集函数（由策略面板同步）。多目标 + EHVI 时隐藏权重字段（帕累托优化，权重无效）
+const currentAcquisition = ref('ei')
+const hideObjectiveWeights = computed(
+  () => form.optimize_mode === 'multi' && currentAcquisition.value === 'ehvi'
+)
+
+async function onStrategyStart(payload) {
+  if (!currentRunId.value) {
+    message.warning('请先在顶部配置并启动一轮 ECML 运行，再启动 BO 推荐')
+    return
+  }
+  try {
+    const res = await startECMLRound(currentRunId.value, payload)
+    boRound.value = res
+    message.success(`第 ${res.round_no || 1} 轮 BO 推荐已产出，等待课题负责人复核`)
+  } catch (err) {
+    error.value = err.response?.data?.detail || err.message || '启动 BO 推荐失败'
+    message.error(error.value)
+  }
+}
+
+async function onRoundConfirmed(result) {
+  try {
+    if (boRound.value?.round_id) {
+      boRound.value = await getECMLRound(boRound.value.round_id)
+    }
+    message.success('已确认下发，实验任务已生成')
+  } catch {
+    message.success('已确认下发')
+  }
+}
 
 // Committee cases / DFT 队列相关 watch 与函数已迁移至 ECMLCommitteePanel 子组件
 
