@@ -134,7 +134,7 @@ const stageConfig = [
     color: '#52c41a',
     bg: '#f6ffed',
     actions: ['predict_crystal_properties', 'predict_polymer_properties', 'verify_dft'],
-    route: '/prediction',
+    route: '/workbench',
   },
   {
     key: 'experiment',

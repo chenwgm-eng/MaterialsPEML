@@ -798,6 +798,7 @@ import { formatSci } from '@/utils/format'
 import ScientificNotation from '@/components/ScientificNotation.vue'
 import { useMdmDict, useUnitSymbols } from '@/utils/mdmDict'
 import { getSourceBadge } from '@/utils/candidateSource'
+import { DEFAULT_MULTI_OBJECTIVE_CONFIG, MULTI_OBJECTIVE_OPTIONS } from '@/constants/objectiveConfig'
 import { ECML_RECOMMENDED_TARGET_KEY, ECML_RECOMMENDED_CANDIDATE_KEY } from '@/utils/researchContext'
 import ECMLStepFlow from '@/components/ECMLStepFlow.vue'
 import MoleculeView from '@/components/MoleculeView.vue'
@@ -868,23 +869,11 @@ const form = reactive({
 // Result Overview 子组件引用（用于读取 bestCandidate/noResult）
 const resultOverviewRef = ref(null)
 
-// 多目标优化可选项（与 Discovery.vue 对齐）
-const multiObjectiveOptions = [
-  { label: '离子电导率', value: 'ionic_conductivity' },
-  { label: '带隙', value: 'band_gap' },
-  { label: '形成能', value: 'formation_energy' },
-  { label: '稳定性', value: 'stability' },
-  { label: '能量高于凸包', value: 'energy_above_hull' },
-]
+// 多目标优化可选项与配置（统一来自 objectiveConfig，避免硬编码漂移）
+const multiObjectiveOptions = [...MULTI_OBJECTIVE_OPTIONS]
 
 // 多目标配置：父组件持有，传给 ECMLControlPanel 作为 props
-const multiObjectiveConfig = reactive({
-  ionic_conductivity: { weight: 0.5, direction: 'maximize', min: null, max: null },
-  band_gap: { weight: 0.3, direction: 'maximize', min: null, max: null },
-  formation_energy: { weight: 0.3, direction: 'minimize', min: null, max: null },
-  stability: { weight: 0.3, direction: 'maximize', min: null, max: null },
-  energy_above_hull: { weight: 0.2, direction: 'minimize', min: null, max: null },
-})
+const multiObjectiveConfig = reactive({ ...DEFAULT_MULTI_OBJECTIVE_CONFIG })
 
 const cancelled = ref(false)
 const error = ref('')

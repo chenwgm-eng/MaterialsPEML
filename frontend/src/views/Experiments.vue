@@ -287,7 +287,7 @@
           <span v-else class="text-muted">-</span>
         </a-descriptions-item>
         <a-descriptions-item label="QC 状态">
-          <StatusBadge :status="qcStatusToBadge(detailRecord.qc_status)" :label="qcStatusLabel(detailRecord.qc_status)" />
+          <StatusBadge :status="detailRecord.qc_status" :label="qcStatusLabel(detailRecord.qc_status)" />
         </a-descriptions-item>
         <!-- 评测修复 P2-5：数据质量分层标记展示 -->
         <a-descriptions-item label="数据质量" :span="3">
@@ -449,7 +449,7 @@ import ResultChart from '@/components/ResultChart.vue'
 import { useMdmDict } from '@/utils/mdmDict'
 import EmptyState from '@/components/EmptyState.vue'
 import SmartLoading from '@/components/SmartLoading.vue'
-import { sourceTypeLabel, sourceTypeOptions as ENUM_SOURCE_OPTIONS } from '@/utils/enumLabels'
+import { sourceTypeLabel, sourceTypeOptions as ENUM_SOURCE_OPTIONS, qcStatusLabel } from '@/utils/enumLabels'
 
 const experimentsStore = useExperimentsStore()
 const route = useRoute()
@@ -809,16 +809,6 @@ function onDetailClose(v) {
 function goToProject(id) { if (id) router.push(`/projects?project_id=${id}`) }
 function goToOrder(id) { if (id) router.push(`/experiment-workbench?order_id=${id}`) }
 function goToSample(id) { if (id) router.push(`/samples?sample_id=${id}`) }
-
-// QC 状态展示（后端未返回 qc_status 时显示"未检"）
-function qcStatusToBadge(status) {
-  const map = { pass: 'success', fail: 'failed', pending: 'running', review: 'warning' }
-  return map[status] || 'default'
-}
-function qcStatusLabel(status) {
-  const map = { pass: '通过', fail: '失败', pending: '待检', review: '复核中' }
-  return map[status] || status || '未检'
-}
 
 // 评测修复 P2-5：数据质量分层标记展示（verified 实测已审 / estimated 估算 / simulated 模拟 / literature 文献）
 function dataQualityColor(quality) {

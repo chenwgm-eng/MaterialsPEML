@@ -421,7 +421,7 @@ const menuGroups = computed(() => {
         { path: '/workbench', title: '材料设计', icon: markRaw(ExperimentOutlined) },
         { path: '/synthesis', title: '合成路径', icon: markRaw(ShareAltOutlined) },
         { path: '/formula-design', title: '配方与工艺', icon: markRaw(ExperimentOutlined) },
-        { path: '/ecml/runs', title: '实验闭环迭代', icon: markRaw(SyncOutlined) },
+        { path: '/ecml', title: '实验闭环迭代', icon: markRaw(SyncOutlined) },
       ],
     },
     // ── 3. 实验与数据（按实验执行对象组织）──

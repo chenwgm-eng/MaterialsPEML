@@ -16,7 +16,9 @@ const routes = [
       { path: 'projects/new', name: 'ProjectNew', component: () => import('@/views/ProjectNew.vue'), meta: { title: '项目新建', icon: 'ProjectOutlined' } },
       // 审查意见0726：材料发现已合并到候选工作台，路径 /discovery 由顶部 redirect 处理
       { path: 'workbench', name: 'CandidateWorkbench', component: () => import('@/views/CandidateWorkbench.vue'), meta: { title: '候选材料设计', icon: 'ExperimentOutlined' } },
-      { path: 'prediction', name: 'Prediction', component: () => import('@/views/Prediction.vue'), meta: { title: '性质预测', icon: 'LineChartOutlined' } },
+      // 独立性质预测页已并入「材料设计」工作台的临时材料性能预测模式
+      { path: 'prediction', redirect: '/workbench?mode=temp' },
+      { path: 'prediction/temp', redirect: '/workbench?mode=temp' },
       { path: 'ecml', name: 'ECMLMonitor', component: () => import('@/views/ECMLMonitor.vue'), meta: { title: '实验闭环迭代', icon: 'SyncOutlined' } },
       { path: 'ecml/runs', name: 'ECMLRuns', component: () => import('@/views/ECMLRuns.vue'), meta: { title: '迭代历史', icon: 'HistoryOutlined' } },
       { path: 'experiments', name: 'Experiments', component: () => import('@/views/Experiments.vue'), meta: { title: '实验数据', icon: 'DatabaseOutlined' } },

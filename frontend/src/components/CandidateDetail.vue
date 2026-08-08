@@ -275,6 +275,14 @@
               生成合成路径
             </a-button>
           </div>
+          <!-- P3-B2：持久化最佳可行性摘要（仅展示，不参与评分） -->
+          <a-alert
+            v-if="synthFeasibility && synthFeasibility.feasibility_score != null"
+            type="info"
+            show-icon
+            style="margin-bottom: 12px"
+            :message="`最佳路线可行性：${(Number(synthFeasibility.feasibility_score) * 100).toFixed(1)}%`"
+          />
           <a-spin :spinning="synthLoading">
             <div v-if="!synthResult && !synthLoading" class="empty-inline">
               <EmptyState
@@ -552,6 +560,8 @@ const router = useRouter()
 const activeTab = ref('structure')
 const synthLoading = ref(false)
 const synthResult = ref(null)
+// P3-B2：持久化的合成可行性摘要（最佳路线可行性，仅展示不参与评分）
+const synthFeasibility = ref(null)
 const complianceLoading = ref(false)
 const complianceResult = ref(null)
 // 用户在合成路径 Tab 中选中的路线 ID（供父组件跳转配方设计时携带）
@@ -818,6 +828,8 @@ async function loadPersistedArtifacts() {
         task_id: data.latest_synthesis_task.task_id,
       }
     }
+    // P3-B2：恢复持久化的合成可行性摘要（最佳路线可行性，仅展示不参与评分）
+    synthFeasibility.value = data.synthesis_feasibility || null
   } catch (err) {
     // 404 或网络错误：忽略，保持 null
   }

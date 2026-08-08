@@ -646,6 +646,7 @@ import client from '@/api/client'
 import { formatSci } from '@/utils/format'
 import { useMdmDict, useUnitSymbols } from '@/utils/mdmDict'
 import { industrialCategoryLabel } from '@/constants/materialTypes'
+import { DEFAULT_MULTI_OBJECTIVE_CONFIG, MULTI_OBJECTIVE_OPTIONS } from '@/constants/objectiveConfig'
 import DisabledButton from '@/components/DisabledButton.vue'
 import ScientificNotation from '@/components/ScientificNotation.vue'
 import CandidateTable from '@/components/CandidateTable.vue'
@@ -826,21 +827,8 @@ function fmtVal(v) {
 }
 
 // 多目标优化可选项与配置（与 Discovery.vue 对齐）
-const multiObjectiveOptionsFallback = [
-  { label: '离子电导率', value: 'ionic_conductivity' },
-  { label: '带隙', value: 'band_gap' },
-  { label: '形成能', value: 'formation_energy' },
-  { label: '稳定性', value: 'stability' },
-  { label: '能量高于凸包', value: 'energy_above_hull' },
-]
-const multiObjectiveOptions = ref([...multiObjectiveOptionsFallback])
-const multiObjectiveConfig = reactive({
-  ionic_conductivity: { weight: 0.5, direction: 'maximize', min: null, max: null },
-  band_gap: { weight: 0.3, direction: 'maximize', min: null, max: null },
-  formation_energy: { weight: 0.3, direction: 'minimize', min: null, max: null },
-  stability: { weight: 0.3, direction: 'maximize', min: null, max: null },
-  energy_above_hull: { weight: 0.2, direction: 'minimize', min: null, max: null },
-})
+const multiObjectiveOptions = ref([...MULTI_OBJECTIVE_OPTIONS])
+const multiObjectiveConfig = reactive({ ...DEFAULT_MULTI_OBJECTIVE_CONFIG })
 function multiObjectiveLabel(key) {
   const opt = multiObjectiveOptions.find((o) => o.value === key)
   return opt ? opt.label : key
@@ -1430,7 +1418,7 @@ async function onPromoteProjectChange() {
   }
 }
 
-// 为临时候选生成唯一 temp_result_id，用于转正去重（同化学式不同临时结果转正到同一任务时各自生成不同候选）
+// 为临时候选生成唯一 temp_result_id，作为来源谱系标识（origin_temp_id），用于追溯该候选源自哪次临时预测
 function generateTempResultId(candidate, idx) {
   return `temp-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`
 }
@@ -1459,6 +1447,7 @@ async function doPromote() {
   try {
     const record = await promoteFromTemporary({
       candidate: promoteTarget.value,
+      material_type: materialType.value,
       project_id: promoteProjectId.value || '',
       task_id: promoteTaskId.value,
       origin_temp_id: promoteTmpId.value,

@@ -536,7 +536,7 @@ function qcStatusColor(status) {
   return 'default'
 }
 
-// QC 状态中文标签（与 utils/enumLabels.js 中 ENUM_LABELS.qcStatus 对齐，兼容大小写）
+// QC 状态中文标签（委员会判定域，兼容大小写）
 function qcStatusLabel(status) {
   if (!status) return '-'
   const s = String(status).toLowerCase()

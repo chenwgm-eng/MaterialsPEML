@@ -102,6 +102,8 @@ class CandidateRecord(BaseModel):
     # 评测修复 P1-004：预测结果顶层字段（模型版本/置信度/预测值/预测时间），
     # 持久化于 data JSONB 内，读写时与顶层字段双向同步
     prediction: dict[str, Any] = Field(default_factory=dict)
+    # P3-B2：合成可行性（best feasibility_score + 关联任务/时间），持久化于 data JSONB
+    synthesis_feasibility: dict[str, Any] = Field(default_factory=dict)
     data: dict[str, Any] = Field(default_factory=dict)  # full candidate JSON
 
 
@@ -213,14 +215,18 @@ class CandidateStore:
         "project_id, multi_objective_score, created_at, data, status, owner, assigned_role"
     )
 
-    def save(self, record: CandidateRecord) -> CandidateRecord:
+    def save(self, record: CandidateRecord, dedup: bool = True) -> CandidateRecord:
         # P1-004：prediction 顶层字段同步进 data JSONB，保证持久化后读回一致
         if record.prediction and record.data.get("prediction") != record.prediction:
             record.data = {**record.data, "prediction": record.prediction}
-        # T-020：基于 content_hash 去重——化学式 + 目标应用相同则跳过创建
+        # P3-B2：synthesis_feasibility 顶层字段同步进 data JSONB
+        if record.synthesis_feasibility and record.data.get("synthesis_feasibility") != record.synthesis_feasibility:
+            record.data = {**record.data, "synthesis_feasibility": record.synthesis_feasibility}
+        # T-020：基于 content_hash 去重——化学式 + 目标应用相同则跳过创建。
+        # dedup=False 时跳过去重（如临时预测转正：每个临时结果应创建独立候选）。
         formula = record.data.get("formula") or record.name
         target_application = record.data.get("target_application", "")
-        if formula:
+        if dedup and formula:
             content_hash = self._compute_content_hash(formula, target_application)
             existing = self.find_by_content_hash(formula, target_application)
             if existing is not None:
@@ -229,8 +235,10 @@ class CandidateStore:
                     content_hash, existing.candidate_id,
                 )
                 return existing
-        else:
+        elif dedup:
             content_hash = None
+        else:
+            content_hash = self._compute_content_hash(formula, target_application) if formula else None
 
         with self.engine.begin() as conn:
             conn.execute(
@@ -277,6 +285,42 @@ class CandidateStore:
                 },
             )
         return record
+
+    def update_synthesis_feasibility(self, candidate_id: str, feasibility: dict) -> bool:
+        """按 candidate_id 更新合成可行性（仅更新 data.synthesis_feasibility）。
+
+        直接 UPDATE data JSONB，不走 content-hash 去重分支——save() 的去重短路
+        会丢弃对已存在候选的字段更新，因此回写必须走专用更新通道。
+        """
+        patch = {"synthesis_feasibility": feasibility}
+        with self.engine.begin() as conn:
+            res = conn.execute(
+                text("""UPDATE experiment.candidates
+                        SET data = data || CAST(:patch AS JSONB)
+                        WHERE candidate_id = :candidate_id"""),
+                {"patch": json.dumps(patch, ensure_ascii=False), "candidate_id": candidate_id},
+            )
+        return (res.rowcount or 0) > 0
+
+    def find_by_origin_temp_id(self, origin_temp_id: str) -> CandidateRecord | None:
+        """按来源谱系标识 origin_temp_id 查询已转正的候选。
+
+        转正时在 data.provenance 中写入 {"step": "promote_from_temporary", "origin_temp_id": ...}，
+        用于幂等去重：重复的转正请求返回同一候选，避免创建重复候选。
+        """
+        if not origin_temp_id:
+            return None
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text(f"SELECT {self._SELECT_COLS} "
+                     "FROM experiment.candidates "
+                     "WHERE data::text LIKE :pattern "
+                     "ORDER BY created_at DESC LIMIT 1"),
+                {"pattern": f"%{origin_temp_id}%"},
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_record(row)
 
     def get(self, candidate_id: str) -> CandidateRecord | None:
         with self.engine.connect() as conn:
@@ -445,6 +489,11 @@ class CandidateStore:
         if not isinstance(prediction_val, dict):
             prediction_val = {}
 
+        # P3-B2：synthesis_feasibility 持久化在 data JSONB 中，读取时提升为顶层字段
+        synth_feas_val = data_val.get("synthesis_feasibility")
+        if not isinstance(synth_feas_val, dict):
+            synth_feas_val = {}
+
         return CandidateRecord(
             candidate_id=_str(row[0]),
             candidate_type=_str(row[1]),
@@ -461,4 +510,5 @@ class CandidateStore:
             status=_str(row[11]) if len(row) > 11 else CandidateStatus.SCREENING.value,
             owner=_str(row[12]) if len(row) > 12 else "",
             assigned_role=_str(row[13]) if len(row) > 13 else "",
+            synthesis_feasibility=synth_feas_val,
         )

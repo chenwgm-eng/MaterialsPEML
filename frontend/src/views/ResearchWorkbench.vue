@@ -232,7 +232,7 @@
             </a-button>
             <a-button size="small" @click="openDerived('prediction')">
               <template #icon><LineChartOutlined /></template>
-              性质预测
+              临时材料性能预测
             </a-button>
             <a-button size="small" @click="openDerived('synthesis')">
               <template #icon><BranchesOutlined /></template>
@@ -790,7 +790,7 @@ function onReset() {
 // 注：材料发现已合并到候选设计（/workbench），路径 /discovery 由 router 顶层 redirect 处理
 const DERIVED_PATHS = {
   discovery: '/workbench',
-  prediction: '/prediction',
+  prediction: '/workbench',
   synthesis: '/synthesis',
   ecml: '/ecml',
 }
@@ -803,6 +803,8 @@ function openDerived(moduleKey) {
     target_properties: form.value.target_properties,
     scenario_id: scenarioId.value,
   })
+  // 性质预测已并入「材料设计」工作台的临时材料性能预测模式
+  if (moduleKey === 'prediction') query.mode = 'temp'
   router.push({ path: DERIVED_PATHS[moduleKey], query })
 }
 

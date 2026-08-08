@@ -6,6 +6,10 @@ export const listCandidates = (candidateType = '') =>
 export const getCandidate = (candidateId) =>
   client.get(`/candidates/${candidateId}`)
 
+/** 将临时性质预测结果转正为正式候选材料（P3：临时预测 → 候选转正闭环） */
+export const promoteFromTemporary = (data) =>
+  client.post('/candidates/promote-from-temporary', data)
+
 // ── 两层流程（Phase B：工艺深化阶段） ─────────────────────────
 // 独立"合成路径"页定位为工艺人员专业工作台，对接以下接口。
 

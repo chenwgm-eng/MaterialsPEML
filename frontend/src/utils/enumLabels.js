@@ -27,12 +27,14 @@ export function sourceTypeLabel(value) {
 
 export const sourceTypeOptions = Object.entries(SOURCE_TYPE_MAP).map(([value, label]) => ({ label, value }))
 
-// ── QC 状态 ──
+// ── QC 状态（后端大写规范集） ──
 const QC_STATUS_MAP = {
-  valid: '有效',
-  invalid: '无效',
-  requires_review: '待复核',
-  pending: '待检',
+  PENDING: '待检查',
+  VALID: '有效',
+  VALID_WITH_WARNING: '有效(警告)',
+  INVALID: '无效',
+  REQUIRES_REVIEW: '需审核',
+  REJECTED: '已拒绝',
 }
 
 export function qcStatusLabel(value) {
@@ -40,7 +42,10 @@ export function qcStatusLabel(value) {
 }
 
 export function qcStatusColor(value) {
-  const map = { valid: 'green', invalid: 'red', requires_review: 'orange', pending: 'blue' }
+  const map = {
+    PENDING: 'blue', VALID: 'green', VALID_WITH_WARNING: 'cyan',
+    INVALID: 'red', REQUIRES_REVIEW: 'orange', REJECTED: 'red',
+  }
   return map[value] || 'default'
 }
 
@@ -163,111 +168,7 @@ export function executionModeLabel(value) {
 
 export const executionModeOptions = Object.entries(EXECUTION_MODE_MAP).map(([value, label]) => ({ label, value }))
 
-// ── 候选材料来源 ──
-const CANDIDATE_SOURCE_MAP = {
-  materials_project: 'Materials Project',
-  gnome: 'GNoME',
-  local_db: '本地数据库',
-  internlm_generated: 'AI 生成',
-  algorithm_generated: '算法生成',
-  mixed: '混合来源',
-}
-
-export function candidateSourceLabel(value) {
-  return CANDIDATE_SOURCE_MAP[value] || value || '-'
-}
-
 // ── 通用：从 Map 生成 options ──
 export function optionsFromMap(map) {
   return Object.entries(map).map(([value, label]) => ({ label, value }))
-}
-
-// ============================================================
-// 统一枚举中文标签映射（v9 全量枚举中文化）
-//
-// 用法：
-//   import { enumLabel, ENUM_LABELS } from '@/utils/enumLabels'
-//   <span>{{ enumLabel('materialCategory', record.category) }}</span>
-//
-// 说明：
-// - 此处集中维护全页面英文枚举值 → 中文标签的映射，避免分散在各页面。
-// - 上面已有的具体函数（sourceTypeLabel / qcStatusLabel / orderStatusLabel 等）
-//   保留向下兼容；新页面优先使用通用 enumLabel() 函数。
-// ============================================================
-
-export const ENUM_LABELS = {
-  // 物料分类
-  materialCategory: {
-    BASE_POLYMER: '基材聚合物',
-    LITHIUM_SALT: '锂盐',
-    FILLER: '填料',
-    SOLVENT: '溶剂',
-    ADDITIVE: '添加剂',
-    ELECTROLYTE: '电解质',
-    CATHODE: '正极材料',
-    ANODE: '负极材料',
-    SEPARATOR: '隔膜',
-    CURRENT_COLLECTOR: '集流体',
-    BINDER: '粘结剂',
-    CONDUCTIVE_AGENT: '导电剂',
-  },
-
-  // 设备类别
-  equipmentCategory: {
-    ELECTROCHEMICAL: '电化学设备',
-    CHARACTERIZATION: '表征设备',
-    SYNTHESIS: '合成设备',
-    TESTING: '测试设备',
-    SAFETY: '安全设备',
-    ANALYTICAL: '分析设备',
-  },
-
-  // 实验状态
-  experimentStatus: {
-    DRAFT: '草稿',
-    PENDING: '待审批',
-    APPROVED: '已批准',
-    REJECTED: '已拒绝',
-    IN_PROGRESS: '进行中',
-    COMPLETED: '已完成',
-    CANCELLED: '已取消',
-  },
-
-  // QC 状态
-  qcStatus: {
-    PASS: '通过',
-    FAIL: '失败',
-    PENDING: '待检',
-    REQUIRES_REVIEW: '复核中',
-    REJECTED: '已拒绝',
-  },
-
-  // 候选来源
-  candidateSource: {
-    AI_GENERATED: 'AI 生成',
-    LITERATURE: '文献',
-    DATABASE: '数据库',
-    EXPERT: '专家',
-    HYBRID: '混合',
-  },
-
-  // 项目阶段
-  projectPhase: {
-    INITIATION: '立项',
-    PLANNING: '规划',
-    EXECUTION: '执行',
-    CLOSING: '收尾',
-    COMPLETED: '已完成',
-  },
-}
-
-/**
- * 获取枚举的中文标签（通用入口）
- * @param {string} type - 枚举类型，取值见 ENUM_LABELS 的 key（如 'materialCategory'）
- * @param {string} value - 枚举值（如 'BASE_POLYMER'）
- * @returns {string} 中文标签，未匹配时返回原值；value 为空时返回 '-'
- */
-export function enumLabel(type, value) {
-  if (value == null || value === '') return '-'
-  return ENUM_LABELS[type]?.[value] || value
 }

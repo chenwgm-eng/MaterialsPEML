@@ -89,7 +89,7 @@ class CrossScaleEngine:
             ]
 
         if predictor is None:
-            return {"properties": [], "properties_by_name": {}, "confidence": 0.0,
+            return {"estimate": True, "properties": [], "properties_by_name": {}, "confidence": 0.0,
                     "material_type": mat_type, "error": "predictor unavailable"}
 
         properties: list[dict] = []
@@ -113,6 +113,7 @@ class CrossScaleEngine:
         confidences = [p["confidence"] for p in properties if p.get("confidence", 0) > 0]
         avg_conf = round(sum(confidences) / len(confidences), 4) if confidences else 0.0
         return {
+            "estimate": False,
             "properties": properties,
             "properties_by_name": props_by_name,
             "confidence": avg_conf,
@@ -128,7 +129,7 @@ class CrossScaleEngine:
         formula = material.get("formula", "")
 
         if not smiles or self.agent is None:
-            return self._template_reaction(formula or smiles)
+            return self._template_reaction(formula or smiles, estimate=True)
 
         try:
             routes = await asyncio.to_thread(
@@ -143,10 +144,10 @@ class CrossScaleEngine:
                 routes = []
 
         if not routes:
-            return self._template_reaction(formula or smiles)
+            return self._template_reaction(formula or smiles, estimate=True)
 
         route = routes[0]
-        # 本地树返回空步骤时，模板化回退
+        # 本地树返回空步骤时，模板化回退（标记为估算，仅用于展示，不参与评分）
         if not route.steps:
             pathway = {
                 "target": smiles,
@@ -159,6 +160,7 @@ class CrossScaleEngine:
                 "confidence": 0.5,
             }
             return {
+                "estimate": True,
                 "pathway": pathway,
                 "kinetics": [self._step_kinetics(0, "retrosynthesis")],
                 "yield": 0.5,
@@ -174,13 +176,15 @@ class CrossScaleEngine:
         kinetics = self._derive_kinetics(route.steps)
         overall_yield = self._compute_yield(route.steps)
         return {
+            "estimate": False,
             "pathway": pathway,
             "kinetics": kinetics,
             "yield": overall_yield,
         }
 
-    def _template_reaction(self, identifier: str) -> dict:
+    def _template_reaction(self, identifier: str, estimate: bool = False) -> dict:
         return {
+            "estimate": estimate,
             "pathway": {
                 "target": identifier,
                 "num_steps": 1,
@@ -232,6 +236,11 @@ class CrossScaleEngine:
     # ------------------------------------------------------------------
 
     def _run_continuum(self, material: dict, molecular: dict | None) -> dict:
+        """连续介质尺度（模板化多物理场近似）。
+
+        ⚠️ 物理近似：以下公式均为工程简化模板，仅用于横向对比与展示，
+        不可用于定量决策（勿作为设计依据或上报结论）。
+        """
         props = (molecular or {}).get("properties_by_name", {}) if molecular else {}
 
         def _val(name):
@@ -241,29 +250,33 @@ class CrossScaleEngine:
             v = p.get("value")
             return float(v) if v is not None else None
 
-        # 电化学（模板化，从分子尺度属性推导）
+        # 电化学（模板化，从分子尺度属性推导；近似 - 勿用于定量决策）
         band_gap = _val("band_gap")
         ionic_cond = _val("ionic_conductivity")
         formation_e = _val("formation_energy")
 
+        # 近似：电压 ≈ 带隙/2（物理量级估算，非真实电化学窗口）
         voltage = min(5.0, max(1.0, (band_gap or 3.0) / 2.0))
+        # 近似：容量经验式（150 + |形成能|*10，单位 mAh/g）
         capacity = 150.0 + abs(formation_e or -2.0) * 10.0
         energy_density = voltage * capacity
         power_density = min(1000.0, max(10.0, (ionic_cond or 1.0e-4) * 1.0e5))
 
-        # 热学
+        # 热学（近似 - 勿用于定量决策）
         thermal_cond = _val("thermal_conductivity") or 1.0
         heat_gen = max(0.1, abs(formation_e or -2.0) * 0.5)
         temp_rise = heat_gen / max(0.1, thermal_cond) * 10.0
 
-        # 力学
+        # 力学（近似 - 勿用于定量决策）
         bulk_mod = _val("bulk_modulus") or 100.0
         shear_mod = _val("shear_modulus") or 40.0
         elastic_mod = _val("elastic_modulus") or bulk_mod
         formula = material.get("formula", "")
+        # 近似：密度由化学式长度启发式估算
         density = 2.0 + (len(formula) % 5) * 0.3
 
         return {
+            "estimate": True,
             "electrochemical": {
                 "operating_voltage": round(voltage, 3),
                 "theoretical_capacity": round(capacity, 2),

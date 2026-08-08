@@ -2268,6 +2268,33 @@ async def discover_polymer(req: DiscoverRequest):
     return result
 
 
+def _assemble_prediction(c_dict: dict) -> dict:
+    """组装 prediction 顶层字段（模型版本/置信度/预测值/预测时间/输入快照/来源谱系）。
+
+    评测修复 P1-004 / D3(P2-003)：使预测结果可追溯到具体模型与候选记录。
+    供 discover 候选落盘与临时预测转正共用，保证两处预测字段结构一致。
+    """
+    if isinstance(c_dict.get("prediction"), dict) and c_dict.get("prediction"):
+        return c_dict["prediction"]
+    _ai_meta = c_dict.get("ai_meta") if isinstance(c_dict.get("ai_meta"), dict) else {}
+    _predicted_value = (
+        c_dict.get("predicted_value")
+        or c_dict.get("predicted_properties")
+        or c_dict.get("properties")
+        or {}
+    )
+    return {
+        "model_version": _ai_meta.get("model_version") or c_dict.get("model_version") or "",
+        "confidence": _ai_meta.get("confidence", c_dict.get("confidence")),
+        "predicted_value": _predicted_value,
+        "predicted_at": _ai_meta.get("generated_at") or c_dict.get("created_at") or "",
+        # D3(P2-003)：输入快照哈希 + 来源谱系，支持调用链反查
+        "input_snapshot_hash": _ai_meta.get("input_snapshot_hash")
+        or c_dict.get("input_snapshot_hash") or "",
+        "provenance": c_dict.get("provenance") or _ai_meta.get("provenance") or [],
+    }
+
+
 def _store_candidates(
     store: CandidateStore,
     result,
@@ -2308,24 +2335,7 @@ def _store_candidates(
                     c_dict["data_quality"] = "estimated"
             # 评测修复 P1-004：组装 prediction 顶层字段（模型版本/置信度/预测值/预测时间），
             # 使预测结果可追溯到具体模型与候选记录
-            if not isinstance(c_dict.get("prediction"), dict) or not c_dict.get("prediction"):
-                _ai_meta = c_dict.get("ai_meta") if isinstance(c_dict.get("ai_meta"), dict) else {}
-                _predicted_value = (
-                    c_dict.get("predicted_value")
-                    or c_dict.get("predicted_properties")
-                    or c_dict.get("properties")
-                    or {}
-                )
-                c_dict["prediction"] = {
-                    "model_version": _ai_meta.get("model_version") or c_dict.get("model_version") or "",
-                    "confidence": _ai_meta.get("confidence", c_dict.get("confidence")),
-                    "predicted_value": _predicted_value,
-                    "predicted_at": _ai_meta.get("generated_at") or c_dict.get("created_at") or "",
-                    # D3(P2-003)：输入快照哈希 + 来源谱系，支持调用链反查
-                    "input_snapshot_hash": _ai_meta.get("input_snapshot_hash")
-                    or c_dict.get("input_snapshot_hash") or "",
-                    "provenance": c_dict.get("provenance") or _ai_meta.get("provenance") or [],
-                }
+            c_dict["prediction"] = _assemble_prediction(c_dict)
             # T-020：前置去重检查——化学式 + 目标应用相同时跳过创建
             dedup_formula = c_dict.get("formula") or name
             dedup_target_app = c_dict.get("target_application", "")
@@ -3426,6 +3436,75 @@ async def get_candidate(candidate_id: str):
     return record.model_dump()
 
 
+@app.post("/candidates/promote-from-temporary")
+async def promote_from_temporary(payload: dict = Body(...)):
+    """P3：将临时性质预测结果转正为正式候选材料。
+
+    - candidate: 临时预测候选对象（含 formula/smiles/name/预测属性等）
+    - project_id / task_id: 所属项目与任务（用于业务链路追溯）
+    - origin_temp_id: 临时结果来源标识（前端生成，用于谱系追溯 + 幂等去重）
+    生成新 candidate_id 并持久化，返回创建的候选记录。
+    """
+    candidate = payload.get("candidate") or {}
+    if not isinstance(candidate, dict) or not candidate:
+        raise HTTPException(status_code=400, detail="candidate 不能为空")
+    project_id = str(payload.get("project_id") or "")
+    task_id = str(payload.get("task_id") or "")
+    origin_temp_id = str(payload.get("origin_temp_id") or "")
+    # 幂等：同一 origin_temp_id 重复转正返回已存在的候选，避免创建重复候选
+    if origin_temp_id:
+        existing = app.state.candidate_store.find_by_origin_temp_id(origin_temp_id)
+        if existing is not None:
+            logger.info(
+                "临时预测转正已存在，幂等返回 origin_temp_id=%s candidate_id=%s",
+                origin_temp_id, existing.candidate_id,
+            )
+            return existing.model_dump()
+
+    candidate_id = f"CAND-{uuid.uuid4().hex[:8].upper()}"
+    name = candidate.get("name") or candidate.get("formula") or candidate.get("smiles") or ""
+    smiles = candidate.get("smiles") or candidate.get("psmiles") or ""
+    # 推断材料类型：优先显式字段（payload.material_type / candidate 内字段），
+    # 否则按 formula/smiles 特征判断（兜底，避免依赖不可靠的推断）
+    candidate_type = (
+        (payload.get("material_type") or payload.get("materialType"))
+        or candidate.get("candidate_type")
+        or candidate.get("material_type")
+        or candidate.get("materialType")
+        or ""
+    )
+    if not candidate_type:
+        candidate_type = "crystal" if (candidate.get("formula") and not smiles) else "polymer"
+
+    # 组装完整 data：写入归属与来源谱系，便于跨模块追溯
+    data = {**candidate, "candidate_id": candidate_id, "project_id": project_id, "task_id": task_id}
+    provenance = candidate.get("provenance")
+    if not isinstance(provenance, list):
+        provenance = []
+    provenance.append({"step": "promote_from_temporary", "origin_temp_id": origin_temp_id})
+    data["provenance"] = provenance
+    # 组装 prediction 顶层字段（与 discover 候选结构一致，含模型版本/置信度/预测值/溯源）
+    data["prediction"] = _assemble_prediction(data)
+
+    record = CandidateRecord(
+        candidate_id=candidate_id,
+        candidate_type=candidate_type,
+        name=name,
+        smiles=smiles,
+        source=candidate.get("source") or "temporary_prediction",
+        project_id=project_id,
+        task_id=task_id,
+        multi_objective_score=candidate.get("multi_objective_score", 0.0),
+        prediction=data.get("prediction") if isinstance(data.get("prediction"), dict) else {},
+        data=data,
+    )
+    # dedup=False：每个临时预测结果均创建独立候选（同公式可并存），
+    # 并返回实际落库对象，避免内容哈希去重产生数据库不存在的幽灵 ID。
+    saved = app.state.candidate_store.save(record, dedup=False)
+    logger.info("临时预测转正为候选 candidate_id=%s type=%s task_id=%s", candidate_id, candidate_type, task_id)
+    return saved.model_dump()
+
+
 # ── 0040 两层流程：候选材料状态机 / 一键生成实验单 / 工艺方案状态 ─────────
 
 class CandidateStatusRequest(BaseModel):
@@ -3762,10 +3841,19 @@ async def list_candidate_artifacts(candidate_id: str):
     artifacts = app.state.candidate_artifact_store.list_by_candidate(candidate_id)
     # 同时返回最新一条成功的合成任务（便于前端恢复合成路径 Tab）
     synth_task = _get_synthesis_task_store().get_latest_success_by_candidate(candidate_id)
+    # P3-B2：返回候选持久化的合成可行性摘要（最佳路线可行性，仅展示）
+    synth_feas = {}
+    try:
+        cand = app.state.candidate_store.get(candidate_id)
+        if cand is not None:
+            synth_feas = cand.synthesis_feasibility or {}
+    except Exception as e:  # noqa: BLE001
+        logger.debug("读取候选合成可行性失败 candidate_id=%s: %s", candidate_id, e)
     return {
         "candidate_id": candidate_id,
         "artifacts": [a.model_dump() for a in artifacts],
         "latest_synthesis_task": synth_task,
+        "synthesis_feasibility": synth_feas,
     }
 
 
@@ -5192,6 +5280,32 @@ def _get_synthesis_task_store():
     return store
 
 
+def _write_synthesis_feasibility_to_candidate(task_id: str, routes: list) -> None:
+    """P3-B2：合成任务成功后，将最佳可行性分数回写候选材料。
+
+    仅当合成任务关联了 candidate_id 时写入；写入失败仅记录日志，不阻断流程。
+    分数仅持久化展示，不纳入多目标评分。
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    try:
+        store = _get_synthesis_task_store()
+        task = store.get_task(task_id)
+        candidate_id = (task or {}).get("candidate_id", "")
+        if not candidate_id:
+            return
+        best = max(routes, key=lambda r: float(r.get("feasibility_score") or 0.0)) if routes else None
+        feasibility = {
+            "feasibility_score": round(float(best.get("feasibility_score") or 0.0), 4) if best else 0.0,
+            "route_id": (best or {}).get("route_id", ""),
+            "task_id": task_id,
+            "updated_at": _dt.now(_tz.utc).isoformat(),
+        }
+        # 走专用更新通道：save() 的 content-hash 去重会短路并丢弃对已存在候选的更新
+        app.state.candidate_store.update_synthesis_feasibility(candidate_id, feasibility)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("回写合成可行性到候选失败 task_id=%s: %s", task_id, exc)
+
+
 async def _probe_askcos() -> bool:
     """快速探测逆合成服务可达性（3s 超时），用于快速失败与服务健康展示。"""
     import httpx
@@ -5576,6 +5690,8 @@ async def _run_synthesis_task(
                 logger.debug("覆盖 agent_info 失败: %s", e)
         store.complete_task(task_id, result, _elapsed_ms())
         _on_task_finished("success", route_count=len(routes))
+        # P3-B2：合成成功后，将最佳可行性分数回写候选材料（若任务关联候选）
+        _write_synthesis_feasibility_to_candidate(task_id, routes)
     except SynthesisServiceError as e:
         store.fail_task(task_id, str(e), _elapsed_ms())
         _on_task_finished("failed", error=str(e))

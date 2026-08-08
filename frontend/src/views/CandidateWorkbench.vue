@@ -1,5 +1,19 @@
 <template>
   <div class="candidate-workbench">
+    <!-- 页面头 + 主视图切换：候选材料工作台（主场景） / 临时材料性能预测（高级能力） -->
+    <div class="page-header">
+      <h1 class="page-title">候选材料工作台</h1>
+      <p class="page-subtitle">第一层配方设计：针对项目任务生成候选材料，进行性质预测与多目标评分，为工艺深化提供候选配方</p>
+    </div>
+    <div class="mode-switch">
+      <a-radio-group v-model:value="mode" class="mode-radio">
+        <a-radio-button value="workbench"><ExperimentOutlined /> 候选材料工作台</a-radio-button>
+        <a-radio-button value="temp"><LineChartOutlined /> 临时材料性能预测</a-radio-button>
+      </a-radio-group>
+    </div>
+
+    <!-- ═══════════════ 工作台视图：候选材料流水线 ═══════════════ -->
+    <template v-if="mode === 'workbench'">
     <!-- 来自 ECML 推荐候选的引导提示 -->
     <a-alert
       v-if="recommendedTarget"
@@ -54,9 +68,6 @@
             <template #icon><ReloadOutlined /></template>
           </a-button>
         </a-tooltip>
-        <a-button size="small" class="prediction-link" @click="goToPrediction">
-          性质预测
-        </a-button>
       </div>
 
       <!-- Agent 行：智能体信息卡 + 模式切换 + 生成按钮（已抽取为子组件） -->
@@ -248,6 +259,14 @@
       </a-table>
       <EmptyState v-else type="data" description="尚未加入对比" />
     </a-drawer>
+    </template>
+
+    <!-- ═══════════════ 临时材料性能预测（高级能力）：不绑定候选流水线 ═══════════════ -->
+    <template v-else>
+      <div class="temp-mode-wrap">
+        <TemporaryPrediction @promoted="onTempPromoted" />
+      </div>
+    </template>
   </div>
 </template>
 
@@ -270,11 +289,13 @@ import {
   UpOutlined,
   FolderOpenOutlined,
   LoadingOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
 import CandidateList from '@/components/CandidateList.vue'
 import CandidateDetail from '@/components/CandidateDetail.vue'
 import CandidateAgentBar from '@/components/candidate/CandidateAgentBar.vue'
+import TemporaryPrediction from '@/views/TemporaryPrediction.vue'
 import { useUnitSymbols } from '@/utils/mdmDict'
 import { useDiscoveryStore } from '@/stores/discovery'
 import client from '@/api/client'
@@ -284,6 +305,19 @@ const router = useRouter()
 const route = useRoute()
 const discoveryStore = useDiscoveryStore()
 const { symbols: unitSymbols, load: loadUnitSymbols } = useUnitSymbols()
+
+// ── 主视图模式：workbench（候选材料工作台）/ temp（临时材料性能预测）──
+// 支持 URL query ?mode=temp 直接进入临时预测（研发工作台派生入口）
+const mode = ref(route.query.mode === 'temp' ? 'temp' : 'workbench')
+
+// 临时材料性能预测转正成功 → 切回工作台并定位到新候选
+function onTempPromoted(payload) {
+  mode.value = 'workbench'
+  const c = payload?.candidate
+  if (c && c.candidate_id) {
+    router.replace({ query: { ...route.query, promote: c.candidate_id } })
+  }
+}
 const energyUnit = computed(() => unitSymbols.value.energy || 'eV')
 const energyPerAtomUnit = computed(() => unitSymbols.value.energy_per_atom || 'eV/atom')
 const condUnit = computed(() => unitSymbols.value.conductivity || 'S/cm')
@@ -607,11 +641,7 @@ function onReset() {
   discoveryStore.clearCandidates()
 }
 
-// 跳转到性质预测页
-function goToPrediction() {
-  router.push('/prediction')
-}
-
+// 选中候选材料
 function onSelectCandidate(item) {
   selectedCandidate.value = item
 }
@@ -834,6 +864,25 @@ onMounted(async () => {
   height: 100%;
   background: var(--light-bg, #f5f7fa);
   overflow: hidden;
+}
+
+/* ── 主视图切换（与合成路径/工艺深化工作台一致） ── */
+.mode-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.mode-radio {
+  flex: 1;
+}
+/* 临时材料性能预测：填满剩余空间以便内部滚动 */
+.temp-mode-wrap {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .workbench-header {

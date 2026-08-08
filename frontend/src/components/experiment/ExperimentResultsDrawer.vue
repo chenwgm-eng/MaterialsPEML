@@ -387,6 +387,7 @@ import { message } from 'ant-design-vue'
 import { SearchOutlined, FlagOutlined, ExclamationCircleOutlined, AuditOutlined } from '@ant-design/icons-vue'
 import { listExperimentResults, checkDeviation, markAnomalies, getExperimentAnalysis } from '@/api/experiments'
 import { getCommitteeCases, getCommitteeCase, getFeedbackActions } from '@/api/committees'
+import { qcStatusLabel, qcStatusColor } from '@/utils/enumLabels'
 import EmptyState from '@/components/EmptyState.vue'
 
 const props = defineProps({
@@ -660,22 +661,6 @@ const materialColumns = computed(() => [
 ])
 
 // ---- 辅助函数 ----
-function qcStatusColor(status) {
-  const map = {
-    PENDING: '#64748b', VALID: '#10b981', VALID_WITH_WARNING: '#3b82f6',
-    INVALID: '#ef4444', REQUIRES_REVIEW: '#f59e0b', REJECTED: '#ef4444',
-  }
-  return map[status] || '#64748b'
-}
-
-function qcStatusLabel(status) {
-  const map = {
-    PENDING: '待检查', VALID: '有效', VALID_WITH_WARNING: '有效(警告)',
-    INVALID: '无效', REQUIRES_REVIEW: '需审核', REJECTED: '已拒绝',
-  }
-  return map[status] || status
-}
-
 function qcSeverityColor(severity) {
   const map = { info: '#3b82f6', warning: 'gold', error: '#ef4444', critical: '#8b5cf6' }
   return map[severity] || '#64748b'
