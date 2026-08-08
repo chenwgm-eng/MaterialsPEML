@@ -1,4 +1,9 @@
-"""Formula and process design agent for polymer electrolyte industrialization."""
+"""Formula and process design agent for material industrialization.
+
+基于领域包（Domain Pack）生成配方（BOM）与工艺（BOP）。配方模板、工艺步骤、
+回退配方均从领域包读取，不再硬编码聚合物/粉末冶金分支，从而支持未来各类
+新材料场景（生物材料/纤维/涂层等）通过新增领域包即可接入。
+"""
 
 from __future__ import annotations
 
@@ -10,8 +15,9 @@ import logging
 import httpx
 
 from ..config import AgentConfig, EngineMode
-from ..llm.schemas import ChatMessage, ChatRequest, ChatResponse
+from ..llm.schemas import ChatMessage, ChatRequest
 from .raw_material_db import RawMaterialDB
+from .domain_pack_store import DomainPackStore
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +33,52 @@ class RecipeProcess(BaseModel):
 
 
 class FormulaAgent:
-    """Design battery electrolyte recipe (BOM) and process (BOP) via LLM with rule-based fallback."""
+    """按领域包生成配方（BOM）与工艺（BOP），LLM 生成 + 规则模板回退。"""
 
-    def __init__(self, raw_material_db: RawMaterialDB, config: AgentConfig | None = None, llm_provider = None):
+    def __init__(
+        self,
+        raw_material_db: RawMaterialDB,
+        config: AgentConfig | None = None,
+        llm_provider=None,
+        domain_pack: dict | None = None,
+    ):
         self.db = raw_material_db
         self.config = config  # AgentConfig 或 None
         self._llm_provider = llm_provider
+        # 领域包数据（配方模板/回退配方/一致性规则）。未显式传入时，从库解析活跃领域包；
+        # 库不可用或为空时回退到内置默认电池领域包，保证旧行为不回归。
+        if domain_pack is None:
+            try:
+                store = DomainPackStore()
+                active = store.resolve_active_pack()
+                domain_pack = active.data if active else None
+            except Exception as exc:
+                logger.warning("解析活跃领域包失败，回退内置默认: %s", exc)
+                domain_pack = None
+        self.domain_pack = domain_pack or DomainPackStore.builtin_fallback()
+
+    # ---- 领域包工具 ----
+    def _recipe_template_for(self, material_type: str) -> dict | None:
+        """按材料类型选取配方模板；未命中时回退到 "*" 默认模板。"""
+        templates = self.domain_pack.get("recipe_templates") or []
+        for tpl in templates:
+            if tpl.get("material_type") == material_type:
+                return tpl
+        for tpl in templates:
+            if tpl.get("material_type") == "*":
+                return tpl
+        return None
+
+    def _all_categories(self) -> list[str]:
+        """收集领域包中引用的全部物料分类（用于 LLM 提示词枚举可选原料）。"""
+        cats: list[str] = []
+        for tpl in self.domain_pack.get("recipe_templates") or []:
+            if tpl.get("material_type") and tpl.get("material_type") != "*":
+                cats.append(tpl["material_type"])
+            for add in tpl.get("additives") or []:
+                if add.get("category"):
+                    cats.append(add["category"])
+        return list(dict.fromkeys(cats))
 
     async def design_recipe(self, target_material: dict) -> RecipeProcess:
         if self.config is None:
@@ -42,24 +88,25 @@ class FormulaAgent:
         candidate_name = target_material.get("candidate", "")
         target_spec = self._find_target_in_db(candidate_name)
 
-        available_polymers = self.db.query_category("BASE_POLYMER")
-        available_salts = self.db.query_category("LITHIUM_SALT")
-
-        polymers_str = ", ".join(f"{p.name}({p.material_id})" for p in available_polymers) or "无"
-        salts_str = ", ".join(f"{s.name}({s.material_id})" for s in available_salts) or "无"
+        category_lines = []
+        for category in self._all_categories():
+            specs = self.db.query_category(category)
+            if specs:
+                item_str = ", ".join(f"{s.name}({s.material_id})" for s in specs)
+                category_lines.append(f"- {category}：{item_str}")
+        material_pool_str = "\n".join(category_lines) or "（物料库为空）"
         target_str = target_spec.name if target_spec else candidate_name or "未指定"
 
-        prompt = f"""你是一个资深的电池材料配方与工艺架构师。
+        prompt = f"""你是一名材料配方与工艺架构师。
 当前需要制备目标材料：{target_str}。
 
 请严格从以下企业现有物料库中选择原材料（不允许编造物料）：
-- 基材：{polymers_str}
-- 锂盐：{salts_str}
+{material_pool_str}
 {f"- 目标材料本身：{target_spec.name}({target_spec.material_id})" if target_spec else ""}
 
 请输出工业级试产指导书，必须包含：
 1. BOM (物料清单及质量占比%)
-2. BOP (工艺参数：混料温度、搅拌转速RPM、涂布厚度、烘烤真空度与时间)
+2. BOP (工艺参数：温度、时间、转速RPM 等)
 
 以 JSON 格式返回，格式：{{"bom": {{"物料名": 比例}}, "bop": [{{"step": "...", "temperature": 25, "duration_min": 60, "rpm": 1500}}], "equipment": "..."}}"""
 
@@ -175,61 +222,43 @@ class FormulaAgent:
         candidate_name = target_material.get("candidate", "")
         target_spec = self._find_target_in_db(candidate_name)
 
-        # 目标材料在物料库中 → 以目标材料为主体生成配方
+        # 目标材料在物料库中 → 以目标材料为主成分生成配方
         if target_spec:
             return self._recipe_for_known_target(target_spec)
 
-        # 目标不在物料库 → 按聚合物电解质模板生成
-        available_polymers = self.db.query_category("BASE_POLYMER")
-        available_salts = self.db.query_category("LITHIUM_SALT")
-
-        if not available_polymers or not available_salts:
+        # 目标不在物料库 → 按领域包回退配方生成（按分类取首个物料填充）
+        fb = self.domain_pack.get("fallback_recipe") or {}
+        bom: dict = {}
+        for category, ratio in (fb.get("bom") or {}).items():
+            specs = self.db.query_category(category)
+            if specs:
+                bom[specs[0].material_id] = float(ratio)
+        if not bom:
             return RecipeProcess()
-
-        polymer = available_polymers[0]
-        salt = available_salts[0]
-
         return RecipeProcess(
-            bom={polymer.material_id: 0.8, salt.material_id: 0.2},
-            bop=[
-                {"step": "混料", "temperature": 25, "duration_min": 60, "rpm": 1500, "equipment": "双行星搅拌机"},
-                {"step": "涂布", "temperature": 25, "duration_min": 30, "rpm": 0, "equipment": "涂布机"},
-                {"step": "烘烤", "temperature": 80, "duration_min": 720, "rpm": 0, "equipment": "真空烘箱"},
-            ],
-            equipment="双行星搅拌机",
+            bom=bom,
+            bop=fb.get("bop") or [],
+            equipment=fb.get("equipment") or "",
         )
 
     def _recipe_for_known_target(self, target_spec) -> RecipeProcess:
-        """目标材料在物料库中：以目标材料为主成分，辅以适量添加剂/粘结剂。"""
-        bom = {target_spec.material_id: 0.9}
+        """目标材料在物料库中：按领域包内对应材料类型的配方模板生成 BOM/BOP。"""
+        tpl = self._recipe_template_for(target_spec.category)
+        if not tpl:
+            return RecipeProcess()
 
-        # 根据目标材料类别选择辅料
-        fillers = self.db.query_category("FILLER")
-        binders = self.db.query_category("BINDER")
-        polymers = self.db.query_category("BASE_POLYMER")
+        bom = {target_spec.material_id: float(tpl.get("main_ratio", 0.9))}
+        for add in tpl.get("additives") or []:
+            category = add.get("category")
+            ratio = add.get("ratio", 0.0)
+            if not category:
+                continue
+            specs = self.db.query_category(category)
+            if specs:
+                bom[specs[0].material_id] = float(ratio)
 
-        # 聚合物基电解质：补加锂盐
-        if target_spec.category == "BASE_POLYMER":
-            salts = self.db.query_category("LITHIUM_SALT")
-            if salts:
-                bom[salts[0].material_id] = 0.1
-            bop = [
-                {"step": "混料", "temperature": 25, "duration_min": 60, "rpm": 1500, "equipment": "双行星搅拌机"},
-                {"step": "涂布", "temperature": 25, "duration_min": 30, "rpm": 0, "equipment": "涂布机"},
-                {"step": "烘烤", "temperature": 80, "duration_min": 720, "rpm": 0, "equipment": "真空烘箱"},
-            ]
-            equipment = "双行星搅拌机"
-        else:
-            # 无机/硫化物电解质：补加粘结剂，采用粉末冶金工艺
-            if binders:
-                bom[binders[0].material_id] = 0.05
-            if fillers:
-                bom[fillers[0].material_id] = 0.05
-            bop = [
-                {"step": "球磨混料", "temperature": 25, "duration_min": 120, "rpm": 300, "equipment": "球磨机"},
-                {"step": "冷压成型", "temperature": 25, "duration_min": 30, "rpm": 0, "equipment": "粉末压片机"},
-                {"step": "烧结", "temperature": 500, "duration_min": 600, "rpm": 0, "equipment": "管式炉"},
-            ]
-            equipment = "球磨机"
-
-        return RecipeProcess(bom=bom, bop=bop, equipment=equipment)
+        return RecipeProcess(
+            bom=bom,
+            bop=tpl.get("bop") or [],
+            equipment=tpl.get("equipment") or "",
+        )

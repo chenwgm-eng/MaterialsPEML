@@ -493,11 +493,11 @@ def _default_activity_bindings() -> list[ActivityAgentBinding]:
             agent_id="builtin_synthesis_planner",
             capability_need="synthesis_evidence",
         ),
-        # --- 电池机理解释 ---
+        # --- 材料机理解释 ---
         ActivityAgentBinding(
             activity_id="battery.interpret",
-            activity_name="电池机理解释",
-            activity_category="battery",
+            activity_name="材料机理解释",
+            activity_category="mechanism",
             agent_id="builtin_battery_interpreter",
             capability_need="evidence_research",
         ),
@@ -758,6 +758,17 @@ def seed_default_mappings(store: ActivityMappingStore):
     for binding in _default_activity_bindings():
         if binding.activity_id not in existing_activities:
             store.upsert_activity_binding(binding)
+
+    # 修复历史遗留名称：去电池化将 "电池机理解释"/battery 分类改为 "材料机理解释"/mechanism
+    legacy = store.get_agent_for_activity("battery.interpret")
+    if legacy and (legacy.activity_name != "材料机理解释" or legacy.activity_category != "mechanism"):
+        store.upsert_activity_binding(ActivityAgentBinding(
+            activity_id="battery.interpret",
+            activity_name="材料机理解释",
+            activity_category="mechanism",
+            agent_id=legacy.agent_id,
+            capability_need=legacy.capability_need,
+        ))
 
     # 种子智能体工具绑定
     existing_tool_bindings = {

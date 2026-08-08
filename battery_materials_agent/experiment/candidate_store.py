@@ -329,24 +329,31 @@ class CandidateStore:
             )
             return cur.rowcount > 0
 
-    def update_status(self, candidate_id: str, to_status: str, actor_role: str = "",
+    def update_status(self, candidate_id: str, to_status: str,
+                      actor_operation_roles: set[str] | None = None,
                       owner: str = "", triggered_by: str = "system",
                       reason: str = "") -> CandidateRecord:
         """更新候选材料状态，强制校验两层状态机迁移图与角色归属。
 
-        角色校验（采用角色）：
-            screening → feasible / rejected     配方设计人员（formulator）
-            feasible  → process_planning / rejected   交棒给工艺人员（process_engineer）
-            process_planning → process_confirmed / rejected   工艺人员（process_engineer）
-            process_confirmed → ready_for_experiment / rejected   工艺人员（process_engineer）
+        角色校验（目标状态所对应的主导角色，见 CANDIDATE_STATUS_ROLE）：
+            screening / feasible → formulator
+            process_planning / process_confirmed / ready_for_experiment → process_engineer
 
-        各状态对应的允许角色见 CANDIDATE_STATUS_ROLE。
+        规则：
+            - ``actor_operation_roles=None``：系统/后端自动流转，跳过人工角色校验
+              （如合成成功后 screening→feasible 的自动推进）。
+            - ``actor_operation_roles`` 为集合：要求目标状态对应的主导角色
+              ``expected_role`` 必须在该集合内，否则拒绝迁移。
+
+        该参数由调用方从可信来源推导（API 层由认证用户权限映射），
+        不接受客户端直接传入，杜绝伪造角色绕过状态机校验。
 
         Args:
             candidate_id: 候选材料 ID
             to_status: 目标状态（screening / feasible / process_planning /
                        process_confirmed / ready_for_experiment / rejected）
-            actor_role: 操作者角色（formulator / process_engineer），传入则强制校验
+            actor_operation_roles: 调用方可执行的操作角色集合
+                （formulator / process_engineer 的子集）；None 表示系统自动流转跳过校验
             owner: 新的责任人（用户名）
             triggered_by: 触发主体标识
             reason: 迁移原因
@@ -377,10 +384,11 @@ class CandidateStore:
 
         # 角色校验：目标状态对应的主导角色
         expected_role = CANDIDATE_STATUS_ROLE.get(to_enum, "")
-        if actor_role and expected_role and actor_role != expected_role:
+        if expected_role and actor_operation_roles is not None and expected_role not in actor_operation_roles:
             raise IllegalCandidateTransitionError(
                 from_status, to_status,
-                f"状态 {to_enum.value} 须由 {expected_role} 角色执行，当前角色 {actor_role!r}",
+                f"状态 {to_enum.value} 须由 {expected_role} 角色执行，"
+                f"当前可用操作角色 {sorted(actor_operation_roles) or '无'}",
             )
 
         with self.engine.begin() as conn:

@@ -35,6 +35,7 @@
       </template>
       <template #extra>
         <a-space>
+          <a-checkbox v-model:checked="showDemo" @change="fetchSamples">显示演示数据</a-checkbox>
           <a-button type="primary" size="small" @click="onAdd">
             <PlusOutlined /> 新建样品
           </a-button>
@@ -78,6 +79,7 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'sample_id'">
             <span class="sample-id">{{ record.sample_id }}</span>
+            <a-tag v-if="record.is_demo" color="orange" size="small" style="margin-left: 4px">演示</a-tag>
           </template>
           <template v-else-if="column.key === 'source_type'">
             <a-tag :color="sourceTypeColor(record.source_type)">{{ sourceTypeLabel(record.source_type) }}</a-tag>
@@ -396,6 +398,7 @@ const loading = ref(false)
 const searchText = ref('')
 const filterSourceType = ref(undefined)
 const filterStatus = ref(undefined)
+const showDemo = ref(false)
 const scenarioId = ref('')
 
 // P0-3 乱码检测：字段值全为 `?` 或包含 3+ 连续 `?` 视为数据已损坏
@@ -643,7 +646,7 @@ function goToCandidate(id) { if (id) router.push(`/workbench?candidate_id=${id}`
 async function fetchSamples() {
   loading.value = true
   try {
-    const data = await listSamples()
+    const data = await listSamples({ include_demo: showDemo.value })
     samples.value = data || []
   } catch {
     samples.value = []

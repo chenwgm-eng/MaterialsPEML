@@ -18,6 +18,9 @@ from .adapters.external_evidence import ExternalEvidenceAdapter
 
 logger = logging.getLogger(__name__)
 
+# 化学合理性数据不足时的兜底分（0.4）：避免空候选触发 "below threshold" 硬阻断
+_INSUFFICIENT_SCORE = 0.4
+
 
 class CommitteeExecutor:
     """执行证据收集 DAG，将 tool_name 路由到对应 adapter。"""
@@ -53,7 +56,13 @@ class CommitteeExecutor:
         tool_name = task.get("tool_name", "")
         args = task.get("args", {})
         candidate_id = args.get("candidate_id", "")
-        candidate = self.candidate_lookup(candidate_id) or {}
+        # 内联 candidate_data 优先于候选存储查找（保证实时候选评估的一致性）
+        inline = args.get("candidate_data")
+        if inline is not None:
+            candidate = self._as_dict(inline)
+        else:
+            found = self.candidate_lookup(candidate_id)
+            candidate = self._as_dict(found) if found else {}
 
         # 晶体构建相关
         if tool_name in _CRYSTAL_TOOLS:
@@ -172,8 +181,43 @@ class CommitteeExecutor:
         """化学合理性检查：验证化学式非空且包含已知元素。"""
         formula = structure_data.get("formula", "")
         if not formula:
-            return {"passed": False, "blocking_reasons": ["空化学式"], "score": 0.0}
+            # 数据不足（空化学式）→ 兜底 INSUFFICIENT_SCORE 而非 0 分触发硬阻断
+            return {
+                "status": "insufficient",
+                "score": _INSUFFICIENT_SCORE,
+                "blocking_reasons": [],
+                "note": "chemical_reasonability",
+            }
         return {"passed": True, "score": 0.75, "note": "chemical_reasonability"}
+
+    def _as_dict(self, obj: Any) -> dict:
+        """将 CandidateRecord dataclass 或 dict 归一化为统一 dict。
+
+        嵌套 data（结构/属性字段）展开到顶层；顶层非空值优先，空/None 由嵌套补齐。
+        """
+        if isinstance(obj, dict):
+            d = dict(obj)
+        else:
+            d = {}
+            for key in (
+                "candidate_id", "formula", "chemical_formula", "name", "lattice",
+                "species", "coords", "space_group", "smiles", "owner",
+                "predicted_properties",
+            ):
+                if hasattr(obj, key):
+                    v = getattr(obj, key)
+                    if v is not None:
+                        d[key] = v
+            # 捕获候选 dataclass 的嵌套 data（结构/属性字段）
+            if hasattr(obj, "data") and getattr(obj, "data") is not None:
+                d["data"] = getattr(obj, "data")
+        # 合并嵌套 data 到顶层；顶层非空值优先
+        nested = d.pop("data", None)
+        if isinstance(nested, dict):
+            for k, v in nested.items():
+                if k not in d or d[k] in (None, "", [], {}):
+                    d[k] = v
+        return d
 
     def _target_match(self, candidate: dict) -> dict:
         """目标匹配评估：检查候选是否有预测属性。"""

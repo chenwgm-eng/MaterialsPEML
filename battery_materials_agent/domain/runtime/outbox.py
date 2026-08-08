@@ -116,7 +116,7 @@ class ScientificOutbox:
             )
 
     def mark_failed(self, message_id: str, error: str) -> None:
-        """标记消息为失败，达到最大重试次数后终态化为 failed。"""
+        """标记消息为失败；未达最大重试次数时重置回 pending 以便重试。"""
         with self.engine.begin() as conn:
             conn.execute(
                 text(
@@ -137,6 +137,15 @@ class ScientificOutbox:
                 conn.execute(
                     text(
                         "UPDATE scientific_kernel.outbox SET status = 'failed' "
+                        "WHERE message_id = :mid"
+                    ),
+                    {"mid": message_id},
+                )
+            else:
+                # 未达最大重试次数：重置为 pending，允许再次被领取重试
+                conn.execute(
+                    text(
+                        "UPDATE scientific_kernel.outbox SET status = 'pending' "
                         "WHERE message_id = :mid"
                     ),
                     {"mid": message_id},

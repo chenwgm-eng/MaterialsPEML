@@ -245,6 +245,33 @@ class IndustrializationConfig(BaseModel):
     ])
 
 
+class MaterialDomainConfig(BaseModel):
+    """Task 4：材料体系可配置——体系分类/默认目标属性集/示例化学式。
+
+    前端候选生成/性质预测页的体系模板来自此配置，不再硬编码电池专属体系。
+    可通过环境变量 ``MATERIAL_DOMAIN_SYSTEMS``（JSON 数组，元素为
+    ``{"name": str, "elements": [str]}``）覆盖默认体系模板。
+    """
+
+    # 体系模板：name 为用户可见的体系名称，elements 为该体系推荐的元素集合
+    material_systems: list[dict] = Field(default_factory=lambda: [
+        {"name": "硫化物固态电解质", "elements": ["Li", "P", "S"]},
+        {"name": "氧化物固态电解质", "elements": ["La", "Zr", "O"]},
+        {"name": "卤化物电解质", "elements": ["Li", "Y", "Cl", "Br", "I"]},
+        {"name": "钙钛矿氧化物", "elements": ["La", "Sr", "Ti", "O"]},
+        {"name": "尖晶石氧化物", "elements": ["Li", "Mn", "O"]},
+        {"name": "层状氧化物", "elements": ["Li", "Co", "Ni", "Mn", "O"]},
+    ])
+    # 默认目标属性集（性质预测页默认选项）
+    default_target_properties: list[str] = Field(default_factory=lambda: [
+        "ionic_conductivity", "band_gap", "formation_energy",
+    ])
+    # 示例化学式（候选生成/项目创建页示例）
+    example_formulas: list[str] = Field(default_factory=lambda: [
+        "Li6PS5Cl", "Li3YCl6", "LaTiO3", "LiMn2O4",
+    ])
+
+
 class ChemistryRuleSetConfig(BaseModel):
     """Task 15：化学规则引擎配置（候选生成阶段硬过滤）。
 
@@ -278,6 +305,7 @@ class AgentConfig(BaseModel):
     eval: EvalConfig = Field(default_factory=EvalConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     chemistry_rules: ChemistryRuleSetConfig = Field(default_factory=ChemistryRuleSetConfig)
+    material_domain: MaterialDomainConfig = Field(default_factory=MaterialDomainConfig)
     # T-034 SCP 异步任务混合生命周期归档（决策 D-09）
     scp_task_completed_retention_days: int = 30
     scp_task_failed_retention_days: int = 90
@@ -336,6 +364,34 @@ def get_config(env_file: str | None = None, refresh: bool = False) -> AgentConfi
     if _config_cache is None or refresh:
         _config_cache = load_config(env_file)
     return _config_cache
+
+
+def _load_material_domain_config() -> MaterialDomainConfig:
+    """Task 4：加载材料领域配置。
+
+    从环境变量 ``MATERIAL_DOMAIN_SYSTEMS``（JSON 数组）读取体系模板，
+    未配置时使用默认通用材料体系。
+    """
+    import json
+    import os
+
+    cfg = MaterialDomainConfig()
+    raw = os.getenv("MATERIAL_DOMAIN_SYSTEMS", "")
+    if raw.strip():
+        try:
+            systems = json.loads(raw)
+            if isinstance(systems, list) and systems:
+                cfg.material_systems = [
+                    {"name": str(s["name"]), "elements": [str(e) for e in s.get("elements", [])]}
+                    for s in systems
+                    if isinstance(s, dict) and s.get("name")
+                ]
+        except (ValueError, TypeError):
+            import logging
+            logging.getLogger(__name__).warning(
+                "MATERIAL_DOMAIN_SYSTEMS 不是合法 JSON 数组，忽略该配置。"
+            )
+    return cfg
 
 
 def _load_chemistry_rules_config() -> ChemistryRuleSetConfig:
@@ -572,6 +628,7 @@ def load_config(env_file: str | None = None) -> AgentConfig:
             report_dir=os.getenv("EVAL_REPORT_DIR", "evals/reports"),
         ),
         chemistry_rules=_load_chemistry_rules_config(),
+        material_domain=_load_material_domain_config(),
         scp_task_completed_retention_days=int(os.getenv("SCP_TASK_COMPLETED_RETENTION_DAYS", "30")),
         scp_task_failed_retention_days=int(os.getenv("SCP_TASK_FAILED_RETENTION_DAYS", "90")),
     )

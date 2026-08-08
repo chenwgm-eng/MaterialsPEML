@@ -24,6 +24,8 @@ class PolymerPredictionResult(BaseModel):
     material_type: str = "polymer"
     # T-029：数据质量分层。ASE/物理计算=simulated，ML 预测=estimated，实验验证=verified
     data_quality: str = "estimated"
+    # 标记结果是否来自占位/回退路径（如无效 SMILES 的假描述符），下游不得当真实输出
+    degraded: bool = False
     provenance: list[dict] = Field(default_factory=list)
 
 
@@ -249,8 +251,11 @@ class PolymerPropertyPredictor:
         # 描述符线性模型路径
         if smiles:
             desc = self._calc.calculate_descriptors(smiles)
+            degraded = False
         else:
+            # 无有效 SMILES，占位描述符：结果 degrade，下游不得当真实预测
             desc = self._calc._fallback_descriptors(psmiles or "C")
+            degraded = True
 
         value, confidence = self._model.predict(desc, property_name)
 
@@ -265,6 +270,7 @@ class PolymerPropertyPredictor:
             formula=features.get("formula", ""),
             material_type="polymer",
             data_quality="estimated",  # T-029：描述符线性模型 ML 预测结果
+            degraded=degraded,
         )
 
     def _predict_with_ase(self, smiles: str, property_name: str) -> tuple[float, float, str]:

@@ -42,19 +42,20 @@
 
         <a-row :gutter="16">
           <a-col :span="8">
-            <a-form-item label="材料范围">
+            <a-form-item label="材料体系">
               <a-select
                 id="rw-scope-select"
-                v-model:value="form.material_scope"
-                placeholder="选择材料范围"
+                v-model:value="form.material_system"
+                placeholder="选择材料体系"
+                :loading="materialSystemLoading"
               >
                 <a-select-option
-                  v-for="opt in RESEARCH_MATERIAL_SCOPES"
+                  v-for="opt in materialSystemOptions"
                   :key="opt.value"
                   :value="opt.value"
                 >{{ opt.label }}</a-select-option>
               </a-select>
-              <div class="form-help">系统会根据材料类型匹配不同的生成和验证工具链。</div>
+              <div class="form-help">体系由当前领域包配置驱动，系统据此匹配元素空间与工具链。</div>
             </a-form-item>
           </a-col>
           <a-col :span="8">
@@ -141,7 +142,7 @@
               添加目标属性
             </a-button>
           </div>
-          <div class="form-help">属性名统一取自属性字典（电池材料属性）；方向和阈值用于筛选与排序候选材料。最小/最大值支持科学计数法（如 1e-3 表示 1×10⁻³）。</div>
+          <div class="form-help">属性名统一取自属性字典（材料属性）；方向和阈值用于筛选与排序候选材料。最小/最大值支持科学计数法（如 1e-3 表示 1×10⁻³）。</div>
         </a-form-item>
 
         <a-form-item>
@@ -418,6 +419,8 @@ import { useTaskStore } from '@/stores/tasks'
 import { buildDerivedQuery } from '@/utils/researchContext'
 import { RESEARCH_MATERIAL_SCOPES, EXECUTION_PREFERENCE_MODES } from '@/constants/materialTypes'
 import { useProjectContextStore } from '@/stores/projectContext'
+import { getConfig } from '@/api/system'
+import client from '@/api/client'
 
 const taskStore = useTaskStore()
 const projectContextStore = useProjectContextStore()
@@ -436,7 +439,8 @@ const explaining = ref(false)
 
 const form = ref({
   goal: '',
-  material_scope: 'crystal',
+  material_scope: 'crystal', // 材料类型枚举（crystal/polymer），由领域包驱动
+  material_system: '', // 材料体系名（领域包 material_systems.name），下拉选择
   target_properties: [],
   preference: 'balanced',
   project_id: '',
@@ -461,6 +465,58 @@ const currentPreferenceDescription = computed(() => {
   return mode?.description || ''
 })
 
+// 材料类型：完全由领域注册表（/domain-packs）驱动。
+// 与 material_system（体系名）解耦——material_scope 只用于下游路由/生成通道选择。
+const domainPacks = ref([])
+const materialKind = computed(() => {
+  const active = domainPacks.value.find((p) => p.is_active)
+  const primary = active || domainPacks.value.find((p) => p.material_kind) || domainPacks.value[0]
+  return primary?.material_kind || 'crystal'
+})
+
+async function loadDomainPacks() {
+  try {
+    const res = await client.get('/domain-packs')
+    domainPacks.value = res?.packs || []
+    // 同步材料类型，保证提交/派生路由使用领域类型
+    form.value.material_scope = materialKind.value
+  } catch {
+    domainPacks.value = []
+  }
+}
+
+// 材料体系下拉：数据源切换到 /config 接口（material_domain.material_systems），
+// 展示并回传体系名到 material_system（与 material_scope 解耦）；
+// /config 不可用或未配置体系时回退静态材料类型。
+const materialSystems = ref([])
+const materialSystemLoading = ref(false)
+const materialSystemOptions = computed(() => {
+  if (materialSystems.value.length) {
+    return materialSystems.value.map((s) => ({ value: s.name, label: s.name }))
+  }
+  return RESEARCH_MATERIAL_SCOPES.map((s) => ({ value: s.value, label: s.label }))
+})
+
+async function loadMaterialSystems() {
+  materialSystemLoading.value = true
+  try {
+    const res = await getConfig()
+    const systems = res?.material_domain?.material_systems || []
+    materialSystems.value = Array.isArray(systems) ? systems : []
+    // 已加载体系：默认选中第一个，保证提交时有值
+    if (materialSystems.value.length && !materialSystems.value.some((s) => s.name === form.value.material_system)) {
+      form.value.material_system = materialSystems.value[0].name
+    } else if (!materialSystems.value.length && !form.value.material_system) {
+      form.value.material_system = 'crystal'
+    }
+  } catch {
+    materialSystems.value = []
+    if (!form.value.material_system) form.value.material_system = 'crystal'
+  } finally {
+    materialSystemLoading.value = false
+  }
+}
+
 const scenarioId = ref('')
 const plan = ref(null)
 const requestId = ref('')
@@ -474,6 +530,8 @@ const STORAGE_KEY = 'research_onboarding_seen'
 
 onMounted(() => {
   loadPropDictionary()
+  loadMaterialSystems()
+  loadDomainPacks()
   try {
     if (!localStorage.getItem(STORAGE_KEY)) {
       tourOpen.value = true
@@ -527,7 +585,7 @@ function onTourClose() {
 }
 
 // ── 目标属性编辑器 ──
-// P1-4：属性名统一从属性字典（电池材料属性分类）读取，单位随属性自动带出
+// P1-4：属性名统一从属性字典（材料属性分类）读取，单位随属性自动带出
 const propOptions = ref([])
 const propUnitMap = ref({})
 
@@ -537,13 +595,9 @@ function filterPropOption(input, option) {
 
 async function loadPropDictionary() {
   try {
-    let res = await getFields({ category: 'battery' })
-    let fields = res?.fields || []
-    // 若 battery 分类为空，降级获取全部可预测属性，避免下拉框无数据
-    if (!fields.length) {
-      res = await getFields({ usable_in: 'predictable' })
-      fields = res?.fields || []
-    }
+    // 属性字典按"可预测"用途加载（领域无关），不再硬编码电池分类。
+    const res = await getFields({ usable_in: 'predictable' })
+    const fields = res?.fields || []
     // P1-101: 仅展示中文标签与单位，不再暴露 ionic_conductivity 等代码字段名
     propOptions.value = fields.map((f) => ({
       value: f.key,
@@ -601,7 +655,8 @@ async function onGeneratePlan() {
     const payload = {
       scenario_id: scenarioId.value,
       goal: form.value.goal.trim(),
-      material_scope: form.value.material_scope,
+      material_scope: materialKind.value || form.value.material_scope,
+      material_system: form.value.material_system,
       target_properties: form.value.target_properties.filter((p) => p.name),
       constraints: {},
       preference: form.value.preference,
@@ -743,7 +798,8 @@ const DERIVED_PATHS = {
 function openDerived(moduleKey) {
   const query = buildDerivedQuery(moduleKey, {
     goal: form.value.goal.trim(),
-    material_scope: form.value.material_scope,
+    material_scope: materialKind.value || form.value.material_scope,
+    material_system: form.value.material_system,
     target_properties: form.value.target_properties,
     scenario_id: scenarioId.value,
   })

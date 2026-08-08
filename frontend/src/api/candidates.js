@@ -24,3 +24,7 @@ export const updateCandidateStatus = (candidateId, data) =>
 /** 更新工艺方案状态（draft → reviewing → confirmed / abandoned） */
 export const updateProcessSchemeStatus = (processId, data) =>
   client.patch(`/process-schemes/${processId}/status`, data)
+
+/** 从已确认的工艺方案生成配方（BOM），打通 深化→配方 链路 */
+export const createBomFromProcess = (candidateId, data) =>
+  client.post(`/candidates/${candidateId}/bom-from-process`, data)

@@ -341,7 +341,7 @@ class TestProcessDeepening:
 
             # 且此刻可合法执行"确认工艺方案"：process_planning → process_confirmed
             candidate_store.update_status(
-                cid, "process_confirmed", actor_role="process_engineer",
+                cid, "process_confirmed", actor_operation_roles={"process_engineer"},
                 owner="proc_engineer", reason="回归：确认工艺方案",
             )
             assert candidate_store.get(cid).status == "process_confirmed"

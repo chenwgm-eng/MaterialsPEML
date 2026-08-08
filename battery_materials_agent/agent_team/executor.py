@@ -251,7 +251,7 @@ class AgenticExecutor:
                         continue
 
                     # ── 策略检查 3: requires_human_review（阻塞等待审批）──
-                    needs_review = self._check_needs_human_review(agent_def, tool_name)
+                    needs_review = await self._check_needs_human_review(agent_def, tool_name)
                     if needs_review:
                         approval_id = str(uuid.uuid4())
                         review_event = ExecutionEvent(
@@ -509,17 +509,21 @@ class AgenticExecutor:
             return action
         return None
 
-    def _check_needs_human_review(self, agent_def: AgentDefinition, tool_name: str) -> bool:
-        """通过 CapabilityRouter 检查工具是否需要人工审核。"""
+    async def _check_needs_human_review(self, agent_def: AgentDefinition, tool_name: str) -> bool:
+        """通过 CapabilityRouter 检查工具是否需要人工审核。
+
+        注意：本方法在 async 上下文中被调用，必须直接 ``await``
+        ``capability_router.resolve``，不能经 ``_run_async_safe`` 阻塞事件循环
+        （``future.result()`` 会阻塞事件循环线程，导致同一 loop 上的协程永不执行，
+        造成编排执行永久卡死）。
+        """
         if self._capability_router is None:
             return False
         # 把 tool_name 当作 capability alias 来解析（MCP 工具名与 alias 一致）
         try:
-            candidates = _run_async_safe(
-                self._capability_router.resolve(
-                    tool_name, self._execution_profile or "standard",
-                    agent_id=agent_def.id,
-                )
+            candidates = await self._capability_router.resolve(
+                tool_name, self._execution_profile or "standard",
+                agent_id=agent_def.id,
             )
             # 取第一个候选（排序后最优）检查 requires_human_review 标记
             if candidates and candidates[0].requires_human_review:

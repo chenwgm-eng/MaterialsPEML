@@ -1,6 +1,6 @@
 import client from './client'
 
-/** 按关键词搜索电池材料领域文献 */
+/** 按关键词搜索材料领域文献 */
 export const searchLiterature = (query, limit = 10) =>
   client.post('/knowledge/search', { query, limit })
 

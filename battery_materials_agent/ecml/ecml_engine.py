@@ -656,10 +656,10 @@ class ECMLEngine:
         "step1_route": ("builtin_material_router", "材料路由调度员", "ecml.step1_route"),
         "step2_generate": ("builtin_material_discovery", "首席材料学家", "ecml.step2_generate"),
         "step3_industrialization": ("builtin_industrialization", "配方工艺师", "ecml.step3_industrialization"),
-        "step4_predict": ("builtin_battery_oracle", "电池寿命预言者", "ecml.step4_predict"),
+        "step4_predict": ("builtin_battery_oracle", "材料性质预言者", "ecml.step4_predict"),
         "step5_verify": ("builtin_dft_verifier", "DFT 计算专家", "ecml.step5_verify"),
         "step6_experiment": ("builtin_experiment_analyst", "实验数据分析员", "ecml.step6_experiment"),
-        "step7_feedback": ("builtin_battery_learner", "电池衰减学习者", "ecml.step7_feedback"),
+        "step7_feedback": ("builtin_battery_learner", "材料数据学习者", "ecml.step7_feedback"),
     }
 
     def _log_agent_event(

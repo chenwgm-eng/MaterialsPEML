@@ -9,6 +9,7 @@ from ..contracts.run import Run, RunStatus
 from ..contracts.artifact import Artifact
 from ..contracts.evidence import EvidencePackage
 from ..domain.runtime import ScientificExecutionKernel
+from ..control_plane.tool_catalog import ToolRiskLevel
 
 
 class NativeScientificService(ABC):
@@ -20,6 +21,12 @@ class NativeScientificService(ABC):
     """
 
     kernel: ScientificExecutionKernel
+
+    # 服务固有风险等级（ToolRiskLevel：A=最高风险，D=最低风险）。
+    # 作为风险单一数据源：CapabilityCatalog 据此注册 ToolCatalog 工具描述，
+    # 并派生对应能力的 max_risk_level 门禁，使路由层能真正做风险过滤（CA3）。
+    # 原生科学服务均为本地 CPU 计算，默认 C（中等风险，同 pymatgen 本地计算）。
+    risk_level: ToolRiskLevel = ToolRiskLevel.C
 
     @property
     @abstractmethod

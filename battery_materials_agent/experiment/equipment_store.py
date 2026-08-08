@@ -135,6 +135,32 @@ class EquipmentStore:
             return None
         return self._row_to_equipment(row)
 
+    def find_by_serial(self, serial_number: str, exclude_id: str = "") -> Equipment | None:
+        """按序列号查找设备（用于唯一性校验），可排除指定设备。"""
+        if not serial_number:
+            return None
+        with self.engine.connect() as conn:
+            if exclude_id:
+                row = conn.execute(
+                    text(
+                        "SELECT * FROM experiment.equipment "
+                        "WHERE serial_number = :serial_number AND equipment_id != :exclude_id "
+                        "ORDER BY equipment_id ASC LIMIT 1"
+                    ),
+                    {"serial_number": serial_number, "exclude_id": exclude_id},
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    text(
+                        "SELECT * FROM experiment.equipment "
+                        "WHERE serial_number = :serial_number ORDER BY equipment_id ASC LIMIT 1"
+                    ),
+                    {"serial_number": serial_number},
+                ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_equipment(row)
+
     def list_all(self, category: str = "", status: str = "") -> list[Equipment]:
         with self.engine.connect() as conn:
             query = "SELECT * FROM experiment.equipment"

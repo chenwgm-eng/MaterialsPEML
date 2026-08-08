@@ -109,14 +109,16 @@ export function chemicalFormula(message = '请输入化学式', trigger = 'blur'
   return [{ required: false, message, trigger }]
 }
 
-/** 日期不晚于另一字段 */
-export function dateNotAfter(otherField, otherLabel = '结束日期', trigger = 'change') {
+/** 日期不晚于另一字段（getOtherValue 返回另一字段的当前值，闭包动态读取） */
+export function dateNotAfter(getOtherValue, otherLabel = '结束日期', trigger = 'change') {
   return [
     {
       validator: (_rule, value) => {
         if (!value) return Promise.resolve()
-        // 需要在组件中通过闭包获取 otherField 的值，此处提供静态校验
-        // 组件中应使用 computed 动态生成规则
+        const other = getOtherValue?.()
+        if (other && value > other) {
+          return Promise.reject(new Error(`不得晚于${otherLabel}`))
+        }
         return Promise.resolve()
       },
       trigger,

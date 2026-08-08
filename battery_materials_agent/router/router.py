@@ -117,8 +117,8 @@ class MaterialRouter:
                 )
 
         return RouterResult(
-            material_type=MaterialType.CRYSTAL,
+            material_type=MaterialType.UNKNOWN,
             branch=MaterialBranch.CRYSTAL_BRANCH,
-            confidence=0.5,
-            reason="Default to crystal branch",
+            confidence=0.2,
+            reason="无法判定材料类型：输入不含可识别的 PSMILES/SMILES/结构文件或材料类型关键词",
         )

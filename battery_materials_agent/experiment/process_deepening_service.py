@@ -115,7 +115,7 @@ class ProcessDeepeningService:
                 self.candidate_store.update_status(
                     candidate_id,
                     CandidateStatus.PROCESS_PLANNING.value,
-                    actor_role="process_engineer",
+                    actor_operation_roles={"process_engineer"},
                     owner=owner or record.owner or "",
                     triggered_by=triggered_by,
                     reason="工艺人员介入，进入工艺深化阶段",

@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # 实体抽取（复用并精简 LiteratureResearcherAgent 的关键词表）
 # ─────────────────────────────────────────────────────────────────────────────
 
-# 常见电池材料类别 → 关键词集合
+# 常见材料类别 → 关键词集合（含电解质/电极/隔膜等电化学储能领域）
 MATERIAL_PATTERNS: dict[str, list[str]] = {
     "固态电解质": [
         "LLZO", "LLZTO", "LLTO", "LATP", "LAGP", "LPSC", "LGPS",

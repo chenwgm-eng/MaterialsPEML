@@ -532,9 +532,10 @@ import { ExperimentOutlined, LineChartOutlined } from '@ant-design/icons-vue'
 import { discoverCrystal, discoverPolymer } from '@/api/discovery'
 import { getOptions, crossScalePredict } from '@/api/properties'
 import { checkMaterialsAvailability } from '@/api/rawMaterials'
-import { getModelCatalog } from '@/api/system'
+import { getModelCatalog, getConfig } from '@/api/system'
 import { createMaterialRequest } from '@/api/materialRequests'
 import { listAgents } from '@/api/agents'
+import client from '@/api/client'
 import { formatSci } from '@/utils/format'
 import { useMdmDict, useUnitSymbols } from '@/utils/mdmDict'
 import { industrialCategoryLabel } from '@/constants/materialTypes'
@@ -735,8 +736,28 @@ function multiObjectiveLabel(key) {
 const LAST_FORMULA_KEY = 'battery_prediction:last_formula'
 const LAST_SMILES_KEY = 'battery_prediction:last_smiles'
 
-const crystalTemplates = ['LiCoO2', 'LiFePO4', 'NMC811']
-const polymerTemplates = ['PEO', 'PVDF', 'PMMA']
+const crystalTemplates = ref(['LiCoO2', 'LiFePO4', 'NMC811'])
+const polymerTemplates = ref(['PEO', 'PVDF', 'PMMA'])
+
+// P3-2：体系模板数据源切换到 /config 接口（material_domain.example_formulas），
+// 由领域包驱动；依据活跃领域包的 material_kind 决定示例公式归属的页签，
+// 未配置或请求失败时保留本地默认模板。
+async function loadDomainTemplates() {
+  try {
+    const [cfg, packsRes] = await Promise.all([getConfig(), client.get('/domain-packs')])
+    const formulas = cfg?.material_domain?.example_formulas || []
+    if (!formulas.length) return
+    const packs = packsRes?.packs || []
+    const active = packs.find((p) => p.is_active) || packs[0]
+    if (active?.material_kind === 'polymer') {
+      polymerTemplates.value = formulas
+    } else {
+      crystalTemplates.value = formulas
+    }
+  } catch {
+    /* 保持默认模板 */
+  }
+}
 
 const confirmVisible = ref(false)
 const confirmTitle = ref('')
@@ -854,6 +875,8 @@ onMounted(async () => {
 
   // 加载材料发现 Agent（右侧面板展示）
   loadCapableAgents()
+  // 加载领域体系的示例公式模板（/config 驱动）
+  loadDomainTemplates()
 
   // P0-001：保存场景 ID，便于结果传递到下游
   if (route.query.scenario_id) {

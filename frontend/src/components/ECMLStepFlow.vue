@@ -57,10 +57,10 @@ const steps = [
   { key: 'step1_route', title: '材料路由', desc: '判断材料类型，选择处理分支', agentId: 'builtin_material_router', agentName: '材料路由调度员' },
   { key: 'step2_generate', title: '候选生成', desc: '生成 N 个候选结构', agentId: 'builtin_material_discovery', agentName: '首席材料学家' },
   { key: 'step3_industrialization', title: '工业化验证', desc: '配方合规审查与成本评估', agentId: 'builtin_industrialization', agentName: '配方工艺师' },
-  { key: 'step4_predict', title: '性质预测', desc: 'CGCNN/PolymerGNN 打分', agentId: 'builtin_battery_oracle', agentName: '电池寿命预言者' },
+  { key: 'step4_predict', title: '性质预测', desc: 'CGCNN/PolymerGNN 打分', agentId: 'builtin_battery_oracle', agentName: '材料性质预言者' },
   { key: 'step5_verify', title: 'DFT 验证', desc: '精确计算 Top-K 候选材料', agentId: 'builtin_dft_verifier', agentName: 'DFT 计算专家' },
   { key: 'step6_experiment', title: '实验闭环', desc: 'FINDUS 合成与表征', agentId: 'builtin_experiment_analyst', agentName: '实验数据分析员' },
-  { key: 'step7_feedback', title: '反馈迭代', desc: '湿数据对比，调整策略', agentId: 'builtin_battery_learner', agentName: '电池衰减学习者' },
+  { key: 'step7_feedback', title: '反馈迭代', desc: '湿数据对比，调整策略', agentId: 'builtin_battery_learner', agentName: '材料数据学习者' },
 ]
 
 function isCurrent(key) {

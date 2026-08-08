@@ -1,8 +1,11 @@
 """Tests for candidate generation modules."""
 
+from unittest import mock
+
 import pytest
 from battery_materials_agent.generation.crystal_candidate_generator import (
     CrystalCandidateGenerator, CrystalCandidate,
+    _extract_elements,
 )
 from battery_materials_agent.generation.polymer_candidate_generator import (
     PolymerCandidateGenerator, PolymerCandidate,
@@ -29,6 +32,23 @@ class TestCrystalCandidateGenerator:
         candidates = self.generator.generate_candidates(elements=["Li", "Co", "O"], num_candidates=10)
         assert len(candidates) > 0
         assert len(candidates) <= 10
+
+    def test_generate_candidates_strict_element_subset(self):
+        # 严格子集：即使 LLM 元素解析未覆盖某个化学式，该候选也必须被过滤，
+        # 不得因空集合（空集 ⊂ 任意 allowed）而绕过过滤泄漏进结果。
+        allowed = {"Li", "Co", "O"}
+        # 构造 LLM 返回 dict，故意缺失含 F 的候选公式，验证回退 pymatgen 过滤生效
+        llm_result = {"LiCoO2": {"Li", "Co", "O"}, "Li2O": {"Li", "O"}}
+        with mock.patch(
+            "battery_materials_agent.generation.crystal_candidate_generator._extract_elements_with_llm",
+            return_value=llm_result,
+        ):
+            candidates = self.generator.generate_candidates(elements=list(allowed), num_candidates=10)
+        assert len(candidates) > 0
+        for c in candidates:
+            # 任何候选元素必须是 allowed 的子集（无额外元素）
+            assert _extract_elements(c.formula).issubset(allowed), \
+                f"候选 {c.formula} 含目标元素集之外的元素"
 
     def test_crystal_candidate_fields(self):
         candidate = CrystalCandidate(

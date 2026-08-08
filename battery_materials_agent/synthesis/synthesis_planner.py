@@ -45,6 +45,11 @@ class RouteStep(BaseModel):
     template_score: float = 0.0
     difficulty: str = "medium"
     reaction_type: str = ""
+    # Task 18：工艺标签与温度一致性校验。process_label 为按步骤温度推断的工艺标签，
+    # label_conflict 标记该步骤的路线级工艺标签与温度不符（已按温度自动校准）。
+    process_label: str = ""
+    label_conflict: bool = False
+    process_label_note: str = ""
 
 
 class SynthesisRoute(BaseModel):
@@ -444,12 +449,27 @@ class SynthesisPlanner:
             key_notes = item.get("key_notes", "")
 
             steps: list[RouteStep] = []
+            # Task 18：工艺标签与温度一致性校验。逐步骤按温度推断工艺标签，
+            # 避免低温步骤被笼统标注为路线级“高温固相法”。
+            calibration_notes: list[str] = []
             for s_idx, s in enumerate(steps_data):
                 action = s.get("action", f"步骤{s_idx + 1}")
                 temp = s.get("temperature")
                 dur = s.get("duration")
                 atm = s.get("atmosphere", "")
-                cond_parts = [method]
+
+                # 按步骤温度自动校准工艺标签（None/非法温度时回退到路线 method）
+                auto_label = self._classify_process_by_temperature(temp, fallback=method)
+                label_conflict = temp is not None and auto_label != method
+                process_label_note = ""
+                if label_conflict:
+                    process_label_note = (
+                        f"工艺标签与温度不符，已按温度自动校准：{temp}°C 归为{auto_label}"
+                        f"（原路线标注：{method}）"
+                    )
+                    calibration_notes.append(process_label_note)
+
+                cond_parts = [auto_label]
                 if temp is not None:
                     cond_parts.append(f"{temp}°C")
                 if dur is not None:
@@ -463,7 +483,10 @@ class SynthesisPlanner:
                     products=[formula],
                     conditions=conditions,
                     score=score,
-                    reaction_type=method,
+                    reaction_type=auto_label,
+                    process_label=auto_label,
+                    label_conflict=label_conflict,
+                    process_label_note=process_label_note,
                     difficulty="medium",
                 ))
 
@@ -487,6 +510,10 @@ class SynthesisPlanner:
                 confidence=score * 0.85,
                 provenance=[
                     {"method": method, "key_notes": key_notes, "precursors": precursors},
+                    *([{
+                        "calibration": "工艺标签与温度不符，已按温度自动校准",
+                        "details": calibration_notes,
+                    }] if calibration_notes else []),
                 ],
             ))
 
@@ -509,6 +536,31 @@ class SynthesisPlanner:
             "rejected_count": rejected,
         }
         return routes, meta
+
+    @staticmethod
+    def _classify_process_by_temperature(temp, fallback: str = "固相合成") -> str:
+        """根据步骤温度(°C)推断工艺标签。
+
+        Task 18：工艺标签与温度一致性校验。避免低温步骤被笼统标注为“高温固相法”。
+        - temp >= 600        -> 高温固相法
+        - 300 <= temp < 600  -> 中温煅烧
+        - 100 < temp < 300   -> 低温/球磨法
+        - temp <= 100        -> 室温球磨法
+        - temp 为 None/非法  -> 返回 fallback（默认“固相合成”）
+        """
+        if temp is None:
+            return fallback
+        try:
+            temp = float(temp)
+        except (TypeError, ValueError):
+            return fallback
+        if temp >= 600:
+            return "高温固相法"
+        if temp >= 300:
+            return "中温煅烧"
+        if temp > 100:
+            return "低温/球磨法"
+        return "室温球磨法"
 
     @staticmethod
     def _parse_formula_elements(formula: str) -> set[str]:

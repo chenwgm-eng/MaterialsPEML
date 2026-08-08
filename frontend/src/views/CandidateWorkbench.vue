@@ -107,6 +107,7 @@
           <LoadingOutlined spin />
           <span class="progress-label">{{ agentStepLabel || 'Agent 正在生成…' }}</span>
           <span class="progress-percent">{{ agentProgress }}%</span>
+          <span class="progress-elapsed">{{ generateMode === 'pure_llm' ? 'AI 创造' : 'AI+检索' }} · 已耗时 {{ agentElapsedText }}</span>
         </div>
         <a-progress :percent="agentProgress" :show-info="false" size="small" />
       </div>
@@ -171,7 +172,7 @@
           :candidates="displayCandidates"
           :loading="loading || taskCandidatesLoading"
           :selected="selectedCandidate"
-          type="crystal"
+          :type="materialKind"
           :status-map="candidateStatusMap"
           :empty-text="selectedTaskId ? '该任务暂无候选材料，点击「调用智能体生成候选材料」' : '请选择项目任务后查看候选材料'"
           @select="onSelectCandidate"
@@ -189,7 +190,7 @@
           <div class="detail-wrap">
             <CandidateDetail
               :candidate="selectedCandidate"
-              type="crystal"
+              :type="materialKind"
               @route-selected="onRouteSelected"
             />
           </div>
@@ -204,9 +205,12 @@
             >采纳进入湿实验</a-button>
             <a-button :icon="h(AuditOutlined)" :loading="approvalLoading" @click="submitApproval">发起审批</a-button>
             <a-button :icon="h(SwapOutlined)" @click="addToCompare">加入对比</a-button>
-            <a-button type="primary" :icon="h(FormOutlined)" @click="goFormulaDesign">
+            <a-button :icon="h(FormOutlined)" @click="goFormulaDesign">
               进入配方设计
               <span v-if="selectedRouteInfo" class="route-hint">·已选路线{{ selectedRouteInfo.route_index + 1 }}</span>
+            </a-button>
+            <a-button type="primary" :icon="h(ToolOutlined)" @click="goProcessDeepening">
+              送去工艺深化
             </a-button>
             <a-button :icon="h(SyncOutlined)" @click="goEcmlIteration">送入闭环迭代</a-button>
             <a-button :icon="h(SaveOutlined)" ghost :loading="saveLoading" @click="saveToLibrary">收藏到物料库</a-button>
@@ -258,7 +262,9 @@ import {
   AuditOutlined,
   SwapOutlined,
   FormOutlined,
+  ToolOutlined,
   SaveOutlined,
+  SyncOutlined,
   BulbOutlined,
   DownOutlined,
   UpOutlined,
@@ -331,6 +337,24 @@ const reasoningCollapsed = ref(true)
 // 异步生成进度
 const agentProgress = computed(() => discoveryStore.agentProgress)
 const agentStepLabel = computed(() => discoveryStore.agentStepLabel)
+// D1(P2-001)：已耗时计时（Agent 长任务进度反馈）
+const agentElapsed = ref(0) // 秒
+let _elapsedTimer = null
+function _startElapsedTimer() {
+  agentElapsed.value = 0
+  clearInterval(_elapsedTimer)
+  _elapsedTimer = setInterval(() => { agentElapsed.value += 1 }, 1000)
+}
+function _stopElapsedTimer() {
+  clearInterval(_elapsedTimer)
+  _elapsedTimer = null
+}
+const agentElapsedText = computed(() => {
+  const s = agentElapsed.value
+  const m = Math.floor(s / 60)
+  return m > 0 ? `${m}分${s % 60}秒` : `${s}秒`
+})
+onBeforeUnmount(_stopElapsedTimer)
 // 需求7：批量预测状态（三点状态指示）
 const candidateStatusMap = computed(() => discoveryStore.candidateStatusMap)
 const batchPredicting = computed(() => discoveryStore.batchPredicting)
@@ -341,13 +365,14 @@ function onAgentLoaded(agent) {
   materialScientistAgentId.value = agent?.id || ''
 }
 
-// 材料类型：根据任务交付物推断（含"聚合物"/"polymer"→polymer，否则 crystal）
+// 材料类型：完全由领域注册表（/domain-packs）驱动，不再对交付物文本做
+// 硬编码关键词猜测。优先取活跃领域包声明的 material_kind，其次取首个
+// 声明 material_kind 的领域包；均无时回退默认 crystal。
+const domainPacks = ref([])
 const materialKind = computed(() => {
-  const deliverable = (selectedTask.value?.deliverable || '').toLowerCase()
-  if (deliverable.includes('聚合物') || deliverable.includes('polymer') || deliverable.includes('peo')) {
-    return 'polymer'
-  }
-  return 'crystal'
+  const active = domainPacks.value.find((p) => p.is_active)
+  const primary = active || domainPacks.value.find((p) => p.material_kind) || domainPacks.value[0]
+  return primary?.material_kind || 'crystal'
 })
 
 // 选中候选
@@ -416,6 +441,16 @@ async function loadProjects() {
     projects.value = Array.isArray(data) ? data : []
   } catch {
     projects.value = []
+  }
+}
+
+// 加载领域注册表：识别候选材料所属领域 / 材料类型（替代硬编码关键词猜测）
+async function loadDomainPacks() {
+  try {
+    const res = await client.get('/domain-packs')
+    domainPacks.value = res?.packs || []
+  } catch {
+    domainPacks.value = []
   }
 }
 
@@ -534,6 +569,7 @@ async function onRun() {
   taskCandidates.value = []
   reasoningCollapsed.value = true
 
+  _startElapsedTimer()
   try {
     const res = await discoveryStore.agentGenerate(payload)
     message.success(`Agent 已生成 ${res.candidates?.length || 0} 个候选材料`)
@@ -552,6 +588,8 @@ async function onRun() {
     if (taskCandidates.value.length > 0) {
       message.success(`已加载 ${taskCandidates.value.length} 个候选材料`)
     }
+  } finally {
+    _stopElapsedTimer()
   }
 }
 
@@ -600,7 +638,7 @@ async function submitApproval() {
   approvalLoading.value = true
   try {
     const task = selectedTask.value
-    await client.post('/approvals', {
+    const res = await client.post('/approvals', {
       title: `候选材料审批：${selectedCandidate.value.name || selectedCandidate.value.formula}`,
       type: 'material_adoption',
       payload: {
@@ -611,7 +649,9 @@ async function submitApproval() {
         target_properties: task?.target_properties || [],
       },
     })
-    message.success('已发起审批，可在「审批中心」跟踪进度')
+    // 展示本次审批进入的目标通道（后端返回；向后兼容用默认「实验审批」）
+    const channelLabel = res?.channel_label || '实验审批'
+    message.success(`已发起审批，本次将提交至「${channelLabel}」，可在「审批中心」跟踪进度`)
   } catch {
     /* handled */
   } finally {
@@ -667,6 +707,18 @@ function goFormulaDesign() {
     query.synthesis_task_id = selectedRouteInfo.value.synthesis_task_id
   }
   router.push({ name: 'FormulaDesign', query })
+}
+
+// 送去工艺深化：跳转工艺深化工作台，预选该候选（深化服务会自动推进 feasible → process_planning）
+function goProcessDeepening() {
+  if (!selectedCandidate.value) return
+  const c = selectedCandidate.value
+  const query = {
+    candidate_id: c.candidate_id || c.id || '',
+    smiles: c.smiles || '',
+  }
+  if (currentScenarioId.value) query.scenario_id = currentScenarioId.value
+  router.push({ name: 'Synthesis', query })
 }
 
 function goEcmlIteration() {
@@ -737,6 +789,9 @@ onBeforeUnmount(stopResize)
 onMounted(async () => {
   await loadProjects()
   loadUnitSymbols()
+
+  // 加载领域注册表，用于识别候选材料所属领域 / 材料类型（替代硬编码关键词猜测）
+  loadDomainPacks()
 
   // 读取来自 ECML 闭环迭代推荐候选的上下文
   const ecmlTarget = sessionStorage.getItem(ECML_RECOMMENDED_TARGET_KEY)

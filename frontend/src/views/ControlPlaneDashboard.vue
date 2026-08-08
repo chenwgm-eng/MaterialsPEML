@@ -175,7 +175,8 @@
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'health'">
-              <a-tag :color="healthColor(record.health)">{{ healthLabel(record.health) }}</a-tag>
+              <a-tag v-if="record.configured === false" color="default">未配置</a-tag>
+              <a-tag v-else :color="healthColor(record.health)">{{ healthLabel(record.health) }}</a-tag>
             </template>
             <template v-if="column.key === 'last_check'">
               <span class="tabular-nums">{{ formatTime(record.last_check) }}</span>

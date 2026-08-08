@@ -52,18 +52,22 @@ class TestMaterialRouter:
         assert result.material_type == MaterialType.CRYSTAL
         assert result.branch == MaterialBranch.CRYSTAL_BRANCH
 
-    def test_route_default_crystal(self):
+    def test_route_unrecognized_input_low_confidence(self):
+        """无法判定的输入返回 UNKNOWN + 低置信 + 明确原因，而非盲目默认 crystal 0.5。"""
         result = self.router.route(MaterialInput())
-        assert result.material_type == MaterialType.CRYSTAL
-        assert result.confidence == 0.5
+        assert result.material_type == MaterialType.UNKNOWN
+        assert result.confidence < 0.5
+        assert result.reason  # 必须附明确原因，禁止 "Default to crystal branch"
 
     def test_route_empty_input(self):
         result = self.router.route(MaterialInput(name=""))
-        assert result.material_type == MaterialType.CRYSTAL
+        assert result.material_type == MaterialType.UNKNOWN
+        assert result.confidence < 0.5
 
     def test_route_invalid_smiles(self):
         result = self.router.route(MaterialInput(smiles="invalid_smiles_XXX"))
-        assert result.material_type == MaterialType.CRYSTAL
+        assert result.material_type == MaterialType.UNKNOWN
+        assert result.confidence < 0.5
 
     def test_route_result_fields(self):
         result = self.router.route(MaterialInput(smiles="CCO"))

@@ -164,20 +164,27 @@ class ComplianceAndCostNode:
             })
 
         # Phase 4: Local toxicity (EHS) and cost estimation
+        # Task 19：有毒物料（is_toxic）强制触发人工审批标记 review_required，
+        # 阻断自动上量/投产，需人工复核 EHS 防护后方可放行。
+        has_toxic = False
         for mat_id, weight_ratio in bom_items:
             spec = self._lookup_material(mat_id)
             if spec is None:
                 continue
             total_cost += spec.unit_cost * weight_ratio
             if spec.is_toxic:
-                warnings.append(f"物料 {spec.name} 具有毒性，需升级 EHS 防护等级。")
+                has_toxic = True
+                warnings.append(f"物料 {spec.name} 具有毒性，需升级 EHS 防护等级，且必须人工审批。")
 
         if total_cost > self.cost_threshold:
             fatal_errors.append(f"配方成本熔断：估算成本 {total_cost:.2f} 元/kg，远超商业警戒线。")
 
         # Phase 5: Evidence summary
-        review_required = bool(evidence_conflicts) or any(
-            a.get("status") == "unknown" for a in external_assessments
+        # Task 19：含毒性物料同样强制进入人工审批（review_required=True）
+        review_required = (
+            has_toxic
+            or bool(evidence_conflicts)
+            or any(a.get("status") == "unknown" for a in external_assessments)
         )
 
         return ComplianceReport(
@@ -211,6 +218,8 @@ class ComplianceAndCostNode:
             total_pct = sum(values)
             bom_items = [(k, v / total_pct if total_pct > 0 else 0) for k, v in bom_items]
 
+        # Task 19：含毒性物料强制进入人工审批（review_required=True）
+        has_toxic = False
         for mat_id, weight_ratio in bom_items:
             spec = self._lookup_material(mat_id)
             if spec is None:
@@ -225,7 +234,8 @@ class ComplianceAndCostNode:
                     f"状态为'待补充证据'，需上传报告后方可作为合规依据。"
                 )
             if spec.is_toxic:
-                warnings.append(f"物料 {spec.name} 具有毒性，需升级 EHS 防护等级。")
+                has_toxic = True
+                warnings.append(f"物料 {spec.name} 具有毒性，需升级 EHS 防护等级，且必须人工审批。")
             if rdkit_available and spec.smiles:
                 mol = Chem.MolFromSmiles(spec.smiles)
                 if mol is not None:
@@ -242,6 +252,7 @@ class ComplianceAndCostNode:
             estimated_unit_cost=total_cost,
             warnings=warnings,
             fatal_errors=fatal_errors,
+            review_required=has_toxic,
         )
 
     async def _check_scp_toxicity(self, bom_items: list, smart_blocks: list[str]) -> list[dict]:

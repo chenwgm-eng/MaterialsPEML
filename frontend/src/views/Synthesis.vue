@@ -125,6 +125,15 @@
               >
                 <ArrowRightOutlined /> 推进至可实验
               </a-button>
+              <a-button
+                v-if="confirmedProcessId"
+                type="primary"
+                ghost
+                :loading="generatingBom"
+                @click="generateBomFromConfirmedProcess"
+              >
+                <FileTextOutlined /> 生成配方
+              </a-button>
               <span class="action-hint">
                 将调用对应高级能力（SCP 优先 / 本地回退）规划合成路径并做 DFT 可行性校验
               </span>
@@ -178,6 +187,7 @@
                           <div v-for="(step, idx) in route.steps" :key="idx" class="step-block">
                             <div class="step-title">步骤 {{ idx + 1 }}
                               <a-tag v-if="step.reaction_type" color="purple">{{ step.reaction_type }}</a-tag>
+                              <a-tag v-if="step.label_conflict" color="#FA8C16">工艺标签待核</a-tag>
                             </div>
                             <div v-if="step.reaction_smiles" class="step-row">
                               <span class="step-key">反应:</span><code class="step-val">{{ step.reaction_smiles }}</code>
@@ -359,6 +369,7 @@
                       步骤 {{ idx + 1 }}
                       <a-tag color="blue" class="num">{{ ((step.score || 0) * 100).toFixed(0) }}%</a-tag>
                       <a-tag v-if="step.reaction_type" color="purple">{{ step.reaction_type }}</a-tag>
+                      <a-tag v-if="step.label_conflict" color="#FA8C16">工艺标签待核</a-tag>
                     </div>
                     <div v-if="step.reaction_smiles" class="step-row"><span class="step-key">反应:</span><code class="step-val">{{ step.reaction_smiles }}</code></div>
                     <div v-if="step.conditions" class="step-row"><span class="step-key">条件:</span><span class="step-val">{{ step.conditions }}</span></div>
@@ -482,10 +493,11 @@ import {
   SafetyCertificateOutlined,
   CheckCircleOutlined,
   ArrowRightOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons-vue'
 import { getReactionNetwork, verifyRouteWithDFT } from '@/api/experiments'
 import { planSynthesisAsync, getSynthesisTask, createManualRoute } from '@/api/synthesis'
-import { getProcessEngineerWorkbench, runProcessDeepening, updateCandidateStatus, updateProcessSchemeStatus } from '@/api/candidates'
+import { getProcessEngineerWorkbench, runProcessDeepening, updateCandidateStatus, updateProcessSchemeStatus, createBomFromProcess } from '@/api/candidates'
 import { listAgents } from '@/api/agents'
 import { useMdmDict } from '@/utils/mdmDict'
 import { getUserId } from '@/api/client'
@@ -498,6 +510,8 @@ const currentRoute = useRoute()
 const router = useRouter()
 const LAST_SMILES_KEY = 'battery_synthesis:last_smiles'
 const currentScenarioId = ref('')
+// 从候选工作台「送去工艺深化」跳转而来时携带的候选 ID，用于加载后自动预选
+const pendingCandidateId = ref(currentRoute.query.candidate_id ? String(currentRoute.query.candidate_id) : '')
 const smiles = ref(currentRoute.query.smiles || currentRoute.query.formula || 'C1COC(=O)O1')
 const serviceError = ref('')
 const isFormulaNotSmiles = computed(() => !!currentRoute.query.formula && !currentRoute.query.smiles)
@@ -572,6 +586,18 @@ async function loadWorkbench() {
         schemes.value = updated.process_schemes || []
         selectedItem.value = updated
       }
+    }
+    // 从候选工作台「送去工艺深化」跳转而来：自动预选目标候选（仅首次）
+    else if (pendingCandidateId.value) {
+      const target = pipelineItems.value.find(
+        (it) => it.candidate.candidate_id === pendingCandidateId.value,
+      )
+      if (target) {
+        selected.value = target.candidate
+        schemes.value = target.process_schemes || []
+        selectedItem.value = target
+      }
+      pendingCandidateId.value = ''
     }
   } catch {
     pipelineItems.value = []
@@ -666,6 +692,42 @@ async function advanceCandidateStatus() {
     message.error(typeof detail === 'string' ? detail : '推进失败，请稍后重试', 6)
   } finally {
     advancingCandidate.value = false
+  }
+}
+
+// ── 打通深化→配方：工艺方案确认后生成 BOM 配方 ──
+// 已确认工艺方案的 ID（取选中候选确认状态的工艺方案），据此生成配方
+const confirmedProcessId = computed(() => {
+  if (!selected.value) return ''
+  const confirmed = schemes.value.find((s) => s.status === 'confirmed')
+  return confirmed?.process_id || ''
+})
+const generatingBom = ref(false)
+async function generateBomFromConfirmedProcess() {
+  const pid = confirmedProcessId.value
+  if (!selected.value || !pid) { message.warning('请先确认工艺方案'); return }
+  generatingBom.value = true
+  try {
+    const res = await createBomFromProcess(selected.value.candidate_id, {
+      process_id: pid,
+      created_by: currentOwner,
+      quantity: 1.0,
+    })
+    const bom = res?.bom
+    if (!bom?.bom_id) { message.error('未返回 BOM 结果'); return }
+    message.success('已基于确认的工艺方案生成配方（BOM）')
+    const query = {
+      candidate_id: selected.value.candidate_id,
+      formula_id: bom.bom_id,
+      name: selected.value.name || '',
+    }
+    if (currentScenarioId.value) query.scenario_id = currentScenarioId.value
+    router.push({ name: 'FormulaDesign', query })
+  } catch (err) {
+    const detail = err?.response?.data?.detail
+    message.error(typeof detail === 'string' ? detail : '生成配方失败，请稍后重试', 6)
+  } finally {
+    generatingBom.value = false
   }
 }
 

@@ -146,8 +146,12 @@
                 :key="item.material_id"
                 class="alert-row"
               >
-                <span class="alert-name">{{ item.name || item.material_id }}</span>
-                <span class="alert-inventory tabular-nums">{{ item.inventory_quantity?.toFixed(1) }} {{ massUnit }}</span>
+                <div class="alert-main">
+                  <span class="alert-name">{{ item.name || item.material_id }}</span>
+                  <span class="alert-inventory tabular-nums">{{ item.inventory?.toFixed(1) }} {{ massUnit }}</span>
+                </div>
+                <div class="alert-context">{{ item.context || '库存低于阈值' }}</div>
+                <div class="alert-action">建议：{{ item.action || '补充采购并登记到货' }}</div>
               </div>
               <div v-if="(resources.material_alerts?.items || []).length > 5" class="alert-more">
                 还有 {{ (resources.material_alerts?.items || []).length - 5 }} 条…
@@ -757,11 +761,20 @@ onBeforeUnmount(() => {
 }
 
 .alert-row {
+  font-size: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.alert-row:last-child {
+  border-bottom: none;
+}
+
+.alert-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
-  padding: 2px 0;
+  gap: 8px;
 }
 
 .alert-name {
@@ -777,6 +790,18 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--error);
   font-variant-numeric: tabular-nums;
+}
+
+.alert-context {
+  margin-top: 2px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.alert-action {
+  margin-top: 2px;
+  color: var(--primary, #f97316);
+  line-height: 1.5;
 }
 
 .alert-more {

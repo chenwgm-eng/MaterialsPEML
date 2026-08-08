@@ -17,7 +17,6 @@ const routes = [
       // 审查意见0726：材料发现已合并到候选工作台，路径 /discovery 由顶部 redirect 处理
       { path: 'workbench', name: 'CandidateWorkbench', component: () => import('@/views/CandidateWorkbench.vue'), meta: { title: '候选材料设计', icon: 'ExperimentOutlined' } },
       { path: 'prediction', name: 'Prediction', component: () => import('@/views/Prediction.vue'), meta: { title: '性质预测', icon: 'LineChartOutlined' } },
-      { path: 'battery-life', name: 'BatteryLifeWorkflow', component: () => import('@/views/BatteryLifeWorkflow.vue'), meta: { title: '性能寿命预测', icon: 'ThunderboltOutlined' } },
       { path: 'ecml', name: 'ECMLMonitor', component: () => import('@/views/ECMLMonitor.vue'), meta: { title: '实验闭环迭代', icon: 'SyncOutlined' } },
       { path: 'ecml/runs', name: 'ECMLRuns', component: () => import('@/views/ECMLRuns.vue'), meta: { title: '迭代历史', icon: 'HistoryOutlined' } },
       { path: 'experiments', name: 'Experiments', component: () => import('@/views/Experiments.vue'), meta: { title: '实验数据', icon: 'DatabaseOutlined' } },
@@ -58,6 +57,8 @@ const routes = [
       { path: 'settings', name: 'Settings', component: () => import('@/views/Settings.vue'), meta: { title: '系统设置', icon: 'SettingOutlined' } },
       // P0-3：无权限状态统一页面
       { path: 'forbidden', name: 'Forbidden', component: () => import('@/components/ForbiddenResult.vue'), meta: { title: '无权限访问' } },
+      // M19: 404 通配路由作为主布局的子路由，保留侧栏/页头并返回首页（P2-101）
+      { path: ':pathMatch(.*)*', name: 'NotFound', component: () => import('@/views/NotFound.vue'), meta: { title: '页面未找到' } },
     ],
   },
   // P2-101: 常见错误路径 301 重定向到规范路径
@@ -73,8 +74,6 @@ const routes = [
   { path: '/experiment-data', redirect: '/experiments' },
   // 审查意见0726：菜单合并后的旧路径重定向
   { path: '/discovery', redirect: '/workbench' },        // 材料发现 → 候选设计
-  // M19: 404 通配路由，捕获所有未匹配路径并显示 404 提示页（P2-101：不再静默重定向到首页）
-  { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('@/views/NotFound.vue'), meta: { title: '页面未找到' } },
 ]
 
 const router = createRouter({

@@ -6,6 +6,7 @@ ModelRouter（模型路由）和 PlanValidator（计划校验），将研发请�
 """
 from __future__ import annotations
 
+import inspect
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Literal
 from uuid import uuid4
@@ -25,10 +26,12 @@ class ResearchRequest(BaseModel):
     request_id: str = ""
     scenario_id: str = ""  # P0-001：全局研发场景 ID，贯穿发现/预测/合成/ECML
     goal: str  # 用户目标描述
-    material_scope: str = ""  # 材料范围
+    material_scope: str = ""  # 材料类型枚举（crystal/polymer/molecule），与 material_system 解耦
+    material_system: str = ""  # 材料体系名（领域包 material_systems.name，如"改性塑料"）
     target_properties: list[dict] = Field(default_factory=list)  # [{name, direction, min, max, weight}]
     constraints: dict = Field(default_factory=dict)
     preference: str = "balanced"  # balanced/rapid_exploration/conservative
+    domain_key: str = ""  # 领域包关键字（如 battery/kingfa）；为空时使用默认领域包
     user_id: str = ""
     project_id: str = ""
     task_id: str = ""  # 业务链路：关联 projects.tasks(task_id)，由 0009 迁移新增列
@@ -72,6 +75,7 @@ class TaskStepV3(BaseModel):
     evidence_requirements: list[str] = Field(default_factory=list)
     autonomy_level: str = "L0"
     on_failure: str = "fallback"  # fallback/request_evidence/human_review/stop
+    executor_kind: str = "native"  # native/scp/skill/agent（由领域包 pipeline 声明）
     status: str = "pending"  # pending/running/completed/failed/skipped
 
 
@@ -91,53 +95,8 @@ class ResearchPlan(BaseModel):
 
 # ── 步骤模板 ──────────────────────────────────────────────────────
 
-# action → capability 别名映射（用于 CapabilityRouter/ModelRouter 解析）
-_ACTION_CAPABILITY_MAP: dict[str, str] = {
-    "route_material": "material_reference_lookup",
-    "generate_crystal_candidates": "chemical_descriptors",
-    "generate_polymer_candidates": "chemical_descriptors",
-    "predict_crystal_properties": "property_prediction",
-    "predict_polymer_properties": "property_prediction",
-    "check_synthesis_feasibility": "compliance_screening",
-    "verify_dft": "dft_verification",
-    "design_formula": "reaction_engineering_check",
-    "compliance_check": "compliance_screening",
-}
-
-
-def _action_sequence(material_type: str, requires_dft: bool) -> list[tuple[str, str, str]]:
-    """返回 (action, agent_role, autonomy_level) 列表。
-
-    crystal: route → generate_crystal → predict → [verify_dft] → compliance
-    polymer: route → generate_polymer → predict_polymer → design_formula → compliance
-    molecule: route → generate_polymer → check_synthesis → predict_crystal → compliance
-    """
-    if material_type == "crystal":
-        seq = [
-            ("route_material", "planner", "L1"),
-            ("generate_crystal_candidates", "thinker", "L0"),
-            ("predict_crystal_properties", "doer", "L1"),
-        ]
-        if requires_dft:
-            seq.append(("verify_dft", "doer", "L1"))
-        seq.append(("compliance_check", "verifier", "L2"))
-        return seq
-    if material_type == "polymer":
-        return [
-            ("route_material", "planner", "L1"),
-            ("generate_polymer_candidates", "thinker", "L0"),
-            ("predict_polymer_properties", "doer", "L1"),
-            ("design_formula", "doer", "L1"),
-            ("compliance_check", "verifier", "L2"),
-        ]
-    # molecule（默认）
-    return [
-        ("route_material", "planner", "L1"),
-        ("generate_polymer_candidates", "thinker", "L0"),
-        ("check_synthesis_feasibility", "doer", "L1"),
-        ("predict_crystal_properties", "doer", "L1"),
-        ("compliance_check", "verifier", "L2"),
-    ]
+# action → capability 别名映射与内置流水线已迁移至 pipeline.py，
+# 由 PipelineResolver 从领域包解析（无配置时回退内置默认）。
 
 
 # ── HybridOrchestrator ───────────────────────────────────────────
@@ -163,6 +122,9 @@ class HybridOrchestrator:
         tool_gateway=None,
         run_manager=None,
         committee_trigger=None,
+        domain_pack: dict | None = None,
+        domain_pack_provider=None,
+        stage_executors: dict | None = None,
     ):
         self._capability_router = capability_router
         self._model_router = model_router
@@ -172,6 +134,77 @@ class HybridOrchestrator:
         self._tool_gateway = tool_gateway
         self._run_manager = run_manager
         self._committee_trigger = committee_trigger
+        from .pipeline import PipelineResolver
+        from .stage_executor import StageExecutor
+
+        # 领域包解析：默认注入的领域包 + 按 request.domain_key 动态解析的 provider。
+        # domain_pack_provider 为可调用对象（domain_key: str -> dict | None），
+        # 由 api.py 传入 DomainPackStore 解析逻辑，支持多领域包（battery/kingfa）切换。
+        self._default_domain_pack = domain_pack
+        self._domain_pack_provider = domain_pack_provider
+        # 研发流水线从领域包解析；无匹配时使用内置默认（兼容旧行为）。
+        self._pipeline_resolver = PipelineResolver(domain_pack)
+        # 统一阶段执行器：按 executor_kind 分派（native/scp/skill/agent）。
+        # 未显式注入时注册默认 native 执行器：基于 CapabilityRouter 真实解析
+        # 步骤所需能力，返回解析结果接入真实执行路径；scp/skill/agent 未注册
+        # 时由 StageExecutor 返回明确错误，避免静默占位。
+        kind_executors = dict(stage_executors or {})
+        if "native" not in kind_executors:
+            kind_executors["native"] = self._native_capability_dispatch
+        self._stage_executor = StageExecutor(kind_executors)
+
+    async def _native_capability_dispatch(self, stage, context: dict | None = None) -> dict:
+        """默认 native 执行器：通过 CapabilityRouter 解析步骤能力并回填步骤。
+
+        返回 dict：{status, capability, aliases, model_route}，供 execute() 事件
+        与下游真实工具调用复用。CapabilityRouter 不存在时返回解析失败的明确信息。
+        """
+        capability = getattr(stage, "resolved_capability", "") or (
+            stage.required_capabilities[0] if getattr(stage, "required_capabilities", None) else ""
+        )
+        profile = getattr(self, "_execution_profile_cache", "standard")
+        if not capability or self._capability_router is None:
+            return {
+                "status": "success",
+                "capability": capability,
+                "aliases": [],
+                "model_route": None,
+                "note": "无能力或未配置路由，跳过真实工具分派",
+            }
+        try:
+            candidates = self._capability_router.resolve(capability, profile)
+            if inspect.isawaitable(candidates):
+                candidates = await candidates
+            aliases = [c.binding_id for c in candidates] if candidates else []
+            route = None
+            if self._model_router is not None:
+                route_obj = self._model_router.route(capability, profile)
+                route = route_obj.route_id if route_obj else None
+            return {
+                "status": "success",
+                "capability": capability,
+                "aliases": aliases,
+                "model_route": route,
+            }
+        except Exception as e:  # noqa: BLE001 - 路由失败不阻断编排
+            return {
+                "status": "error",
+                "capability": capability,
+                "error": f"{type(e).__name__}: {e}",
+            }
+
+    def register_stage_executor(self, kind: str, executor) -> None:
+        """注册某类阶段执行器（native/scp/skill/agent），运行期可扩展。"""
+        self._stage_executor.register(kind, executor)
+
+    def _resolve_domain_pack(self, request: ResearchRequest) -> dict | None:
+        """按 request.domain_key 解析领域包数据；未指定时回退默认领域包。"""
+        key = (getattr(request, "domain_key", "") or "").strip()
+        if key and self._domain_pack_provider is not None:
+            data = self._domain_pack_provider(key)
+            if data is not None:
+                return data
+        return self._default_domain_pack
 
     async def plan(self, request: ResearchRequest) -> ResearchPlan:
         """生成研发计划。"""
@@ -240,8 +273,9 @@ class HybridOrchestrator:
     ) -> AsyncGenerator[dict, None]:
         """执行计划。
 
-        简化实现：按拓扑顺序遍历步骤，yield 执行事件。
-        实际工具调用由 Task 13 实现，此处只产出事件流。
+        按拓扑顺序遍历步骤，依据每步的 executor_kind 通过 StageExecutor 分派
+        到对应执行引擎（native/scp/skill/agent），并 yield 执行事件。
+        未注册的执行类型回退为占位事件，保证无回归。
         """
         plan.status = "running"
         yield {
@@ -261,27 +295,40 @@ class HybridOrchestrator:
                 "agent_id": step.agent_id,
                 "action": step.action,
                 "autonomy_level": step.autonomy_level,
+                "executor_kind": step.executor_kind,
                 "allowed_tool_aliases": list(step.allowed_tool_aliases),
                 "model_route_id": step.model_route_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-            # 实际工具调用由 Task 13 实现；此处仅产出占位事件
-            yield {
-                "event_type": "step_progress",
-                "step_id": step.step_id,
-                "content": (
-                    f"派发 {step.agent_id} 执行 {step.action}"
-                    f"（实际工具调用由后续任务实现）"
-                ),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
+            # 按 executor_kind 通过 StageExecutor 分派真实执行路径
+            result = await self._stage_executor.execute(step)
+            step_output = result.get("result", result)
+            if result.get("status") == "error":
+                step.status = "failed"
+                yield {
+                    "event_type": "step_progress",
+                    "step_id": step.step_id,
+                    "content": f"派发 {step.agent_id} 执行 {step.action} 失败: {result.get('error', '')}",
+                    "executor_kind": step.executor_kind,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            else:
+                yield {
+                    "event_type": "step_progress",
+                    "step_id": step.step_id,
+                    "content": f"派发 {step.agent_id} 执行 {step.action}",
+                    "executor_kind": step.executor_kind,
+                    "result": step_output,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
 
             step.status = "completed"
             yield {
                 "event_type": "step_complete",
                 "step_id": step.step_id,
                 "status": "completed",
+                "executor_kind": step.executor_kind,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -346,6 +393,7 @@ class HybridOrchestrator:
                 evidence_requirements=list(step.evidence_requirements),
                 autonomy_level=step.autonomy_level,
                 on_failure=step.on_failure,
+                executor_kind=step.executor_kind,
                 status="pending",
             )
             new_steps.append(new_step)
@@ -379,27 +427,36 @@ class HybridOrchestrator:
     def _generate_steps(
         self, intent: dict, request: ResearchRequest
     ) -> list[TaskStepV3]:
-        """基于意图生成步骤。"""
+        """基于意图从领域包解析研发流水线并生成步骤。"""
         material_scope: MaterialScope = intent["material_scope"]
         risk_assessment: RiskAssessment = intent["risk_assessment"]
         material_type = material_scope.material_type or "molecule"
 
-        actions = _action_sequence(material_type, risk_assessment.requires_dft)
+        # 从领域包解析流水线（带内置兜底）；context 用于计算 when 条件
+        # 支持按 request.domain_key 动态切换领域包（如 battery/kingfa）
+        pack = self._resolve_domain_pack(request)
+        from .pipeline import PipelineResolver
+
+        resolver = PipelineResolver(pack) if pack is not None else self._pipeline_resolver
+        stages = resolver.resolve(
+            material_type, {"requires_dft": risk_assessment.requires_dft}
+        )
 
         steps: list[TaskStepV3] = []
         prev_step_id = ""
-        for idx, (action, role, autonomy) in enumerate(actions):
+        for idx, stage in enumerate(stages):
             step_id = f"step_{idx}"
             deps = [prev_step_id] if prev_step_id else []
-            capability = _ACTION_CAPABILITY_MAP.get(action, "")
+            capability = stage.resolved_capability
             steps.append(
                 TaskStepV3(
                     step_id=step_id,
-                    agent_id=role,
-                    action=action,
+                    agent_id=stage.agent_role,
+                    action=stage.action,
                     required_capabilities=[capability] if capability else [],
                     depends_on=deps,
-                    autonomy_level=autonomy,
+                    autonomy_level=stage.autonomy_level,
+                    executor_kind=stage.executor_kind,
                     status="pending",
                 )
             )

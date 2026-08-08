@@ -469,7 +469,7 @@ const categoryLabels = {
   experiment: '实验',
   discovery: '发现',
   synthesis: '合成',
-  battery: '电池',
+  mechanism: '机理',
   quality: '质量',
 }
 
@@ -480,7 +480,7 @@ const categoryColor = (c) => ({
   experiment: 'warning',
   discovery: 'cyan',
   synthesis: 'purple',
-  battery: 'orange',
+  mechanism: 'orange',
   quality: 'red',
 }[c] || 'default')
 

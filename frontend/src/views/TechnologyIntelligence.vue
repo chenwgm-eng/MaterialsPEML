@@ -2,7 +2,7 @@
   <div class="tech-intel">
     <div class="page-header">
       <h1 class="page-title">技术情报</h1>
-      <p class="page-subtitle">搜索电池材料文献，构建知识图谱并沉淀情报资产</p>
+      <p class="page-subtitle">搜索材料文献，构建知识图谱并沉淀情报资产</p>
     </div>
 
     <!-- 顶层标签：技术情报 / 已保存图谱 -->
@@ -17,8 +17,8 @@
           <div class="search-row">
             <a-input-search
               v-model:value="searchQuery"
-              aria-label="搜索电池材料文献"
-              placeholder="输入关键词搜索电池材料文献（如 固态电解质、NCM811、LLZO）"
+              aria-label="搜索材料文献"
+              placeholder="输入关键词搜索材料文献（如 固态电解质、多孔材料、钙钛矿）"
               enter-button="搜索"
               size="large"
               :loading="searching"
@@ -329,7 +329,7 @@ const papers = ref([])
 const graphNodes = ref([])
 const graphEdges = ref([])
 
-const hotKeywords = ['固态电解质', 'NCM811', 'LLZO', '锂金属负极', '磷酸铁锂', '钠离子电池']
+const hotKeywords = ['固态电解质', '多孔材料', '钙钛矿', '高熵合金', '催化材料', '复合材料']
 
 function credibilityClass(score) {
   if (score == null || score <= 0) return 'indicator-weak'

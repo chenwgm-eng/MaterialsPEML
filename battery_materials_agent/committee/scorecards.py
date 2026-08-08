@@ -28,10 +28,17 @@ class CrystalConstructionScorecard:
             return {"score": 0.0, "blocking_reasons": blocking_reasons, "warnings": warnings, "passed": False}
 
         # Hard constraints: structure validity
+        # 同时识别 valid / passed 键（P0 修复）：任一为 False 即硬阻断
         struct_evidence = [e for e in evidence if e.capability == "structure_validity"]
-        if not struct_evidence or any(e.value.get("valid") is False for e in struct_evidence):
+        if struct_evidence and any(
+            e.value.get("valid") is False or e.value.get("passed") is False
+            for e in struct_evidence
+        ):
             blocking_reasons.append("Structure validity check failed")
             return {"score": 0.0, "blocking_reasons": blocking_reasons, "warnings": warnings, "passed": False}
+        if not struct_evidence:
+            # 数据不足（无结构有效性证据）→ 不硬阻断，仅告警
+            warnings.append("structure validity: insufficient data")
 
         # Evidence-coverage check
         present_capabilities = {e.capability for e in evidence if e.status == "success"}

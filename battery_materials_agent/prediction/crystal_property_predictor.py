@@ -41,6 +41,9 @@ class PredictionResult(BaseModel):
     material_type: str = "crystal"  # crystal | polymer，用于下游路由
     # T-029：数据质量分层。ASE/物理计算=simulated，ML 预测=estimated，实验验证=verified
     data_quality: str = "estimated"
+    # T-XXX：标记结果是否来自降级/启发式路径（如随机权重 GNN），下游不得当真实
+    # 模型输出使用。置 True 表示结果不可信、仅作占位。
+    degraded: bool = False
     provenance: list[dict] = Field(default_factory=list)
 
 
@@ -253,6 +256,7 @@ class CrystalPropertyPredictor:
             smiles=features.get("smiles", ""),
             material_type="crystal",
             data_quality="estimated",  # T-029：启发式 GNN 预测结果
+            degraded=True,  # 随机权重启发式 GNN，非真实训练模型，下游不得当真实输出
         )
 
     def _predict_with_matgl(self, formula: str, property_name: str) -> tuple[float, float, str]:

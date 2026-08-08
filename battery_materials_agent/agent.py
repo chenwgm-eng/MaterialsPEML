@@ -559,6 +559,7 @@ class BatteryMaterialsAgent:
                 "is_passed": report.is_passed,
                 "warnings": report.warnings,
                 "fatal_errors": report.fatal_errors,
+                "review_required": report.review_required,
                 "estimated_unit_cost": report.estimated_unit_cost,
                 "ai_meta": ai_meta,
             }

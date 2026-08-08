@@ -4,7 +4,7 @@
   1. TestDatabaseSchema          — scientific_kernel.* 6 张表 / 索引 / 外键
   2. TestStateMachineTransitions — Run 状态机转换（含新修复的 QUEUED→RUNNING 路径）
   3. TestKernelLifecycle         — ScientificExecutionKernel 真实数据库生命周期
-  4. TestServiceRegistry         — 12 个原生科学服务注册表与 CPU Worker 注册
+  4. TestServiceRegistry         — 11 个原生科学服务注册表与 CPU Worker 注册
   5. TestWorkflowExecutor        — 真实服务混编工作流 / $ref 解析 / 失败策略
   6. TestOutboxReliability       — 事务 Outbox 入队/领取/标记 + SKIP LOCKED + 重试
   7. TestAPIRoutes               — FastAPI TestClient 验证 HTTP→kernel→DB 链路
@@ -394,7 +394,7 @@ class TestKernelLifecycle(unittest.TestCase):
 class TestServiceRegistry(unittest.TestCase):
     """验证 get_service_registry() 与 setup_cpu_worker() 的注册行为。"""
 
-    EXPECTED_COUNT = 12
+    EXPECTED_COUNT = 11
 
     def setUp(self):
         # 清除 lru_cache，确保每个测试拿到全新注册表（独立性）
@@ -408,7 +408,7 @@ class TestServiceRegistry(unittest.TestCase):
         _truncate_scientific_kernel()
 
     def test_registry_returns_twelve_services(self):
-        """get_service_registry() 应返回 12 个原生科学服务。"""
+        """get_service_registry() 应返回 11 个原生科学服务。"""
         registry = get_service_registry()
         self.assertEqual(len(registry), self.EXPECTED_COUNT)
 
@@ -428,10 +428,10 @@ class TestServiceRegistry(unittest.TestCase):
                 self.assertIsInstance(svc, NativeScientificService)
 
     def test_expected_capability_ids_present(self):
-        """验证 12 个已知 capability_id 均已注册。"""
+        """验证 11 个已知 capability_id 均已注册。"""
         expected = {
             "mpa", "chem_properties", "materials_structure", "formulation_packing",
-            "molecular_simulation", "battery_modeling", "synthesis_planning",
+            "molecular_simulation", "synthesis_planning",
             "process_modeling", "reaction_network", "wavefunction_analysis",
             "fluid_simulation", "molecular_docking",
         }
@@ -439,7 +439,7 @@ class TestServiceRegistry(unittest.TestCase):
         self.assertEqual(set(registry.keys()), expected)
 
     def test_setup_cpu_worker_registers_all_services(self):
-        """setup_cpu_worker() 应将全部 12 个服务注册到 CPU Worker。"""
+        """setup_cpu_worker() 应将全部 11 个服务注册到 CPU Worker。"""
         from battery_materials_agent.services.registry import setup_cpu_worker
         # 传入全新 worker 实例，避免污染全局单例
         worker = ScientificCPUWorker()
@@ -696,10 +696,14 @@ class TestOutboxReliability(unittest.TestCase):
             conn_b.close()
 
     def test_retry_logic_marks_failed_after_max_retries(self):
-        """mark_failed 在达到 max_retries 后应将消息终态化为 'failed'。"""
+        """mark_failed 在未达 max_retries 时重置回 pending 以便重试，达到后终态化为 'failed'。"""
         msg = self.outbox.enqueue("e2e.retry", "e2e-subject", {}, max_retries=2)
 
-        # 第一次失败：retry_count=1 < max_retries=2，状态保持 pending
+        # 先领取（状态 → sending），模拟 worker 处理失败后的真实路径
+        claimed = self.outbox.claim_pending(limit=10)
+        self.assertEqual(len(claimed), 1)
+
+        # 第一次失败：retry_count=1 < max_retries=2，状态应重置回 pending 以允许重试
         self.outbox.mark_failed(msg.message_id, "error-1")
         engine = get_engine()
         with engine.connect() as conn:
@@ -709,6 +713,11 @@ class TestOutboxReliability(unittest.TestCase):
             ).fetchone()
         self.assertEqual(r1[0], "pending")
         self.assertEqual(r1[1], 1)
+
+        # 重置回 pending 后应能被再次领取（重试生效）
+        reclaim = self.outbox.claim_pending(limit=10)
+        self.assertEqual(len(reclaim), 1)
+        self.assertEqual(reclaim[0].message_id, msg.message_id)
 
         # 第二次失败：retry_count=2 >= max_retries=2，终态化为 failed
         self.outbox.mark_failed(msg.message_id, "error-2")

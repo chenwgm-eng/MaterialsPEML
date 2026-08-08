@@ -72,7 +72,10 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'type'">
-            <a-tag :color="typeColor(record.type)">{{ typeLabel(record.type) }}</a-tag>
+            <a-space size="4" wrap>
+              <a-tag :color="typeColor(record.type)">{{ typeLabel(record.type) }}</a-tag>
+              <a-tag v-if="channelOf(record)" color="orange">{{ channelOf(record) }}</a-tag>
+            </a-space>
           </template>
           <template v-if="column.key === 'created_at'">
             <span class="tabular-nums">{{ formatTime(record.created_at) }}</span>
@@ -207,6 +210,11 @@ function typeColor(type) {
 function typeLabel(type) {
   const map = { experiment_order: '实验任务', qc_review: 'QC审核', material_request: '物料申请' }
   return map[type] || type
+}
+
+// 审批目标通道标签（后端返回的 channel，如「实验审批」/「委员会评审」）
+function channelOf(record) {
+  return record?.channel || record?.details?.channel || ''
 }
 
 function detailsText(record) {

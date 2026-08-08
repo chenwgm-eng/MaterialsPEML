@@ -27,7 +27,6 @@ def get_service_registry() -> dict[str, NativeScientificService]:
     from .materials_structure.application import StructureApplication
     from .formulation_packing.application import FormulationPackingApplication
     from .molecular_simulation.application import MolecularSimulationApplication
-    from .battery_modeling.application import BatteryModelingApplication
     from .synthesis_planning.application import SynthesisPlanningApplication
     from .process_modeling.application import ProcessModelingApplication
     from .reaction_network.application import ReactionNetworkApplication
@@ -42,7 +41,6 @@ def get_service_registry() -> dict[str, NativeScientificService]:
         StructureApplication(kernel),
         FormulationPackingApplication(kernel),
         MolecularSimulationApplication(kernel),
-        BatteryModelingApplication(kernel),
         SynthesisPlanningApplication(kernel),
         ProcessModelingApplication(kernel),
         ReactionNetworkApplication(kernel),

@@ -146,7 +146,7 @@ class TestCandidateStatusMachine:
     def test_legal_transition_screening_to_feasible(self, candidate_store, ensure_candidate):
         updated = candidate_store.update_status(
             ensure_candidate, CandidateStatus.FEASIBLE.value,
-            actor_role="formulator", owner="formulator_a",
+            actor_operation_roles={"formulator"}, owner="formulator_a",
         )
         assert updated.status == CandidateStatus.FEASIBLE.value
         assert updated.assigned_role == "formulator"
@@ -157,18 +157,18 @@ class TestCandidateStatusMachine:
     ):
         # 先交棒给工艺阶段
         candidate_store.update_status(
-            ensure_candidate, CandidateStatus.FEASIBLE.value, actor_role="formulator",
+            ensure_candidate, CandidateStatus.FEASIBLE.value, actor_operation_roles={"formulator"},
         )
         # formulator 无权进入 process_planning
         with pytest.raises(IllegalCandidateTransitionError):
             candidate_store.update_status(
                 ensure_candidate, CandidateStatus.PROCESS_PLANNING.value,
-                actor_role="formulator",
+                actor_operation_roles={"formulator"},
             )
         # process_engineer 可以
         updated = candidate_store.update_status(
             ensure_candidate, CandidateStatus.PROCESS_PLANNING.value,
-            actor_role="process_engineer", owner="proc_b",
+            actor_operation_roles={"process_engineer"}, owner="proc_b",
         )
         assert updated.assigned_role == "process_engineer"
 
@@ -177,19 +177,19 @@ class TestCandidateStatusMachine:
         with pytest.raises(IllegalCandidateTransitionError):
             candidate_store.update_status(
                 ensure_candidate, CandidateStatus.READY_FOR_EXPERIMENT.value,
-                actor_role="formulator",
+                actor_operation_roles={"formulator"},
             )
 
     def test_full_chain_to_ready(self, candidate_store, ensure_candidate):
-        candidate_store.update_status(ensure_candidate, CandidateStatus.FEASIBLE.value, actor_role="formulator")
-        candidate_store.update_status(ensure_candidate, CandidateStatus.PROCESS_PLANNING.value, actor_role="process_engineer")
-        candidate_store.update_status(ensure_candidate, CandidateStatus.PROCESS_CONFIRMED.value, actor_role="process_engineer")
-        updated = candidate_store.update_status(ensure_candidate, CandidateStatus.READY_FOR_EXPERIMENT.value, actor_role="process_engineer")
+        candidate_store.update_status(ensure_candidate, CandidateStatus.FEASIBLE.value, actor_operation_roles={"formulator"})
+        candidate_store.update_status(ensure_candidate, CandidateStatus.PROCESS_PLANNING.value, actor_operation_roles={"process_engineer"})
+        candidate_store.update_status(ensure_candidate, CandidateStatus.PROCESS_CONFIRMED.value, actor_operation_roles={"process_engineer"})
+        updated = candidate_store.update_status(ensure_candidate, CandidateStatus.READY_FOR_EXPERIMENT.value, actor_operation_roles={"process_engineer"})
         assert updated.status == CandidateStatus.READY_FOR_EXPERIMENT.value
 
     def test_reject_from_screening(self, candidate_store, ensure_candidate):
         updated = candidate_store.update_status(
-            ensure_candidate, CandidateStatus.REJECTED.value, actor_role="formulator",
+            ensure_candidate, CandidateStatus.REJECTED.value, actor_operation_roles={"formulator"},
         )
         assert updated.status == CandidateStatus.REJECTED.value
 

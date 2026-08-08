@@ -337,3 +337,118 @@ class TestComplianceCheckerEvidenceWarning:
         report = checker._evaluate_sync({"RM-004": 1.0})
         assert report.is_passed is True
         assert len(report.warnings) >= 1
+
+
+# ───────────────────── Task 19 有毒物料强制人工审批 / REACH 阻断 ─────────────────────
+
+class TestTask19ToxicForceReview:
+    """Task 19：REACH 不合规物料强制阻断；有毒物料强制人工审批（review_required）。
+
+    覆盖：
+    - is_toxic=True → review_required=True，warning 含"人工审批"明确原因
+    - reach_compliant=False → fatal_error（is_passed=False），含"不符合 REACH"原因
+    - 无毒且合规（含凭证）物料 → review_required=False，不强制人工审批
+    """
+
+    def _make_checker(self, specs: dict[str, MaterialSpec]):
+        """构造不依赖 DB 与 SCP 的 ComplianceAndCostNode 实例。"""
+        from battery_materials_agent.industrialization.compliance_checker import (
+            ComplianceAndCostNode,
+        )
+        db = MagicMock()
+        db.get_spec = MagicMock(side_effect=lambda mid: specs.get(mid))
+        db.get_all = MagicMock(return_value=list(specs.values()))
+        checker = ComplianceAndCostNode.__new__(ComplianceAndCostNode)
+        checker.db = db
+        checker.cost_threshold = 500.0
+        checker.blacklist_smarts = []
+        checker._scp_enabled = False
+        checker._mcp_tool_registry = None
+        checker._scp_client_pool = None
+        return checker
+
+    def test_toxic_material_forces_manual_review_with_reason(self):
+        """有毒物料 → review_required=True，且原因包含'人工审批'。"""
+        spec = MaterialSpec(
+            material_id="RM-TOX-01", name="PbO",
+            reach_compliant=True, unit_cost=10.0,
+            coa_uri="https://x.com/coa.pdf",  # 合规且有凭证
+            is_toxic=True,
+        )
+        checker = self._make_checker({"RM-TOX-01": spec})
+        report = checker._evaluate_sync({"RM-TOX-01": 1.0})
+        assert report.review_required is True
+        assert any("人工审批" in w for w in report.warnings)
+        # 毒性本身不熔断（保持 warning），但强制人工审批
+        assert report.is_passed is True
+
+    def test_toxic_forces_review_in_async_path(self):
+        """evaluate_async 路径同样强制 review_required（含 SCP 关闭场景）。"""
+        import asyncio
+        spec = MaterialSpec(
+            material_id="RM-TOX-02", name="NiCl2",
+            reach_compliant=True, unit_cost=5.0,
+            sds_uri="https://x.com/sds.pdf",
+            is_toxic=True,
+        )
+        checker = self._make_checker({"RM-TOX-02": spec})
+        report = asyncio.run(checker.evaluate_async({"RM-TOX-02": 1.0}))
+        assert report.review_required is True
+        assert any("人工审批" in w for w in report.warnings)
+
+    def test_reach_fail_blocks_with_reason(self):
+        """REACH 不合规 → fatal_error，is_passed=False，原因含'不符合 REACH'。"""
+        spec = MaterialSpec(
+            material_id="RM-NC-01", name="NonComp",
+            reach_compliant=False, unit_cost=8.0,
+            coa_uri="https://x.com/coa.pdf",  # 有凭证但声明不合规
+        )
+        checker = self._make_checker({"RM-NC-01": spec})
+        report = checker._evaluate_sync({"RM-NC-01": 1.0})
+        assert report.is_passed is False
+        assert any("不符合 REACH" in e for e in report.fatal_errors)
+
+    def test_non_toxic_compliant_does_not_force_review(self):
+        """无毒且合规（含凭证）物料 → review_required=False。"""
+        spec = MaterialSpec(
+            material_id="RM-SAFE-01", name="PEO",
+            reach_compliant=True, unit_cost=50.0,
+            coa_uri="https://x.com/coa.pdf",
+            is_toxic=False,
+        )
+        checker = self._make_checker({"RM-SAFE-01": spec})
+        report = checker._evaluate_sync({"RM-SAFE-01": 1.0})
+        assert report.review_required is False
+
+    def test_design_formula_surfaces_review_required(self):
+        """配方生成入口（agent._handle_design_formula）返回 review_required 字段，
+        供前端强制人工审批展示。"""
+        from battery_materials_agent.agent import BatteryMaterialsAgent
+        ag = BatteryMaterialsAgent.__new__(BatteryMaterialsAgent)
+        ag.raw_material_db = MagicMock()
+        ag.raw_material_db.get_spec = MagicMock(return_value=None)
+        ag.compliance_node = MagicMock()
+        ag._lookup_material_fuzzy = MagicMock(return_value=None)
+        fake_report = type("R", (), {
+            "is_passed": True,
+            "review_required": True,
+            "warnings": ["物料 RM-TOX 具有毒性，需升级 EHS 防护等级，且必须人工审批。"],
+            "fatal_errors": [],
+            "estimated_unit_cost": 3.0,
+        })()
+        ag.compliance_node.evaluate = MagicMock(return_value=fake_report)
+        # 构造最小 recipe 对象
+        recipe = type("Rec", (), {
+            "bom": {"RM-TOX": 1.0},
+            "bop": [],
+            "equipment": "手套箱",
+        })()
+        ag.formula_agent = MagicMock()
+        async def _fake_design(*args, **kwargs):
+            return recipe
+        ag.formula_agent.design_recipe = MagicMock(side_effect=_fake_design)
+        result = ag._handle_design_formula(
+            target_material={"candidate": "target", "target_property": "x"},
+            quantity=1.0,
+        )
+        assert result["review_required"] is True

@@ -23,8 +23,10 @@ class RiskAssessment(BaseModel):
 
 
 # 关键词 → material_type 映射（按优先级排序：先匹配 crystal/polymer，再匹配 molecule）
+# 固态电解质/硫化物/氧化物/卤化物等无机晶体体系均归为 crystal，避免误判为聚合物。
 _MATERIAL_KEYWORDS: list[tuple[list[str], str]] = [
-    (["晶体", "crystal"], "crystal"),
+    (["硫化物", "sulfide", "固态电解质", "solid electrolyte", "氧化物", "oxide",
+      "卤化物", "halide", "晶体", "crystal", "陶瓷", "ceramic"], "crystal"),
     (["聚合物", "polymer"], "polymer"),
     (["电解液", "electrolyte", "分子", "molecule"], "molecule"),
 ]
@@ -214,9 +216,9 @@ def _infer_lithium_context(
     require_elements: list[str],
     exclude_elements: list[str] | None = None,
 ) -> list[str]:
-    """锂电池语境默认推断：检测'锂'/'lithium'/'Li'关键词，未显式指定时默认 require_elements=['Li']。
+    """锂元素语境默认推断：检测'锂'/'lithium'/'Li'关键词，未显式指定时默认 require_elements=['Li']。
 
-    P0-4 修复：用户说'固态电解质'/'锂电解质'/'锂电池'/'锂离子'时，应默认要求含 Li 元素。
+    P0-4 修复：用户提及'固态电解质'/'锂电解质'/'锂离子'等锂相关材料语境时，应默认要求含 Li 元素。
     若 Li 被显式排除（在 exclude_elements 中），则不应用默认推断。
     """
     if require_elements:
@@ -334,7 +336,7 @@ class IntentInterpreter:
         # 8. P0-4：NL 约束抽取——元素包含/排除、属性比较
         exclude_elements = _parse_exclude_elements(goal)
         require_elements = _parse_require_elements(goal)
-        # 锂电池语境默认推断（未显式指定 require_elements 时）
+        # 锂元素语境默认推断（未显式指定 require_elements 时）
         require_elements = _infer_lithium_context(goal, require_elements, exclude_elements)
         # 冲突解决：require 优先于 exclude（同一元素不会同时出现在两边）
         if require_elements and exclude_elements:

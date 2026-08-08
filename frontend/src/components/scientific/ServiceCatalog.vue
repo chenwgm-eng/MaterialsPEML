@@ -49,7 +49,6 @@ const phases = [
     services: [
       { id: 'formulation', capabilityId: 'formulation_packing', name: '配方与堆积', description: '配方比例优化与分子堆积结构生成' },
       { id: 'molecular_simulation', capabilityId: 'molecular_simulation', name: '分子动力学', description: 'OpenMM/LAMMPS 多系综 MD 模拟与轨迹分析' },
-      { id: 'battery_modeling', capabilityId: 'battery_modeling', name: '电池建模', description: 'PyBaMM P2D/ECM/PyBOP 多轨道仿真' },
     ],
   },
   {

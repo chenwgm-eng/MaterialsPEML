@@ -151,13 +151,11 @@ app.include_router(_chemical_router)
 app.include_router(_structure_router)
 app.include_router(_formulation_router)
 
-# ── Phase 2 原生科学服务路由（MolecularSim, Battery, Synthesis, Process） ──
+# ── Phase 2 原生科学服务路由（MolecularSim, Synthesis, Process） ──
 from .scientific_routes.molecular_simulation_routes import router as _molecular_simulation_router
-from .scientific_routes.battery_modeling_routes import router as _battery_modeling_router
 from .scientific_routes.synthesis_planning_routes import router as _synthesis_planning_router
 from .scientific_routes.process_modeling_routes import router as _process_modeling_router
 app.include_router(_molecular_simulation_router)
-app.include_router(_battery_modeling_router)
 app.include_router(_synthesis_planning_router)
 app.include_router(_process_modeling_router)
 
@@ -707,6 +705,8 @@ async def startup():
                     len(_activity_mapping_store.list_tool_registrations()))
 
         from .agent_team.agent_proxy import AgentProxy
+        from .services.registry import get_service_registry
+
         _agent_proxy = AgentProxy(
             agent_registry=_registry,
             mapping_store=_activity_mapping_store,
@@ -717,6 +717,7 @@ async def startup():
             scp_catalog=_scp_catalog,
             skill_catalog=_skill_catalog,
             skill_executor=_skill_executor,
+            scientific_registry=get_service_registry(),
         )
         # 注入到 ECML 引擎
         if hasattr(agent, "ecml") and agent.ecml is not None:
@@ -920,6 +921,17 @@ async def startup():
         logger.info("Scientific CPU Worker started with all 12 native services")
     except Exception as e:
         logger.warning("Scientific CPU Worker startup failed (non-fatal): %s", e)
+
+    # ── 启动 Outbox 消费者（可靠事件派发） ──
+    # 若无消费者，execution_kernel 入队的任务/运行/审批事件会永久滞留在 pending。
+    try:
+        from .domain.runtime.outbox import ScientificOutbox
+        from .domain.runtime.outbox_dispatcher import OutboxDispatcher
+        _dispatcher = OutboxDispatcher(ScientificOutbox())
+        _spawn_background(_dispatcher.run_forever())
+        logger.info("Outbox 消费者已启动")
+    except Exception as e:
+        logger.warning("Outbox 消费者启动失败 (non-fatal): %s", e)
 
 
 @app.on_event("shutdown")
@@ -2163,6 +2175,27 @@ async def discover_crystal(req: DiscoverRequest):
         require_elements=require_elements,
         exclude_elements=exclude_elements,
     )
+    # D3(P2-003)：临时性质预测溯源——为晶体候选补充 model_version/confidence/
+    # input_snapshot/generated_at ai_meta，与 /discover/polymer 对齐，支持调用链反查
+    input_snapshot_hash = _compute_input_snapshot({
+        "elements": req.elements or [],
+        "target_property": req.target_property,
+        "num_candidates": req.num_candidates,
+        "scenario_id": req.scenario_id,
+        "target_properties": target_props or [],
+    })
+    from datetime import datetime as _dt, timezone
+    for c in result.get("candidates", []) if isinstance(result, dict) else []:
+        if not c.get("ai_meta"):
+            c["ai_meta"] = {}
+        c["ai_meta"]["input_snapshot_hash"] = input_snapshot_hash
+        c["ai_meta"]["model_version"] = c.get("model_version") or "materials-project-v1"
+        c["ai_meta"]["confidence"] = c.get("confidence") or 0.85
+        c["ai_meta"]["generated_at"] = _dt.now(timezone.utc).isoformat()
+    if isinstance(result, dict):
+        result.setdefault("ai_meta", {})["input_snapshot_hash"] = input_snapshot_hash
+        result.setdefault("ai_meta", {})["model_version"] = "materials-project-v1"
+        result.setdefault("ai_meta", {})["generated_at"] = _dt.now(timezone.utc).isoformat()
     # 持久化候选材料，打通 Discovery → SampleManager 溯源链路
     _store_candidates(
         app.state.candidate_store, result, "crystal", req.scenario_id,
@@ -2285,9 +2318,13 @@ def _store_candidates(
                 )
                 c_dict["prediction"] = {
                     "model_version": _ai_meta.get("model_version") or c_dict.get("model_version") or "",
-                    "confidence": c_dict.get("confidence"),
+                    "confidence": _ai_meta.get("confidence", c_dict.get("confidence")),
                     "predicted_value": _predicted_value,
                     "predicted_at": _ai_meta.get("generated_at") or c_dict.get("created_at") or "",
+                    # D3(P2-003)：输入快照哈希 + 来源谱系，支持调用链反查
+                    "input_snapshot_hash": _ai_meta.get("input_snapshot_hash")
+                    or c_dict.get("input_snapshot_hash") or "",
+                    "provenance": c_dict.get("provenance") or _ai_meta.get("provenance") or [],
                 }
             # T-020：前置去重检查——化学式 + 目标应用相同时跳过创建
             dedup_formula = c_dict.get("formula") or name
@@ -2988,6 +3025,33 @@ def _compute_input_snapshot(params: dict) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
+def _is_demo_id(record_id: str | None) -> bool:
+    """是否演示数据（SEED_ 前缀，由 seed_ecml_demo.py 写入）。"""
+    return bool(record_id and str(record_id).lstrip().upper().startswith("SEED_"))
+
+
+def _tag_demo(record: dict) -> dict:
+    """为单条记录打上 is_demo 标记（就地返回），供前端显示"演示"徽标。"""
+    ident = record.get("sample_id") or record.get("candidate_id") \
+        or record.get("order_id") or record.get("material_id") \
+        or record.get("result_id") or record.get("id") or ""
+    record["is_demo"] = _is_demo_id(ident)
+    return record
+
+
+def _filter_demo(records: list[dict], include_demo: bool = False) -> list[dict]:
+    """D2(P2-002)：默认过滤 SEED_ 演示数据，并打 is_demo 标记。
+
+    统计口径同步排除演示数据：include_demo=False 时不返回演示记录。
+    """
+    out = []
+    for r in records:
+        _tag_demo(r)
+        if include_demo or not r.get("is_demo"):
+            out.append(r)
+    return out
+
+
 def _auto_create_release_card_for_candidate(
     candidate: dict,
     project_id: str | None = None,
@@ -3334,19 +3398,21 @@ async def discover_generate(req: GenerateRequest):
 
 @app.get("/candidates")
 async def list_candidates(candidate_type: str = "", scenario_id: str = "",
-                          limit: int = 0, offset: int = 0):
+                          limit: int = 0, offset: int = 0, include_demo: bool = False):
     """列出持久化的候选材料记录，支持按类型与场景 ID 筛选。
 
     评测修复 P2-002：limit/offset 分页参数此前被忽略导致全量返回。
     limit<=0 表示不分页（向后兼容旧调用方），limit>0 时返回分页切片。
+    D2(P2-002)：默认过滤 SEED_ 演示数据，include_demo=True 时包含。
     """
     records = app.state.candidate_store.list_all(candidate_type, scenario_id)
-    total = len(records)
+    items = _filter_demo([r.model_dump() for r in records], include_demo)
+    total = len(items)
     if limit > 0:
-        records = records[max(0, offset): max(0, offset) + limit]
+        items = items[max(0, offset): max(0, offset) + limit]
     return {
-        "candidates": [r.model_dump() for r in records],
-        "count": len(records),
+        "candidates": items,
+        "count": len(items),
         "total": total,
     }
 
@@ -3363,21 +3429,43 @@ async def get_candidate(candidate_id: str):
 # ── 0040 两层流程：候选材料状态机 / 一键生成实验单 / 工艺方案状态 ─────────
 
 class CandidateStatusRequest(BaseModel):
-    """候选材料状态迁移请求。"""
+    """候选材料状态迁移请求。
+
+    注意：不接收客户端传入的 actor_role —— 操作角色由服务端从认证用户推导，
+    杜绝客户端伪造角色绕过状态机校验。
+    """
     status: str = Field(..., description="目标状态：screening/feasible/process_planning/process_confirmed/ready_for_experiment/rejected")
-    actor_role: str = Field(default="", description="操作者角色：formulator / process_engineer")
     owner: str = Field(default="", description="新的责任人（用户名）")
     reason: str = Field(default="", description="迁移原因")
 
 
+# 认证访问角色 → 允许执行的状态机操作角色（formulator / process_engineer）
+# 访问门禁已由 require_role(UserRole.RESEARCHER) 拦截；此处将访问角色映射为
+# 状态机操作角色。用户模型未内置 formulator/process_engineer 区分，故研发序列角色
+# 均可执行两类操作；REVIEWER/VIEWER 无操作角色，且被 require_role 拦截。
+_ACCESS_ROLE_TO_OPERATION_ROLES: dict[UserRole, set[str]] = {
+    UserRole.RESEARCHER: {"formulator", "process_engineer"},
+    UserRole.DATA_ENGINEER: {"formulator", "process_engineer"},
+    UserRole.PROJECT_MANAGER: {"formulator", "process_engineer"},
+    UserRole.ADMIN: {"formulator", "process_engineer"},
+    UserRole.REVIEWER: set(),
+    UserRole.VIEWER: set(),
+}
+
+
 @app.patch("/candidates/{candidate_id}/status",
            dependencies=[Depends(require_role(UserRole.RESEARCHER))])
-async def update_candidate_status(candidate_id: str, req: CandidateStatusRequest):
-    """更新候选材料状态（两层状态机 + 角色校验）。"""
+async def update_candidate_status(candidate_id: str, req: CandidateStatusRequest,
+                                  current_user: User = Depends(require_login)):
+    """更新候选材料状态（两层状态机 + 角色校验）。
+
+    操作角色从认证用户（JWT）推导，不再信任客户端传入的 actor_role。
+    """
     from .experiment.candidate_store import IllegalCandidateTransitionError
     try:
         updated = app.state.candidate_store.update_status(
-            candidate_id, req.status, actor_role=req.actor_role,
+            candidate_id, req.status,
+            actor_operation_roles=_ACCESS_ROLE_TO_OPERATION_ROLES.get(current_user.role, set()),
             owner=req.owner, triggered_by="user", reason=req.reason,
         )
     except IllegalCandidateTransitionError as e:
@@ -3713,6 +3801,20 @@ class BomFromRouteRequest(BaseModel):
     quantity: float = 1.0  # 0727b：BOM 用量，传递给 FormulaAgent 计算成本
 
 
+class BomFromProcessRequest(BaseModel):
+    """从已确认的工艺方案生成配方（BOM）请求（打通 深化→配方 链路）。
+
+    工艺人员确认工艺方案（status=confirmed）后，系统据此生成 BOM 配方，
+    复用 FormulaAgent 的配方生成能力，并回填 BomScheme.process_id 关联工艺方案。
+    route_id 可选：指定以哪条候选工艺路线为准；留空则取方案中可行性最高的一条。
+    """
+    process_id: str  # 已确认的工艺方案 ID
+    route_id: str = ""  # 可选，指定工艺方案中的某条候选路线
+    name: str = ""  # BOM 名称，留空自动生成
+    created_by: str = ""
+    quantity: float = 1.0  # BOM 用量，传递给 FormulaAgent 计算成本
+
+
 def _match_route_by_id(routes: list[dict], route_id: str) -> tuple[dict | None, int]:
     """在 routes 列表中按 route_id 匹配，支持 "R1" 和 "1" 两种格式。
 
@@ -3734,6 +3836,107 @@ def _match_route_by_id(routes: list[dict], route_id: str) -> tuple[dict | None, 
         if 0 <= i < len(routes or []):
             return routes[i], i
     return None, -1
+
+
+def _resolve_target_property(domain_pack: dict | None = None) -> str:
+    """从领域包读取默认目标属性；未配置时回退 ionic_conductivity。
+
+    用于候选生成与 BOM 生成时传递 target_property，避免在多个接口中写死。
+    """
+    _dp = domain_pack
+    if not isinstance(_dp, dict):
+        _fa = getattr(agent, "formula_agent", None)
+        _dp = getattr(_fa, "domain_pack", None) if _fa else None
+    if isinstance(_dp, dict):
+        props = _dp.get("default_target_properties") or []
+        if props and props[0]:
+            return str(props[0])
+    return "ionic_conductivity"
+
+
+def _resolve_material_domain(cfg, domain_key: str = "") -> dict:
+    """统一材料体系配置：优先从领域包 data 读取，AgentConfig 仅作回退。
+
+    消除"材料体系双源"：/config 与 /api/config 改由领域包 Store 提供权威值，
+    AgentConfig.material_domain 只在领域包未提供某项时回退，保证新领域（如金发
+    科技聚合物配方）无需改 AgentConfig 即可反映在体系模板上。
+
+    domain_key 指定时精确解析该领域包（如请求带 kingfa 时返回改性塑料体系）；
+    留空则取默认活跃包。
+
+    返回结构与 AgentConfig.material_domain 对齐：
+    {material_systems, default_target_properties, example_formulas}
+
+    跨域防串数据：领域包一旦激活，各字段由该领域包权威决定；领域包未声明的
+    字段返回空列表，**不再回退**到 AgentConfig 默认（AgentConfig 仅在没有活跃
+    领域包时兜底），避免把其他领域（如默认电池）的体系/属性串入当前领域。
+    """
+    domain_data = {}
+    try:
+        from .industrialization.domain_pack_store import DomainPackStore
+        store = DomainPackStore()
+        pack = store.resolve_active_pack(domain_key=domain_key)
+        if pack is not None and isinstance(pack.data, dict):
+            domain_data = pack.data
+    except Exception:
+        logger.debug("resolve material_domain from domain pack failed, fallback to config", exc_info=True)
+
+    fallback = getattr(cfg, "material_domain", None)
+
+    def _pick(key: str) -> list:
+        if domain_data:
+            # 领域包已激活：未声明字段即返回空，避免跨域串入默认（电池）配置。
+            return domain_data.get(key) or []
+        # 无活跃领域包：回退 AgentConfig 默认。
+        if fallback is None:
+            return []
+        return getattr(fallback, key, None) or []
+
+    return {
+        "material_systems": _pick("material_systems"),
+        "default_target_properties": _pick("default_target_properties"),
+        "example_formulas": _pick("example_formulas"),
+    }
+
+
+def _assert_bom_system_consistency(
+    cand_type: str,
+    target_label: str,
+    bom_materials: list[dict],
+    consistency: dict | None = None,
+) -> list[str]:
+    """C2(P1-004)：BOM 明细物料体系与目标材料体系一致性校验。
+
+    目标为晶体体系时，BOM 不得含聚合物体系物料（如 PEO/PVDF/PAN）；
+    目标为聚合物体系时，BOM 不得含晶体/无机物物料（如 LIFEPO4/NCM/硫化物）。
+    返回跨体系错配的物料名列表；为空表示一致。
+
+    consistency 为领域包中的一致性规则（含 polymer_kw/crystal_kw），
+    未传入时使用内置默认关键词，保证旧行为不回归。
+    """
+    _cons = consistency or {}
+    _poly_kw = tuple(_cons.get("polymer_kw") or ("peo", "polymer", "pvdf", "pan ", "pan-", "pmma", "psmiles", "[*]"))
+    _crystal_kw = tuple(_cons.get("crystal_kw") or ("lpscl", "lgps", "li6ps5cl", "lifepo4", "ncm", "sulfide", "li2s", "p2s5"))
+    _type = (cand_type or "").lower()
+    _label = (target_label or "").lower()
+    if "polymer" in _type:
+        is_crystal_target = False
+    elif "crystal" in _type:
+        is_crystal_target = True
+    else:
+        is_crystal_target = not (_label and any(k in _label for k in _poly_kw))
+    crossed = []
+    for _m in bom_materials or []:
+        _name = str(_m.get("material_name") or _m.get("material_id") or "").lower()
+        if not _name:
+            continue
+        if is_crystal_target:
+            if any(k in _name for k in _poly_kw):
+                crossed.append(_name)
+        else:
+            if any(k in _name for k in _crystal_kw):
+                crossed.append(_name)
+    return crossed
 
 
 def _extract_route_to_bom(route: dict) -> tuple[dict, list[dict], list[dict]]:
@@ -3836,7 +4039,7 @@ async def create_bom_from_route(candidate_id: str, req: BomFromRouteRequest):
     #    target_material.candidate 传候选名称，FormulaAgent 会优先从物料库匹配
     target_material = {
         "candidate": cand.name or cand.formula or cand.smiles or candidate_id,
-        "target_property": "ionic_conductivity",
+        "target_property": _resolve_target_property(),
     }
     # 计算输入参数哈希快照（用于 AI 输出溯源）
     input_snapshot_hash = _compute_input_snapshot({
@@ -3866,6 +4069,25 @@ async def create_bom_from_route(candidate_id: str, req: BomFromRouteRequest):
     bom_list = recipe_result.get("bom") or []
     bop_list = recipe_result.get("bop") or []
     ehs = recipe_result.get("ehs") or {}
+    # C2(P1-004)：BOM 明细物料体系与目标材料体系一致性校验，跨体系错配直接阻断
+    # 一致性关键词从领域包读取；不可用时回退内置默认
+    _cons_rules = {}
+    _fa = getattr(agent, "formula_agent", None)
+    _dp = getattr(_fa, "domain_pack", None) if _fa else None
+    if isinstance(_dp, dict):
+        _cons_rules = _dp.get("consistency") or {}
+    _crossed = _assert_bom_system_consistency(
+        cand.candidate_type, cand.name or cand.formula or "", bom_list, _cons_rules
+    )
+    if _crossed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "BOM 物料与目标材料体系不一致，已阻断生成："
+                f"目标体系为「{cand.candidate_type or cand.name or '未知'}」，"
+                f"但 BOM 含跨体系物料 {sorted(set(_crossed))}"
+            ),
+        )
     material_cost = float(recipe_result.get("material_cost") or 0.0)
     process_cost = float(recipe_result.get("process_cost") or 0.0)
     total_unit_cost = float(recipe_result.get("total_unit_cost") or 0.0)
@@ -3974,6 +4196,168 @@ async def create_bom_from_route(candidate_id: str, req: BomFromRouteRequest):
     return {
         "bom": created_bom.model_dump(),
         "process_scheme": created_scheme.model_dump(),
+        "ai_meta": ai_meta,
+    }
+
+
+@app.post("/candidates/{candidate_id}/bom-from-process",
+          dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def create_bom_from_process(candidate_id: str, req: BomFromProcessRequest):
+    """从已确认的工艺方案生成配方（BOM）（打通 深化→配方 链路）。
+
+    流程：
+    1. 校验候选存在，且工艺方案存在、状态为 confirmed
+    2. 从工艺方案的候选路线中选定一条（指定 route_id 或取可行性最高者）
+    3. 调用 FormulaAgent（builtin_industrialization）生成完整 BOM/BOP/成本/EHS
+    4. 跨体系一致性校验（复用领域包规则）
+    5. 创建 BomScheme 并回填 process_id 关联既有工艺方案
+    """
+    # 1. 校验候选与工艺方案
+    cand = app.state.candidate_store.get(candidate_id)
+    if cand is None:
+        raise HTTPException(status_code=404, detail=f"候选材料 {candidate_id} 不存在")
+    scheme = app.state.process_scheme_store.get(req.process_id)
+    if scheme is None:
+        raise HTTPException(status_code=404, detail=f"工艺方案 {req.process_id} 不存在")
+    if scheme.candidate_id != candidate_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"工艺方案 {req.process_id} 不属于候选材料 {candidate_id}",
+        )
+    if scheme.status != "confirmed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"工艺方案状态为 {scheme.status}，须确认（confirmed）后才能生成配方",
+        )
+
+    # 2. 选定工艺路线：优先指定 route_id，否则取可行性最高者
+    routes = scheme.routes or []
+    if not routes:
+        raise HTTPException(status_code=400, detail="工艺方案中无候选路线，无法生成配方")
+    route = None
+    if req.route_id:
+        route, _idx = _match_route_by_id(routes, req.route_id)
+        if route is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"工艺方案 {req.process_id} 中未匹配到 route_id={req.route_id}",
+            )
+    else:
+        route = max(routes, key=lambda r: float(r.get("feasibility_score") or 0.0))
+
+    # 3. 调用 FormulaAgent 生成完整 BOM/BOP/成本/EHS
+    target_material = {
+        "candidate": cand.name or cand.formula or candidate_id,
+        "target_property": _resolve_target_property(),
+    }
+    input_snapshot_hash = _compute_input_snapshot({
+        "candidate_id": candidate_id,
+        "process_id": req.process_id,
+        "route_id": route.get("route_id", ""),
+        "quantity": req.quantity or 1.0,
+        "name": req.name,
+    })
+    try:
+        recipe_result = agent._handle_design_formula(
+            target_material=target_material,
+            quantity=float(req.quantity or 1.0),
+        )
+    except Exception as exc:
+        logger.exception("从工艺方案生成 BOM 失败: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"调用配方工艺 agent 失败：{exc}",
+        ) from exc
+    if "error" in recipe_result:
+        raise HTTPException(
+            status_code=500,
+            detail=f"配方工艺 agent 返回错误：{recipe_result['error']}",
+        )
+
+    bom_list = recipe_result.get("bom") or []
+    bop_list = recipe_result.get("bop") or []
+    ehs = recipe_result.get("ehs") or {}
+
+    # 4. 跨体系一致性校验（复用领域包规则）
+    _cons_rules = {}
+    _fa = getattr(agent, "formula_agent", None)
+    _dp = getattr(_fa, "domain_pack", None) if _fa else None
+    if isinstance(_dp, dict):
+        _cons_rules = _dp.get("consistency") or {}
+    _crossed = _assert_bom_system_consistency(
+        cand.candidate_type, cand.name or cand.formula or "", bom_list, _cons_rules
+    )
+    if _crossed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "BOM 物料与目标材料体系不一致，已阻断生成："
+                f"目标体系为「{cand.candidate_type or cand.name or '未知'}」，"
+                f"但 BOM 含跨体系物料 {sorted(set(_crossed))}"
+            ),
+        )
+    material_cost = float(recipe_result.get("material_cost") or 0.0)
+    process_cost = float(recipe_result.get("process_cost") or 0.0)
+    total_unit_cost = float(recipe_result.get("total_unit_cost") or 0.0)
+    process_cost_breakdown = recipe_result.get("process_cost_breakdown") or []
+
+    # 合成路径原料（工艺路线 reactants）合并进 BOM 追溯
+    route_reactants = []
+    for s in (route.get("steps") or []):
+        for r in (s.get("reactants") or []):
+            if r and r not in route_reactants:
+                route_reactants.append(r)
+
+    formulation = {
+        "materials": bom_list,
+        "route_reactants": route_reactants,
+        "target_smiles": route.get("target_smiles", ""),
+    }
+    process_route = {
+        "steps": bop_list,
+        "route_steps": [s for s in (scheme.steps or [])],
+        "feasibility_score": route.get("feasibility_score", 0.0),
+        "confidence": route.get("confidence", 0.0),
+        "ehs": ehs,
+        "material_cost": material_cost,
+        "process_cost": process_cost,
+        "total_unit_cost": total_unit_cost,
+        "process_cost_breakdown": process_cost_breakdown,
+    }
+    rid_num = (route.get("route_id") or "").strip().lstrip("Rr") or "1"
+    bom_name = req.name or f"配方 - 工艺方案{rid_num or '1'}"
+
+    # 5. 创建 BomScheme 并回填 process_id（关联既有工艺方案）
+    from .experiment.bom_store import BomScheme
+
+    bom = BomScheme(
+        candidate_id=candidate_id,
+        task_id=cand.task_id or "",
+        formulation=formulation,
+        process_route=process_route,
+        test_protocol={},
+        version="v1",
+        status="draft",
+        created_by=req.created_by,
+        source_route_id=route.get("route_id", ""),
+        source_synthesis_task_id=scheme.source_synthesis_task_id or "",
+        process_id=scheme.process_id,
+        name=bom_name,
+    )
+    try:
+        created_bom = app.state.bom_store.create(bom)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    from datetime import datetime as _dt2, timezone
+    ai_meta = {
+        "input_snapshot_hash": input_snapshot_hash,
+        "model_version": "internlm-v1",
+        "generated_at": _dt2.now(timezone.utc).isoformat(),
+    }
+    return {
+        "bom": created_bom.model_dump(),
+        "process_scheme": scheme.model_dump(),
         "ai_meta": ai_meta,
     }
 
@@ -4531,6 +4915,7 @@ async def invoke_agent_tool(req: AgentToolInvokeRequest):
     """
     if _agent_proxy is None:
         raise HTTPException(status_code=503, detail="AgentProxy 未初始化")
+    _init_hybrid_stack()  # 确保 CapabilityRouter 已注入 AgentProxy（sci_* 能力需经其路由）
     from dataclasses import asdict
     try:
         result = await asyncio.to_thread(
@@ -5530,8 +5915,12 @@ async def ecml_run_step(req: ECMLRunStepRequest):
 
 
 @app.get("/config")
-async def get_runtime_config():
-    """Return current runtime config (masking secrets)."""
+async def get_runtime_config(domain_key: str = ""):
+    """Return current runtime config (masking secrets).
+
+    domain_key 可选：指定时按领域包解析 material_domain（如 kingfa 返回改性塑料
+    体系模板），留空则取默认活跃包。
+    """
     cfg = agent.config
     internlm_key = ""
     if cfg.internlm.api_key is not None:
@@ -5592,6 +5981,9 @@ async def get_runtime_config():
             "crystal": getattr(app.state.agent.crystal_predictor, "model_type", "cgcnn"),
             "polymer": getattr(app.state.agent.polymer_predictor, "model_type", "polymernn"),
         },
+        # Task 4：材料体系可配置（前端候选生成/性质预测页体系模板）
+        # 统一双源：优先领域包 Store，AgentConfig 仅作回退
+        "material_domain": _resolve_material_domain(cfg, domain_key=domain_key),
     }
 
 
@@ -5832,7 +6224,7 @@ async def update_config(req: ConfigUpdateRequest):
     return {"updated": updated, "count": len(updated), "engine_mode": cfg.engine_mode.value}
 
 
-def _serialize_agent_config(cfg):
+def _serialize_agent_config(cfg, domain_key: str = ""):
     """Serialize AgentConfig to a JSON-friendly dict for /api/config.
 
     Secrets are NEVER returned. Each secret-bearing section exposes only a
@@ -5869,13 +6261,16 @@ def _serialize_agent_config(cfg):
             "db_url": cfg.middleware.db_url,
             "poll_interval": cfg.middleware.poll_interval,
         },
+        # Task 4：材料体系可配置（前端候选生成/性质预测页体系模板）
+        # 统一双源：优先领域包 Store，AgentConfig 仅作回退
+        "material_domain": _resolve_material_domain(cfg, domain_key=domain_key),
     }
 
 
 @app.get("/api/config")
-async def get_api_config():
+async def get_api_config(domain_key: str = ""):
     """Return current runtime config for LOGOS dual-engine integration."""
-    return _serialize_agent_config(app.state.agent.config)
+    return _serialize_agent_config(app.state.agent.config, domain_key=domain_key)
 
 
 @app.put("/api/config", dependencies=[Depends(require_role(UserRole.ADMIN))])
@@ -6504,13 +6899,17 @@ async def orchestration_history():
 # --- 企业物料规格库 ---
 
 @app.get("/raw-materials")
-async def list_raw_materials(category: str = ""):
-    """查询企业物料规格库，支持按分类筛选。"""
+async def list_raw_materials(category: str = "", include_demo: bool = False):
+    """查询企业物料规格库，支持按分类筛选。
+
+    D2(P2-002)：默认过滤 SEED_ 演示物料，include_demo=True 时包含。
+    """
     if category:
         materials = agent.raw_material_db.query_category(category)
     else:
         materials = agent.raw_material_db.get_all()
-    return {"materials": [m.model_dump() for m in materials], "count": len(materials)}
+    items = _filter_demo([m.model_dump() for m in materials], include_demo)
+    return {"materials": items, "count": len(items)}
 
 
 @app.get("/raw-materials/{material_id}")
@@ -8117,10 +8516,14 @@ async def list_experiment_orders(
     status: str | None = None,
     project_id: str | None = None,
     include_result_count: bool = False,
+    include_demo: bool = False,
 ):
-    """查询实验任务列表。可选 include_result_count 返回每条任务关联的实验数据条数。"""
+    """查询实验任务列表。可选 include_result_count 返回每条任务关联的实验数据条数。
+
+    D2(P2-002)：默认过滤 SEED_ 演示任务，include_demo=True 时包含。
+    """
     orders = agent.experiment_controller._store.list_orders(status=status, project_id=project_id)
-    result = [o.model_dump() for o in orders]
+    result = _filter_demo([o.model_dump() for o in orders], include_demo)
     if include_result_count:
         counts = agent.experiment_controller._store.count_result_records()
         for item in result:
@@ -8497,12 +8900,16 @@ def _enrich_qc_record(record: ExperimentResultRecord) -> dict:
 
 
 @app.get("/experiments/results")
-async def list_experiment_results(qc_status: str | None = None, order_id: str | None = None):
-    """查询实验结果。"""
+async def list_experiment_results(qc_status: str | None = None, order_id: str | None = None,
+                                  include_demo: bool = False):
+    """查询实验结果。
+
+    D2(P2-002)：默认过滤 SEED_ 演示结果，include_demo=True 时包含。
+    """
     records = agent.experiment_controller._store.list_result_records(
         qc_status=qc_status, order_id=order_id,
     )
-    return [_enrich_qc_record(r) for r in records]
+    return _filter_demo([_enrich_qc_record(r) for r in records], include_demo)
 
 
 @app.get("/experiments/types")
@@ -8883,6 +9290,8 @@ async def list_pending_approvals():
     # 实验任务审批（status=PENDING_APPROVAL）
     orders = agent.experiment_controller._store.list_orders(status="PENDING_APPROVAL")
     for o in orders:
+        # 审批通道：默认实验审批；若订单 notes 标记为委员会评审（如高风险/委员会案件）则归入该通道
+        channel_label = "委员会评审" if "委员会" in (o.notes or "") else "实验审批"
         items.append({
             "type": "experiment_order",
             "id": o.order_id,
@@ -8890,10 +9299,12 @@ async def list_pending_approvals():
             "requester": o.assignee,
             "created_at": o.created_at,
             "status": o.status,
+            "channel": channel_label,
             "details": {
                 "candidate_id": o.candidate_id,
                 "priority": o.priority,
                 "project_id": o.project_id,
+                "channel": channel_label,
             },
         })
     # QC 审核队列（qc_status=PENDING）
@@ -8934,13 +9345,19 @@ class ApprovalCreateRequest(BaseModel):
 @app.post("/approvals", dependencies=[Depends(require_role(UserRole.PROJECT_MANAGER))])
 async def create_approval(req: ApprovalCreateRequest):
     """发起通用审批。当前实现：创建一个 PENDING_APPROVAL 状态的实验订单草稿，
-    使其在审批中心可见；后续可扩展为独立审批记录表。"""
+    使其在审批中心可见；后续可扩展为独立审批记录表。
+
+    审批通道（channel）：material_adoption 等材料采纳流程默认进入「实验审批」通道，
+    返回结果中携带 channel / channel_label，并写入订单 notes 供审批中心区分通道。
+    """
     payload = req.payload or {}
     candidate = payload.get("candidate", {}) if isinstance(payload, dict) else {}
     candidate_id = candidate.get("candidate_id") or candidate.get("id") or ""
     formula = candidate.get("formula") or candidate.get("name") or ""
     project_id = payload.get("project_id", "") if isinstance(payload, dict) else ""
     task_id = payload.get("task_id", "") if isinstance(payload, dict) else ""
+    channel = "experiment"  # 材料采纳流程的目标审批通道：实验审批
+    channel_label = "实验审批"
     order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
     try:
         from datetime import datetime, timezone
@@ -8951,7 +9368,7 @@ async def create_approval(req: ApprovalCreateRequest):
             candidate_id="",
             project_id=project_id,
             task_id=task_id,
-            notes=f"{req.title} | 候选: {formula or candidate_id}",
+            notes=f"{req.title} | 候选: {formula or candidate_id} | 审批通道: {channel_label}",
             status="PENDING_APPROVAL",
             priority="P2",
             assignee=req.requester or "system",
@@ -8965,7 +9382,9 @@ async def create_approval(req: ApprovalCreateRequest):
         "approval_id": order_id,
         "status": "PENDING_APPROVAL",
         "title": req.title,
-        "message": "已发起审批，可在「审批中心」跟踪进度",
+        "channel": channel,
+        "channel_label": channel_label,
+        "message": f"已发起审批，本次将提交至「{channel_label}」，可在「审批中心」跟踪进度",
     }
 
 
@@ -10218,6 +10637,14 @@ async def create_equipment(req: EquipmentUpsertRequest):
     store: EquipmentStore = app.state.equipment_store
     if req.equipment_id and store.get(req.equipment_id):
         raise HTTPException(status_code=409, detail=f"设备 {req.equipment_id} 已存在")
+    # C3(P3-001)：设备序列号唯一性校验，杜绝同一仪器重复登记（型号+序列号相同视为重复）
+    if req.serial_number:
+        dup = store.find_by_serial(req.serial_number, exclude_id=req.equipment_id)
+        if dup:
+            raise HTTPException(
+                status_code=409,
+                detail=f"序列号 {req.serial_number} 已被设备 {dup.equipment_id} 登记（型号 {dup.model}），请勿重复登记",
+            )
     eq = Equipment(
         equipment_id=req.equipment_id or f"EQUIP-{_uuid.uuid4().hex[:6].upper()}",
         name=req.name,
@@ -10404,11 +10831,14 @@ async def delete_sample(sample_id: str):
 
 
 @app.get("/samples")
-async def list_samples():
-    """查询样品列表。"""
+async def list_samples(include_demo: bool = False):
+    """查询样品列表。
+
+    D2(P2-002)：默认过滤 SEED_ 演示样品，include_demo=True 时包含。
+    """
     store: SampleStore = app.state.sample_store
     samples = store.list_all()
-    return [s.model_dump() for s in samples]
+    return _filter_demo([s.model_dump() for s in samples], include_demo)
 
 
 @app.get("/samples/{sample_id}")
@@ -10906,9 +11336,26 @@ async def dashboard_resources(
             "inventory_unit": m.inventory_unit,
             "threshold": _MATERIAL_LOW_STOCK_THRESHOLD,
             "supplier": m.supplier,
+            # D4(P2-004)：告警附上下文解释与建议动作，避免只看数字无法行动
+            "context": (
+                f"当前库存 {m.inventory_quantity}{m.inventory_unit or 'kg'}，"
+                f"低于阈值 {_MATERIAL_LOW_STOCK_THRESHOLD}{m.inventory_unit or 'kg'}，"
+                f"可能影响进行中的实验/配方投料。"
+            ),
+            "action": (
+                f"联系供应商{m.supplier or '（未登记）'}补充采购，"
+                f"或核对现有{int(_MATERIAL_LOW_STOCK_THRESHOLD) - int(m.inventory_quantity)}"
+                f"{m.inventory_unit or 'kg'}缺口并在物料规格库登记到货。"
+            ),
         }
         for m in materials
         if m.inventory_quantity < _MATERIAL_LOW_STOCK_THRESHOLD
+    ]
+    # D4(P2-004)：按 material_id 去重，避免看板出现重复预警条目
+    _seen: set[str] = set()
+    low_stock = [
+        item for item in low_stock
+        if not (item["material_id"] in _seen or _seen.add(item["material_id"]))
     ]
 
     # 计算任务队列长度（运行中的 ECML 任务，受时间范围筛选）
@@ -11970,8 +12417,8 @@ def _user_role_from_request(request: Request) -> str:
 def _check_committee_access(request: Request, case, action: str) -> None:
     """Committee 权限检查。
 
-    case 参数可传入 CommitteeCase 或 dict（含 project_id），用于后续项目级权限校验。
-    目前仅做角色级检查；当 case 携带 project_id 时，预留项目成员校验入口。
+    case 参数可传入 CommitteeCase 或 dict（含 project_id）。
+    先做角色级检查，再做对象级（项目成员）权限校验（fail-closed）。
     """
     role = _user_role_from_request(request)
     if role == "admin":
@@ -11980,16 +12427,19 @@ def _check_committee_access(request: Request, case, action: str) -> None:
         raise HTTPException(status_code=403, detail="viewer 角色仅可查看已完成的评估结果")
     if role == "researcher" and action in ("admin_manage",):
         raise HTTPException(status_code=403, detail="researcher 角色无权管理全局策略")
-    # Project-scoped access check: when a case with project_id is provided,
-    # callers can later add project membership enforcement here.
-    # TODO: Add project membership check when project service is available.
+    # Project-scoped access check: 当 case 携带 project_id 时，校验调用者是否
+    # 有权访问该项目（fail-closed，与 memory card 检索端点同一套 check_project_access）。
     if case is not None:
         project_id = (
             case.get("project_id") if isinstance(case, dict)
             else getattr(case, "project_id", None)
         )
         if project_id:
-            pass  # placeholder — project service not yet wired in
+            user = getattr(request.state, "current_user", None)
+            user_id = getattr(user, "user_id", "") if user else ""
+            store = getattr(request.app.state, "user_store", None)
+            if not user_id or store is None or not check_project_access(user_id, project_id, store):
+                raise HTTPException(status_code=403, detail="无权访问该项目")
 
 
 # ── T-031 高风险 AI 操作人工确认门禁 ──────────────────────────────────────────
@@ -12899,9 +13349,17 @@ async def get_providers(request: Request):
     if role != "admin":
         raise HTTPException(status_code=403, detail="此操作需要 admin 权限")
     providers = _provider_registry.list_providers()
+    import os as _os
+    items = []
+    for p in providers:
+        d = p.model_dump(mode="json")
+        # D5(P2-005)：未配置 = 需要密钥但对应环境变量未设置（local:// 无需密钥视为已配置）
+        _ref = (d.get("auth_secret_ref") or "").strip()
+        d["configured"] = (not _ref) or bool(_os.environ.get(_ref))
+        items.append(d)
     return {
-        "providers": [p.model_dump(mode="json") for p in providers],
-        "count": len(providers),
+        "providers": items,
+        "count": len(items),
     }
 
 
@@ -13135,17 +13593,58 @@ def _init_hybrid_stack() -> None:
     _alias_registry = AliasRegistry()
     _eligibility_store = EligibilityStore()
     seed_default_eligibility_rules(_eligibility_store)
+    # 把 11 个原生科学服务注册为可路由能力（单一数据源派生，可经
+    # SCIENTIFIC_CAPABILITIES_ENABLED 配置），使 CapabilityRouter 可解析到对应服务。
+    from .services.capability_catalog import register_scientific_capabilities
+
+    register_scientific_capabilities(_alias_registry, _eligibility_store)
+    # CA3 风险门禁：将科学服务注册进 ToolCatalog，并把 tool_catalog 注入路由器，
+    # 否则本地风险恒为最低 0.1，max_risk_level 过滤对科学服务形同虚设。
+    if _tool_catalog is not None:
+        from .services.capability_catalog import register_scientific_tools
+
+        register_scientific_tools(_tool_catalog)
     # 注入 capability_registry 启用契约门禁：deprecated/pending_high_risk 的能力
     # 会被自动过滤，主能力不可调用时走 fallback_chain
     from .capability.registry import CapabilityRegistry as _CapRegistry
     _cap_registry = _CapRegistry()
     _capability_router = CapabilityRouter(
-        _alias_registry, _eligibility_store, capability_registry=_cap_registry,
+        _alias_registry, _eligibility_store,
+        tool_catalog=_tool_catalog,
+        capability_registry=_cap_registry,
     )
+    # 将路由器注入 AgentProxy，使 sci_* 科学能力调用经 CapabilityRouter 路由
+    if _agent_proxy is not None:
+        _agent_proxy.set_capability_router(_capability_router)
     _model_router = ModelRouter()
     _research_store = ResearchStore()
+    # 解析活跃领域包，注入 orchestrator 使研发流水线随领域包可插拔；
+    # 库不可用或无线领域包时回退内置默认。
+    domain_pack = None
+    domain_pack_provider = None
+    try:
+        from .industrialization.domain_pack_store import DomainPackStore
+
+        _dp_store = DomainPackStore()
+        _active_pack = _dp_store.resolve_active_pack()
+        if _active_pack is not None:
+            domain_pack = _active_pack.data
+
+        def _resolve_pack_by_key(key: str) -> dict | None:
+            try:
+                pack = _dp_store.resolve_active_pack(domain_key=key)
+                return pack.data if pack is not None else None
+            except Exception:
+                return None
+
+        domain_pack_provider = _resolve_pack_by_key
+    except Exception:
+        domain_pack = None
+        domain_pack_provider = None
     _hybrid_orchestrator = HybridOrchestrator(
         _capability_router, _model_router, IntentInterpreter(), PlanValidator(),
+        domain_pack=domain_pack,
+        domain_pack_provider=domain_pack_provider,
     )
     # 把 capability_router 注入 executor，让策略检查（prohibited/risk/human_review）生效
     if _executor is not None:
@@ -13155,13 +13654,63 @@ def _init_hybrid_stack() -> None:
 
 class CreateResearchRequest(BaseModel):
     goal: str
-    material_scope: str = ""
+    material_scope: str = ""  # 材料类型枚举（crystal/polymer/molecule）
+    material_system: str = ""  # 材料体系名（领域包 material_systems.name）
     target_properties: list[dict] = Field(default_factory=list)
     constraints: dict = Field(default_factory=dict)
     preference: str = "balanced"
+    domain_key: str = ""  # 领域包关键字（如 battery/kingfa）；空则用默认
     project_id: str = ""
     task_id: str = ""  # 业务链路：关联 projects.tasks(task_id)
     scenario_id: str = ""  # P0-001：前端传入的全局场景 ID
+
+
+# ── 领域注册表：暴露材料领域包，前端据此识别材料类型 ──────────────
+
+@app.get("/domain-packs")
+async def list_domain_packs():
+    """列出活跃领域包（领域注册表）。
+
+    前端据此识别候选材料所属领域 / 材料表示法，避免对交付物文本做
+    硬编码关键词猜测（如 deliverable.includes('聚合物') → polymer）。
+
+    返回的 material_kind 由领域包 data.pipeline 键推断：优先声明所支持的
+    材料类型（crystal/polymer/molecule），供前端选择对应生成/预测通道。
+    """
+    packs = []
+    try:
+        from .industrialization.domain_pack_store import DomainPackStore
+        store = DomainPackStore()
+        for p in store.list_packs(active_only=True):
+            data = p.data or {}
+            packs.append({
+                "domain_key": p.domain_key,
+                "name": p.name,
+                "description": p.description,
+                "material_representation": p.material_representation,
+                "material_kind": _infer_domain_material_kind(data),
+                "default_target_properties": data.get("default_target_properties") or [],
+                "is_active": p.is_active,
+            })
+    except Exception:
+        packs = []
+    return {"packs": packs, "count": len(packs)}
+
+
+def _infer_domain_material_kind(data: dict) -> str:
+    """从领域包 data.pipeline 键推断主材料类型（crystal/polymer/molecule）。
+
+    规则：pipeline 中除 "*" 外的键作为候选；含 crystal 则优先 crystal，
+    否则按 polymer > molecule > 默认 crystal 的顺序取第一个。
+    """
+    pipeline = data.get("pipeline") or {}
+    keys = [k for k in pipeline.keys() if k != "*"]
+    if "crystal" in keys:
+        return "crystal"
+    for preferred in ("polymer", "molecule"):
+        if preferred in keys:
+            return preferred
+    return "crystal"
 
 
 # ── SubTask 9.1: Research Request API ──────────────────────────────
@@ -13178,9 +13727,11 @@ async def create_research_request(
         scenario_id=req.scenario_id,
         goal=req.goal,
         material_scope=req.material_scope,
+        material_system=req.material_system,
         target_properties=req.target_properties,
         constraints=req.constraints,
         preference=req.preference,
+        domain_key=req.domain_key,
         project_id=req.project_id,
         task_id=req.task_id,
         user_id=user.user_id if user else "",

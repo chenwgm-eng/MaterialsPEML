@@ -487,10 +487,18 @@ watch(() => plan.value, (newPlan) => {
 
 function onAdoptAgents() {
   if (plan.value?.suggested_agents) {
-    plan.value.suggested_agents.forEach((a) => {
-      teamAgents.value.push(a)
-    })
+    // 后端 analyze 返回的 team 与 suggested_agents 为同一批推荐；
+    // 采纳时按 id 去重，避免角色被重复添加（角色数量翻倍）。
+    const existing = new Set(teamAgents.value.map((a) => a.id))
+    const toAdd = plan.value.suggested_agents.filter((a) => !existing.has(a.id))
+    teamAgents.value = [...teamAgents.value, ...toAdd]
     plan.value.suggested_agents = []
+    // 采纳后同步选中新增成员
+    if (toAdd.length) {
+      const next = new Set(selectedAgentIds.value)
+      toAdd.forEach((a) => next.add(a.id))
+      selectedAgentIds.value = next
+    }
   }
   showAgentConfirm.value = false
 }

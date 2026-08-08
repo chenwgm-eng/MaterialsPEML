@@ -206,7 +206,8 @@ class Outbox:
         The retry count is incremented atomically via
         ``retry_count = retry_count + 1``. If ``retry_count`` reaches
         ``max_retries``, the status is set to ``failed``; otherwise the status
-        is left unchanged for another retry.
+        is reset back to ``pending`` so it can be reclaimed by a later
+        ``claim_pending`` for another retry.
         """
         with self.engine.begin() as conn:
             cursor = conn.execute(
@@ -229,6 +230,14 @@ class Outbox:
                 conn.execute(
                     text(
                         "UPDATE control_plane.outbox_messages SET status = 'failed' WHERE message_id = :mid"
+                    ),
+                    {"mid": message_id},
+                )
+            else:
+                # 未达最大重试次数：重置为 pending，允许再次被领取重试
+                conn.execute(
+                    text(
+                        "UPDATE control_plane.outbox_messages SET status = 'pending' WHERE message_id = :mid"
                     ),
                     {"mid": message_id},
                 )

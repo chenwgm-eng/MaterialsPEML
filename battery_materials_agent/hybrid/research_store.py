@@ -26,6 +26,20 @@ def _parse_json_field(value, default):
     return value
 
 
+def _to_iso_str(value) -> str:
+    """将数据库返回的时间值统一序列化为 ISO 字符串。
+
+    SQLite/PostgreSQL 驱动可能返回 `datetime` 对象或字符串，而
+    ResearchRequest.created_at 等 Pydantic 字段要求 `str`。统一转 ISO 字符串，
+    避免 ``start_research_run`` 中 ``ResearchRequest.model_validate`` 校验失败。
+    """
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
 class ResearchStore:
     """研发请求和计划的 SQLAlchemy 持久化。
 
@@ -51,16 +65,18 @@ class ResearchStore:
             conn.execute(
                 text(
                     """INSERT INTO hybrid.research_requests
-                       (request_id, scenario_id, goal, material_scope, target_properties,
+                       (request_id, scenario_id, goal, material_scope, material_system,
+                        target_properties,
                         constraints, preference, user_id, project_id, task_id, execution_profile,
                         status, created_at, updated_at)
-                       VALUES (:request_id, :scenario_id, :goal, :material_scope,
+                       VALUES (:request_id, :scenario_id, :goal, :material_scope, :material_system,
                                :target_properties, :constraints, :preference, :user_id,
                                :project_id, :task_id, :execution_profile, :status, :created_at, :updated_at)
                        ON CONFLICT (request_id) DO UPDATE SET
                            scenario_id = EXCLUDED.scenario_id,
                            goal = EXCLUDED.goal,
                            material_scope = EXCLUDED.material_scope,
+                           material_system = EXCLUDED.material_system,
                            target_properties = EXCLUDED.target_properties,
                            constraints = EXCLUDED.constraints,
                            preference = EXCLUDED.preference,
@@ -76,6 +92,7 @@ class ResearchStore:
                     "scenario_id": request.scenario_id,
                     "goal": request.goal,
                     "material_scope": request.material_scope,
+                    "material_system": request.material_system,
                     "target_properties": json.dumps(request.target_properties),
                     "constraints": json.dumps(request.constraints),
                     "preference": request.preference,
@@ -335,6 +352,7 @@ class ResearchStore:
             "scenario_id": row["scenario_id"] or "",
             "goal": row["goal"],
             "material_scope": row["material_scope"],
+            "material_system": row["material_system"] if "material_system" in row.keys() else "",
             "target_properties": _parse_json_field(row["target_properties"], []) or [],
             "constraints": _parse_json_field(row["constraints"], {}) or {},
             "preference": row["preference"],
@@ -343,8 +361,8 @@ class ResearchStore:
             "task_id": (row["task_id"] if "task_id" in row.keys() else "") or "",
             "execution_profile": row["execution_profile"],
             "status": row["status"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
+            "created_at": _to_iso_str(row["created_at"]),
+            "updated_at": _to_iso_str(row["updated_at"]),
         }
 
     @staticmethod

@@ -111,6 +111,7 @@ def _make_agent_stub():
     agent.compliance_node = MagicMock()
     agent.compliance_node.evaluate = MagicMock(return_value=SimpleNamespace(
         is_passed=True, warnings=[], fatal_errors=[], estimated_unit_cost=100.0,
+        review_required=False,
     ))
 
     specs = {
@@ -170,3 +171,81 @@ def test_design_formula_ehs_profiles():
             "material_name", "reach_status", "reach_clause",
             "ghs_classification", "flash_point", "reactivity_hazard", "sds_link",
         }
+
+
+# ── BOM 与目标材料体系一致性（C2 / P1-004） ──────────────
+
+def test_bom_system_consistency_crystal_target_ok():
+    from battery_materials_agent.api import _assert_bom_system_consistency
+    bom = [
+        {"material_id": "M1", "material_name": "Li2S"},
+        {"material_id": "M2", "material_name": "P2S5"},
+        {"material_id": "M3", "material_name": "LiCl"},
+    ]
+    assert _assert_bom_system_consistency("crystal", "Li6PS5Cl", bom) == []
+
+
+def test_bom_system_consistency_crystal_target_rejects_polymer():
+    from battery_materials_agent.api import _assert_bom_system_consistency
+    bom = [
+        {"material_id": "M1", "material_name": "Li2S"},
+        {"material_id": "M2", "material_name": "PEO"},
+        {"material_id": "M3", "material_name": "PVDF"},
+    ]
+    crossed = _assert_bom_system_consistency("crystal", "Li6PS5Cl", bom)
+    assert set(crossed) == {"peo", "pvdf"}
+
+
+def test_bom_system_consistency_polymer_target_rejects_crystal():
+    from battery_materials_agent.api import _assert_bom_system_consistency
+    bom = [
+        {"material_id": "M1", "material_name": "PEO"},
+        {"material_id": "M2", "material_name": "LiFePO4"},
+    ]
+    crossed = _assert_bom_system_consistency("polymer", "PEO-based electrolyte", bom)
+    assert crossed == ["lifepo4"]
+
+
+def test_bom_system_consistency_unknown_type_by_label():
+    from battery_materials_agent.api import _assert_bom_system_consistency
+    # candidate_type 缺失时按目标材料名推断（含聚合物关键词 → 聚合物目标）
+    bom = [{"material_id": "M1", "material_name": "Li2S"}]
+    assert _assert_bom_system_consistency("", "PEO electrolyte", bom) == ["li2s"]
+    # 无关键词 → 默认按晶体目标处理，聚合物物料被拦截
+    bom2 = [{"material_id": "M1", "material_name": "PEO"}]
+    assert _assert_bom_system_consistency("", "Li6PS5Cl", bom2) == ["peo"]
+
+
+# ── SEED_ 演示数据隔离（D2 / P2-002） ────────────────────
+
+def test_is_demo_id():
+    from battery_materials_agent.api import _is_demo_id, _filter_demo
+    assert _is_demo_id("SEED_SMP_001") is True
+    assert _is_demo_id("seed_cand_llzo") is True
+    assert _is_demo_id("SMP_abc123") is False
+    assert _is_demo_id(None) is False
+    assert _is_demo_id("") is False
+
+
+def test_filter_demo_default_excludes_seed():
+    from battery_materials_agent.api import _filter_demo
+    records = [
+        {"sample_id": "SEED_SMP_A", "name": "演示样品"},
+        {"sample_id": "SMP_1", "name": "真实样品"},
+    ]
+    out = _filter_demo([dict(r) for r in records])
+    assert [r["sample_id"] for r in out] == ["SMP_1"]
+    # 留下的真实记录带 is_demo=False 标记
+    assert out[0]["is_demo"] is False
+
+
+def test_filter_demo_include_seed():
+    from battery_materials_agent.api import _filter_demo
+    records = [
+        {"sample_id": "SEED_SMP_A", "name": "演示样品"},
+        {"sample_id": "SMP_1", "name": "真实样品"},
+    ]
+    out = _filter_demo([dict(r) for r in records], include_demo=True)
+    assert len(out) == 2
+    demo = next(r for r in out if r["sample_id"].startswith("SEED_"))
+    assert demo["is_demo"] is True

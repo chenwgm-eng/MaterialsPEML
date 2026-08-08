@@ -177,7 +177,8 @@
             </a-col>
             <a-col :span="8">
               <a-card size="small" class="kpi-card">
-                <a-statistic :title="`总成本 (¥/${massUnit})`" :value="currentFormula.total_cost_per_kg || 0" prefix="¥" :precision="2" />
+                <a-statistic title="总成本 (¥)" :value="Number(currentFormula.material_cost || 0) + Number(currentFormula.process_cost || 0)" prefix="¥" :precision="2" />
+                <div class="cost-hint">总成本 = 物料成本 + 加工成本</div>
               </a-card>
             </a-col>
           </a-row>
@@ -525,7 +526,7 @@
               <a-statistic title="加工成本" :value="result.process_cost || 0" prefix="¥" :precision="2" />
             </a-col>
             <a-col :span="8">
-              <a-statistic :title="`总成本 (¥/${massUnit})`" :value="result.total_cost_per_kg || 0" prefix="¥" :precision="2" />
+              <a-statistic title="总成本 (¥)" :value="Number(result.material_cost || 0) + Number(result.process_cost || 0)" prefix="¥" :precision="2" />
             </a-col>
           </a-row>
 
@@ -1025,6 +1026,10 @@ async function onDesign() {
     message.warning('请选择或输入目标材料')
     return
   }
+  if (!quantity.value || Number(quantity.value) <= 0) {
+    message.warning(`请填写需求量（${massUnit}）`)
+    return
+  }
   loading.value = true
   try {
     const targetArg = { candidate: target.value, target_property: 'ionic_conductivity' }
@@ -1484,6 +1489,12 @@ onMounted(async () => {
 
 .kpi-card {
   background: var(--light-bg-hover, #fafafa);
+}
+
+.cost-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
 }
 
 .section-block {

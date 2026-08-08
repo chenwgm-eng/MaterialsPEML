@@ -762,24 +762,21 @@ class CrystalCandidateGenerator:
             unique_formulas = list({c.formula for c in all_candidates if c.formula})
             llm_elements = _extract_elements_with_llm(unique_formulas)
 
-            # 元素解析函数：LLM 优先，回退 pymatgen
+            # 元素解析函数：LLM 优先，未覆盖的化学式回退 pymatgen
+            # 注意：不能对 LLM 未覆盖的公式返回空集合——空集是任意 allowed 的子集，
+            # 会让含目标元素集之外元素的无关候选绕过严格过滤（BLOCKER 回归）。
             def _get_elements(formula: str) -> set[str]:
                 if llm_elements is not None:
-                    return llm_elements.get(formula, set())
+                    llm_parsed = llm_elements.get(formula)
+                    if llm_parsed is not None:
+                        return llm_parsed
                 return _extract_elements(formula)
 
-            if llm_elements is not None:
-                filtered = [
-                    c for c in all_candidates
-                    if llm_elements.get(c.formula, set()).issubset(allowed)
-                ]
-                logger.info("使用 InternLM 解析元素，过滤后候选数: %d/%d", len(filtered), len(all_candidates))
-            else:
-                filtered = [
-                    c for c in all_candidates
-                    if _extract_elements(c.formula).issubset(allowed)
-                ]
-                logger.info("使用 pymatgen 解析元素，过滤后候选数: %d/%d", len(filtered), len(all_candidates))
+            filtered = [
+                c for c in all_candidates
+                if _get_elements(c.formula).issubset(allowed)
+            ]
+            logger.info("使用 InternLM 解析元素（未覆盖公式回退 pymatgen），过滤后候选数: %d/%d", len(filtered), len(all_candidates))
 
             # 候选不足或为空时，补充本地已知电池材料库（严格过滤后去重合并）
             # 使用较大 num_results 确保扩展材料不被截断

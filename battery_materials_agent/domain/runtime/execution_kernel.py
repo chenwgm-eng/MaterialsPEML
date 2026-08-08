@@ -145,7 +145,7 @@ class ScientificExecutionKernel:
         return run
 
     def update_run_status(self, run_id: str, new_status: RunStatus) -> Run:
-        """更新 Run 状态（含状态机校验）。"""
+        """更新 Run 状态（含状态机校验与乐观锁守卫）。"""
         current = self.get_run(run_id)
         if current is None:
             raise ValueError(f"Run {run_id!r} not found")
@@ -158,12 +158,18 @@ class ScientificExecutionKernel:
             update_fields["completed_at"] = now
         set_clause = ", ".join(f"{k} = :{k}" for k in update_fields)
         with self.engine.begin() as conn:
-            conn.execute(
+            result = conn.execute(
                 text(
-                    f"UPDATE scientific_kernel.runs SET {set_clause} WHERE run_id = :run_id"
+                    f"UPDATE scientific_kernel.runs SET {set_clause} "
+                    "WHERE run_id = :run_id AND status = :current_status"
                 ),
-                {**update_fields, "run_id": run_id},
+                {**update_fields, "run_id": run_id, "current_status": current.status.value},
             )
+            if result.rowcount == 0:
+                # 并发下状态已被其他写者改变，读-改-写失败，避免丢失更新
+                raise ValueError(
+                    f"Run {run_id!r} 状态并发更新冲突：期望从 {current.status.value} 迁移，但状态已被其他写者改变"
+                )
         self.outbox.enqueue(
             f"run.status_changed.{validated.value}",
             run_id,
@@ -173,15 +179,20 @@ class ScientificExecutionKernel:
         return self.get_run(run_id)
 
     def cancel_run(self, run_id: str) -> Run:
-        """取消运行（通过 CANCELLING 中间态过渡）。"""
+        """取消运行（通过 CANCELLING 中间态过渡，非法时走合法直接 CANCELLED）。"""
         current = self.get_run(run_id)
         if current is None:
             raise ValueError(f"Run {run_id!r} not found")
-        try:
-            self.state_machine.transition(current.status, RunStatus.CANCELLING)
+        # 仅走状态机允许的路径：优先 CANCELLING，若当前状态不允许 CANCELLING
+        # 但允许直接 CANCELLED（如 QUEUED/PREPARING），则直接取消；若两者都非法
+        # （当前已是终态），则抛错，绝不在状态机之外强置终态。
+        if RunStateMachine.can_transition(current.status, RunStatus.CANCELLING):
             return self.update_run_status(run_id, RunStatus.CANCELLING)
-        except InvalidTransitionError:
+        if RunStateMachine.can_transition(current.status, RunStatus.CANCELLED):
             return self.update_run_status(run_id, RunStatus.CANCELLED)
+        raise InvalidTransitionError(
+            f"Run {run_id!r} 当前状态 {current.status.value} 不允许取消（可能已是终态）"
+        )
 
     def resume_run(self, run_id: str) -> Run:
         """恢复运行（从 QUEUED/PREPARING 重新进入 RUNNING）。"""

@@ -1,6 +1,6 @@
 import client from './client'
 
-export const listSamples = () => client.get('/samples')
+export const listSamples = (params = {}) => client.get('/samples', { params })
 
 export const getSample = (id) => client.get(`/samples/${encodeURIComponent(id)}`)
 

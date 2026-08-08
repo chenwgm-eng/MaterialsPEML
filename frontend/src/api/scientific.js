@@ -137,14 +137,7 @@ export const molecularSimulation = {
   listMetrics: () => client.get('/v1/molecular-simulation/metrics'),
 }
 
-// 6. 电池建模与仿真 — /v1/battery-modeling
-export const batteryModeling = {
-  simulate: (params) => client.post('/v1/battery-modeling/simulate', params),
-  simulateFull: (params) => client.post('/v1/battery-modeling/simulate/full', params),
-  listTracks: () => client.get('/v1/battery-modeling/tracks'),
-}
-
-// 7. 合成路线规划 — /v1/synthesis-planning
+// 6. 合成路线规划 — /v1/synthesis-planning
 export const synthesisPlanning = {
   plan: (params) => client.post('/v1/synthesis-planning/plan', params),
   planFull: (params) => client.post('/v1/synthesis-planning/plan/full', params),
@@ -206,7 +199,6 @@ export const SERVICE_API_MAP = {
   structure,
   formulation,
   molecular_simulation: molecularSimulation,
-  battery_modeling: batteryModeling,
   synthesis_planning: synthesisPlanning,
   process_modeling: processModeling,
   reaction_network: reactionNetwork,
@@ -215,24 +207,9 @@ export const SERVICE_API_MAP = {
   molecular_docking: molecularDocking,
 }
 
-// 服务 ID → 智能体映射表（通过 AgentProxy 调用）
-// capability 与后端 agent_team/activity_mapping.py 中的 AgentToolBinding 一致
-export const SERVICE_AGENT_MAP = {
-  mpa: { agent_id: 'builtin_battery_oracle', capability: 'sci_mpa' },
-  chemical: { agent_id: 'builtin_battery_oracle', capability: 'sci_chem_properties' },
-  structure: { agent_id: 'builtin_material_discovery', capability: 'sci_materials_structure' },
-  formulation: { agent_id: 'builtin_industrialization', capability: 'sci_formulation_packing' },
-  molecular_simulation: { agent_id: 'builtin_battery_oracle', capability: 'sci_molecular_simulation' },
-  battery_modeling: { agent_id: 'builtin_battery_oracle', capability: 'sci_battery_modeling' },
-  synthesis_planning: { agent_id: 'builtin_synthesis_planner', capability: 'sci_synthesis_planning' },
-  process_modeling: { agent_id: 'builtin_industrialization', capability: 'sci_process_modeling' },
-  reaction_network: { agent_id: 'builtin_synthesis_planner', capability: 'sci_reaction_network' },
-  wavefunction_analysis: { agent_id: 'builtin_dft_verifier', capability: 'sci_wavefunction_analysis' },
-  fluid_simulation: { agent_id: 'builtin_industrialization', capability: 'sci_fluid_simulation' },
-  molecular_docking: { agent_id: 'builtin_material_discovery', capability: 'sci_molecular_docking' },
-}
-
 // 通过匹配的智能体调用工具（AgentProxy → MCPToolRegistry → 科学服务）
+// 注意：Agent↔能力↔工具绑定统一由后端 /mappings/* 配置（映射控制台），
+// 前端不写死 agent/capability 映射，避免与 activity_mapping.py 双源。
 export function invokeAgentTool (data) {
   return client.post('/v1/agent-tools/invoke', data, { timeout: 180000 })
 }

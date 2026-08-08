@@ -23,6 +23,7 @@ from typing import Any, Optional
 
 from .activity_mapping import ActivityMappingStore, AgentToolBinding, ToolRegistration
 from .registry import AgentRegistry
+from ..contracts.task import Task
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,7 @@ class AgentProxy:
         scp_catalog=None,
         skill_catalog=None,
         skill_executor=None,
+        scientific_registry=None,
     ):
         self._agent_registry = agent_registry
         self._mapping_store = mapping_store
@@ -90,6 +92,12 @@ class AgentProxy:
         self._scp_catalog = scp_catalog
         self._skill_catalog = skill_catalog
         self._skill_executor = skill_executor
+        # 原生科学服务注册表：{capability_id: NativeScientificService}，供 sci_* 能力执行
+        self._scientific_registry = scientific_registry
+
+    def set_capability_router(self, router) -> None:
+        """注入 CapabilityRouter（延迟到 _init_hybrid_stack 之后，避免初始化顺序耦合）。"""
+        self._capability_router = router
 
     # ===================================================================
     # 核心：业务活动 → 智能体 → 工具
@@ -140,6 +148,18 @@ class AgentProxy:
             agent_id=agent_id, capability=capability, sync_mode="sync",
         )
         try:
+            # 科学服务能力（sci_*）：经 CapabilityRouter 路由后执行，其余走常规工具选择
+            if self._is_scientific_capability(capability):
+                evidence, tool_id, used_fallback, fallback_from = _run_async_safe(
+                    self._invoke_scientific_async(capability, params, timeout)
+                )
+                result.tool_id = tool_id
+                result.used_fallback = used_fallback
+                result.fallback_from = fallback_from
+                result.result = evidence
+                result.success = True
+                return result
+
             tool_id, tool_reg, used_fallback, fallback_from = self._select_tool(
                 agent_id, capability
             )
@@ -189,6 +209,18 @@ class AgentProxy:
             agent_id=agent_id, capability=capability, sync_mode="async",
         )
         try:
+            # 科学服务能力（sci_*）：经 CapabilityRouter 路由后执行，其余走常规工具选择
+            if self._is_scientific_capability(capability):
+                evidence, tool_id, used_fallback, fallback_from = await self._invoke_scientific_async(
+                    capability, params, timeout
+                )
+                result.tool_id = tool_id
+                result.used_fallback = used_fallback
+                result.fallback_from = fallback_from
+                result.result = evidence
+                result.success = True
+                return result
+
             tool_id, tool_reg, used_fallback, fallback_from = self._select_tool(
                 agent_id, capability
             )
@@ -222,6 +254,50 @@ class AgentProxy:
             result.duration_ms = (time.time() - started) * 1000
             result.completed_at = datetime.now(timezone.utc).isoformat()
         return result
+
+    # ===================================================================
+    # 科学服务能力（sci_*）—— 经 CapabilityRouter 路由后执行
+    # ===================================================================
+
+    def _is_scientific_capability(self, capability: str) -> bool:
+        """是否为原生科学服务能力（sci_*），且已注入科学服务注册表。"""
+        return bool(capability.startswith("sci_") and self._scientific_registry)
+
+    @staticmethod
+    def _capability_id_from_binding(binding_id: str) -> str:
+        """从路由 binding 提取服务 capability_id：'local:sci:mpa' → 'mpa'。"""
+        parts = binding_id.split(":")
+        if len(parts) >= 3 and parts[0] == "local" and parts[1] == "sci":
+            return parts[2]
+        return binding_id
+
+    async def _invoke_scientific_async(
+        self, capability: str, params: dict, timeout: float
+    ) -> tuple[Any, str, bool, str]:
+        """经 CapabilityRouter 解析 sci_* 能力并执行对应科学服务。
+
+        返回 (evidence, tool_id, used_fallback, fallback_from)。
+        """
+        router = self._capability_router
+        if router is None:
+            raise RuntimeError("CapabilityRouter 未配置，无法路由科学服务")
+        candidates = await router.resolve(capability, "standard")
+        if not candidates:
+            raise ValueError(f"No routable scientific capability for {capability}")
+        candidate = candidates[0]
+        capability_id = self._capability_id_from_binding(candidate.binding_id)
+        service = self._scientific_registry.get(capability_id)
+        if service is None:
+            raise ValueError(f"Scientific service not registered: {capability_id}")
+        task = Task(
+            project_id=params.get("project_id", ""),
+            capability_id=capability_id,
+            title=capability,
+            metadata=params,
+        )
+        # run_full_cycle 为同步计算，放入线程池避免阻塞事件循环
+        evidence = await asyncio.to_thread(service.run_full_cycle, task, params)
+        return evidence, candidate.binding_id, candidate.degraded, candidate.fallback_from
 
     # ===================================================================
     # 工具选择（决策 2-C + 9-C）
