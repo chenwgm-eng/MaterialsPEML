@@ -1,0 +1,515 @@
+{
+  "route": {
+    "material_type": "unknown",
+    "branch": "crystal_branch",
+    "confidence": 0.2,
+    "reason": "无法判定材料类型：输入不含可识别的 PSMILES/SMILES/结构文件或材料类型关键词"
+  },
+  "crystal": {
+    "candidates": [
+      {
+        "candidate_id": "CAND-10759312",
+        "formula": "Li10GeP2S12",
+        "structure_type": "LGPS",
+        "space_group": "P42/nmc",
+        "energy_above_hull": 0.03,
+        "band_gap": 2.8,
+        "formation_energy": -1.65,
+        "source": "local_database",
+        "material_id": "mp-10408",
+        "ionic_conductivity_estimate": 0.012,
+        "stability_score": 0.97,
+        "multi_objective_score": 1.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "73c794220e7e6639",
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "generated_at": "2026-08-07T10:15:39.565895+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:39.565895+00:00",
+          "input_snapshot_hash": "73c794220e7e6639",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-8D8D968A",
+        "formula": "Na3Zr2Si2PO12",
+        "structure_type": "NASICON",
+        "space_group": "R-3c",
+        "energy_above_hull": 0.0,
+        "band_gap": 4.5,
+        "formation_energy": -5.2,
+        "source": "local_database",
+        "material_id": "mp-10826",
+        "ionic_conductivity_estimate": 0.001,
+        "stability_score": 1.0,
+        "multi_objective_score": 0.08333333333333333,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "73c794220e7e6639",
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "generated_at": "2026-08-07T10:15:39.565895+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:39.565895+00:00",
+          "input_snapshot_hash": "73c794220e7e6639",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-C4B007C4",
+        "formula": "Li7La3Zr2O12",
+        "structure_type": "Garnet",
+        "space_group": "Ia-3d",
+        "energy_above_hull": 0.0,
+        "band_gap": 5.0,
+        "formation_energy": -4.52,
+        "source": "local_database",
+        "material_id": "mp-8435",
+        "ionic_conductivity_estimate": 0.001,
+        "stability_score": 1.0,
+        "multi_objective_score": 0.08333333333333333,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "73c794220e7e6639",
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "generated_at": "2026-08-07T10:15:39.565895+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:39.565895+00:00",
+          "input_snapshot_hash": "73c794220e7e6639",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-117C77F3",
+        "formula": "Li3InCl6",
+        "structure_type": "Halide",
+        "space_group": "C2/m",
+        "energy_above_hull": 0.0,
+        "band_gap": 4.2,
+        "formation_energy": -2.85,
+        "source": "local_database",
+        "material_id": "mp-10654",
+        "ionic_conductivity_estimate": 0.0005,
+        "stability_score": 1.0,
+        "multi_objective_score": 0.041666666666666664,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "73c794220e7e6639",
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "generated_at": "2026-08-07T10:15:39.565895+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:39.565895+00:00",
+          "input_snapshot_hash": "73c794220e7e6639",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-691A8521",
+        "formula": "Na3PS4",
+        "structure_type": "NASICON",
+        "space_group": "P213",
+        "energy_above_hull": 0.02,
+        "band_gap": 3.5,
+        "formation_energy": -1.95,
+        "source": "local_database",
+        "material_id": "mp-10170",
+        "ionic_conductivity_estimate": 0.0002,
+        "stability_score": 0.98,
+        "multi_objective_score": 0.016666666666666666,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "73c794220e7e6639",
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "generated_at": "2026-08-07T10:15:39.565895+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "materials-project-v1",
+          "confidence": 0.85,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:39.565895+00:00",
+          "input_snapshot_hash": "73c794220e7e6639",
+          "provenance": []
+        }
+      }
+    ],
+    "count": 5,
+    "degraded": false,
+    "blocked_count": 0,
+    "ai_meta": {
+      "input_snapshot_hash": "73c794220e7e6639",
+      "model_version": "materials-project-v1",
+      "generated_at": "2026-08-07T10:15:39.565895+00:00"
+    }
+  },
+  "polymer": {
+    "candidates": [
+      {
+        "candidate_id": "CAND-B62A8128",
+        "name": "Poly(ethylene oxide)",
+        "psmiles": "Polymer([*]CCO[*])",
+        "smiles": "CCO",
+        "monomer_smiles": [
+          "C(CO)O"
+        ],
+        "source": "known",
+        "description": "PEO-based SPE, widely studied for Li+ conduction",
+        "predicted_ionic_conductivity": 1e-05,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-628597F1",
+        "name": "Poly(vinylidene fluoride)",
+        "psmiles": "Polymer([*]CC(F)(F)[*])",
+        "smiles": "C=C(F)F",
+        "monomer_smiles": [
+          "C=C(F)F"
+        ],
+        "source": "known",
+        "description": "PVDF, high dielectric constant",
+        "predicted_ionic_conductivity": 1e-07,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-5CE1A186",
+        "name": "Poly(methyl methacrylate)",
+        "psmiles": "Polymer([*]CC(C)(C(=O)OC)[*])",
+        "smiles": "CC(C)(C(=O)OC)",
+        "monomer_smiles": [
+          "CC(C)(C(=O)OC)"
+        ],
+        "source": "known",
+        "description": "PMMA, good mechanical properties",
+        "predicted_ionic_conductivity": 1e-08,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-AAD8F017",
+        "name": "Polyacrylonitrile",
+        "psmiles": "Polymer([*]CCC#N[*])",
+        "smiles": "CC(C#N)",
+        "monomer_smiles": [
+          "C=CC#N"
+        ],
+        "source": "known",
+        "description": "PAN, good thermal stability",
+        "predicted_ionic_conductivity": 1e-06,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-E442D96F",
+        "name": "Poly(propylene carbonate)",
+        "psmiles": "Polymer([*]CC(C)OC(=O)O[*])",
+        "smiles": "CC(C)OC(=O)O",
+        "monomer_smiles": [
+          "CC(C)OC(=O)O"
+        ],
+        "source": "known",
+        "description": "PPC, biodegradable SPE candidate",
+        "predicted_ionic_conductivity": 5e-06,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-9231CB07",
+        "name": "Poly(propylene oxide)",
+        "psmiles": "Polymer([*]CC(C)O[*])",
+        "smiles": "CC(C)O",
+        "monomer_smiles": [
+          "CC(C)O"
+        ],
+        "source": "rule_based",
+        "description": "Methyl side chain reduces crystallinity",
+        "predicted_ionic_conductivity": 2e-06,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-6BB18E2A",
+        "name": "Poly(vinyl alcohol)",
+        "psmiles": "Polymer([*]CC(O)[*])",
+        "smiles": "CC(O)",
+        "monomer_smiles": [
+          "CC(O)"
+        ],
+        "source": "rule_based",
+        "description": "Hydroxyl groups for H-bonding",
+        "predicted_ionic_conductivity": 1e-06,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-6B59B294",
+        "name": "Poly(vinyl fluoride)",
+        "psmiles": "Polymer([*]CCF[*])",
+        "smiles": "C=CF",
+        "monomer_smiles": [
+          "C=CF"
+        ],
+        "source": "rule_based",
+        "description": "Fluorinated backbone",
+        "predicted_ionic_conductivity": 2e-06,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-3F806157",
+        "name": "Poly(ethylene carbonate)",
+        "psmiles": "Polymer([*]CCOC(=O)O[*])",
+        "smiles": "CCOC(=O)O",
+        "monomer_smiles": [
+          "CCOC(=O)O"
+        ],
+        "source": "rule_based",
+        "description": "Cyclic carbonate for high conductivity",
+        "predicted_ionic_conductivity": 4e-06,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      },
+      {
+        "candidate_id": "CAND-AE227046",
+        "name": "Poly(trimethylene carbonate)",
+        "psmiles": "Polymer([*]CCCOC(=O)O[*])",
+        "smiles": "CCCOC(=O)O",
+        "monomer_smiles": [
+          "CCCOC(=O)O"
+        ],
+        "source": "rule_based",
+        "description": "Flexible carbonate backbone",
+        "predicted_ionic_conductivity": 4e-06,
+        "molecular_weight": 0.0,
+        "multi_objective_score": 0.0,
+        "provenance": [],
+        "ai_meta": {
+          "input_snapshot_hash": "2739428a75023a0b",
+          "model_version": "internlm-v1",
+          "generated_at": "2026-08-07T10:15:49.604203+00:00"
+        },
+        "scenario_id": "",
+        "project_id": "",
+        "task_id": "",
+        "data_quality": "estimated",
+        "prediction": {
+          "model_version": "internlm-v1",
+          "confidence": null,
+          "predicted_value": {},
+          "predicted_at": "2026-08-07T10:15:49.604203+00:00",
+          "input_snapshot_hash": "2739428a75023a0b",
+          "provenance": []
+        }
+      }
+    ],
+    "count": 10,
+    "ai_meta": {
+      "input_snapshot_hash": "2739428a75023a0b",
+      "model_version": "internlm-v1",
+      "generated_at": "2026-08-07T10:15:49.604203+00:00"
+    }
+  }
+}

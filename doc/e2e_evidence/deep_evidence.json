@@ -1,0 +1,42 @@
+[
+  {
+    "test": "404_render",
+    "nf": {
+      "mainText": "404\n抱歉，您访问的页面不存在\n返回首页\n返回上一页\n\n可能原因：\n\n页面地址已变更，请使用左侧导航栏重新进入\n链接已失效，请联系管理员\nURL 拼写错误，请检查地址栏",
+      "bodyText": "跳转到主内容\nMaterialsPEML\n我的研发\n项目空间\n实验与数据\n知识资产\nAI 与编排\n管理\n系统管理员\n管理员\n系统正常\n新建\n页面未找到\n最近\n系统管理员\n管理员\n404\n抱歉，您访问的页面不存在\n返回首页\n返回上一页\n\n可能原因：\n\n页面地址已变更，请使用左侧导航栏重新进入\n链接已失效，请联系管理员\nURL 拼写错误，请检查地址栏"
+    }
+  },
+  {
+    "test": "battery_life_clicked",
+    "errs": [
+      "[console] Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    ]
+  },
+  {
+    "test": "battery_life_result",
+    "tail": "404\n抱歉，您访问的页面不存在\n返回首页\n返回上一页\n\n可能原因：\n\n页面地址已变更，请使用左侧导航栏重新进入\n链接已失效，请联系管理员\nURL 拼写错误，请检查地址栏",
+    "errs": []
+  },
+  {
+    "test": "material_detail_drawer",
+    "matDetail": "3D 分子结构 — C(COCCO[*])[*]SMILES:C(COCCO[*])[*]取 消确 定",
+    "errs": []
+  },
+  {
+    "test": "formula_detail_drawer",
+    "formDetail": "配方详情\nBOM-6B8FC3F20A\nV01\n目标材料：Cl-rich LPSCl\n需求量： kg\n编 辑\n只读\n物料成本\n¥158.00\n加工成本\n¥1,656.80\n总成本 (¥)\n¥1,814.80\n总成本 = 物料成本 + 加工成本\n物料清单 (BOM)\n工艺参数 (BOP)\n相关知识\n物料清单 (BOM)\n原料名称\tCAS号\t用量 (kg)\t单价 (¥/kg)\t成本 (¥)\t供应商\t库存\t操作\nPEO\t\t-\t85\t¥68.00\t国泰华荣\t已入库\t\nLiTFSI\t\t-\t450\t¥90.00\t多氟多\t已入库\t\n加工成本明细（设备折旧 / 能耗 / 人工）\nEHS 合规检查\nREACH 合规\t待复核\tGHS 危险性分类\t未分类为危险品\n存储要求\t常温存储\t废弃处理\t通用工业废弃物\n物料\tREACH 核查\tGHS 分类\t闪点\t反应性危害\tSDS\nPEO\t通过\t未分类为危险品\t未测定\t无已知反应性危害\t未关联\nLiTFSI\t通过\t未分类为危险品\t未测定\t无已知反应性危害\t未关联",
+    "errs": []
+  },
+  {
+    "test": "knowledge_graph_view",
+    "kg": {
+      "canvas": 1,
+      "text": "已保存的知识图谱\n2 个图谱\n刷 新\nLi6PS5Cl 知识图谱\n检索词：Li6PS5Cl\n·\n5 节点\n·\n4 关系\n·\n1 篇文献\n·\n2026/7/25 17:05:22\n查看\n删除\nsolid electrolyte 知识图谱\n检索词：solid electrolyte\n·\n27 节点\n·\n36 关系\n·\n10 篇文献\n·\n2026/7/23 21:33:20\n查看\n删除\nLi6PS5Cl 知识图谱\n5 节点\n4 关系"
+    },
+    "errs": []
+  },
+  {
+    "test": "properties_page",
+    "errs": []
+  }
+]
