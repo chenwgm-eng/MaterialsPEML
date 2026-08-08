@@ -38,6 +38,7 @@ const props = defineProps({
   data: { type: Array, default: () => [] },
   xKey: { type: String, default: 'x' },
   yKey: { type: String, default: 'y' },
+  cumulativeKey: { type: String, default: 'cumulative' },
   title: { type: String, default: '' },
   height: { type: Number, default: 280 },
   facet: { type: Boolean, default: false },
@@ -161,6 +162,49 @@ const chartOption = computed(() => {
         itemStyle: { color: '#2050d0', borderRadius: [4, 4, 0, 0] },
         barMaxWidth: 36,
       }],
+    }
+  }
+
+  // 帕累托图：频次降序柱 + 累计占比折线（双 Y 轴）
+  if (props.type === 'pareto') {
+    const cumulativeData = props.data.map((d) => d[props.cumulativeKey] ?? 0)
+    return {
+      title: props.title ? { text: props.title, textStyle: { fontSize: 14, fontWeight: 600, color: '#1a1a2e' }, left: 0, top: 0 } : undefined,
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: '#ffffff',
+        borderColor: '#e0e0e0',
+        borderWidth: 1,
+        textStyle: { color: '#1a1a2e', fontSize: 12 },
+        extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 6px;',
+      },
+      legend: { data: ['问题数', '累计占比'], top: props.title ? 30 : 4, right: 0, itemWidth: 12, itemHeight: 8, textStyle: { color: '#8a8f9c', fontSize: 11 } },
+      grid: { left: 48, right: 48, top: props.title ? 60 : 36, bottom: 34 },
+      xAxis: { ...categoryAxis, axisLabel: { ...categoryAxis.axisLabel, interval: 0 } },
+      yAxis: [
+        { type: 'value', name: '问题数', nameTextStyle: { color: '#8a8f9c', fontSize: 11 }, splitLine: { lineStyle: { color: '#f0f0f0' } }, axisLabel: { color: '#8a8f9c', fontSize: 11 } },
+        { type: 'value', name: '累计占比', nameTextStyle: { color: '#8a8f9c', fontSize: 11 }, min: 0, max: 100, axisLabel: { color: '#8a8f9c', fontSize: 11, formatter: '{value}%' }, splitLine: { show: false } },
+      ],
+      series: [
+        {
+          name: '问题数',
+          type: 'bar',
+          data: yData,
+          itemStyle: { color: '#f97316', borderRadius: [4, 4, 0, 0] },
+          barMaxWidth: 36,
+        },
+        {
+          name: '累计占比',
+          type: 'line',
+          yAxisIndex: 1,
+          data: cumulativeData,
+          smooth: true,
+          showSymbol: true,
+          symbolSize: 6,
+          lineStyle: { color: '#2050d0', width: 2 },
+          itemStyle: { color: '#2050d0' },
+        },
+      ],
     }
   }
 

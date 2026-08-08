@@ -3,7 +3,7 @@
 from fastapi import FastAPI, HTTPException, Request, Query, Depends, Body
 from fastapi import Path as FastApiPath
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response, JSONResponse
+from fastapi.responses import FileResponse, Response, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field, SecretStr, field_validator
 from pathlib import Path
 from sqlalchemy import text
@@ -47,12 +47,16 @@ from .knowledge import (
 from .workflow_schema import get_schema_loader
 from .projects import Project, ProjectStore, ProjectTask, _iso
 from .audit import get_audit_logger, AuditEntry, AuditLogger
+from .auth.tenant_store import TenantStore
 from .auth import (
     UserRole, User, UserStore,
     get_current_user, require_role, require_login, check_project_access,
+    require_permission,
 )
 from .auth.user_store import hash_password, is_legacy_hash, verify_password
 from .auth.tokens import issue_token, verify_token
+from .auth import sso as sso_module
+from .auth import ldap_auth
 from .version_store import (
     Version, VersionType, VersionStore, get_version_store,
 )
@@ -60,6 +64,7 @@ from .industrialization.formula_store import FormulaVersion, FormulaStore, get_f
 from .integrations.models import ExternalInvocation
 from .integrations.audit_store import AuditStore, ProvenanceDecorator, DB_PATH as AUDIT_DB_PATH
 from .integrations import init_audit_db
+from .db import get_tenant
 from .mcp_tools.scp_client import SCPClientPool
 from .mcp_tools.scp_catalog import SCPCatalog, ToolBinding, RiskLevel
 from .mcp_tools.scp_policy import SCPPolicy, PolicyDeniedError
@@ -85,6 +90,10 @@ from .control_plane.provider_registry import ProviderRegistry
 from .evals.runner import EvalRunner
 from .evals.coe_audit import CoeAuditor
 from .ai_assistant import AiSessionStore
+from .report.export import (
+    build_report, export_excel, export_pdf, schedule_report,
+    start_report_scheduler, VALID_FORMATS, REPORT_TYPES,
+)
 
 # 后台任务引用集：避免 asyncio.create_task 创建的任务被 GC 回收，并集中管理生命周期
 _background_tasks: set[asyncio.Task] = set()
@@ -933,6 +942,13 @@ async def startup():
     except Exception as e:
         logger.warning("Outbox 消费者启动失败 (non-fatal): %s", e)
 
+    # ── 启动报表定时调度器（APScheduler + PostgreSQL 持久化） ──
+    try:
+        start_report_scheduler()
+        logger.info("报表定时调度器已启动（APScheduler 持久化调度）")
+    except Exception as e:
+        logger.warning("报表定时调度器启动失败 (non-fatal): %s", e)
+
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -1481,6 +1497,12 @@ class UserUpdateRequest(BaseModel):
     is_active: bool | None = None
 
 
+class TenantCreateRequest(BaseModel):
+    tenant_id: str = ""
+    name: str = ""
+    status: str = "active"
+
+
 def _user_to_dict(user: User) -> dict:
     """转换为字典并剔除密码哈希，避免泄露到接口响应。"""
     d = user.model_dump()
@@ -1488,18 +1510,73 @@ def _user_to_dict(user: User) -> dict:
     return d
 
 
+def user_permissions(user: User | None) -> list[str]:
+    """返回当前用户拥有的权限点列表（供前端 UI 门禁用）。"""
+    if user is None:
+        return []
+    from .auth.permissions import ROLE_PERMISSIONS, role_has_permission
+    if user.role == UserRole.ADMIN:
+        perms = set()
+        for permset in ROLE_PERMISSIONS.values():
+            perms |= permset
+        perms |= {"user.manage", "tenant.manage"}
+        return sorted(perms)
+    return sorted(ROLE_PERMISSIONS.get(user.role, set()))
+
+
 @app.post("/auth/login")
-async def login(req: LoginRequest):
+async def login(req: LoginRequest, request: Request):
     """登录：校验用户名/密码，签发带 HMAC 签名与过期时间的认证 token。"""
     store: UserStore = app.state.user_store
     user = store.get_by_username(req.username)
+    client_ip = request.client.host if request.client else ""
     if user is None or not user.is_active or not verify_password(req.password, user.password_hash):
+        # LDAP 兜底：本地用户不存在或密码不符时，尝试企业 LDAP 认证（A2）
+        from .config import get_config as _gc
+        ldap_cfg = _gc().ldap
+        if ldap_cfg.enabled and ldap_cfg.server:
+            try:
+                identity = ldap_auth.authenticate(ldap_cfg, req.username, req.password)
+                if identity:
+                    user, _created = sso_module.provision_user(
+                        store, ldap_cfg, dict(identity, default_role=ldap_cfg.default_role,
+                                              default_tenant=ldap_cfg.default_tenant),
+                        auth_source="ldap",
+                    )
+                    store.update_last_login(user.user_id)
+                    get_audit_logger().log(AuditEntry(
+                        event_type="auth", module="auth", action="ldap_login",
+                        operator=user.username, user_id=user.user_id, ip=client_ip,
+                        resource_type="user", resource_id=user.user_id,
+                        tenant_id=user.tenant_id,
+                    ))
+                    return {
+                        "user_id": user.user_id, "username": user.username,
+                        "display_name": user.display_name, "email": user.email,
+                        "role": user.role.value, "project_ids": user.project_ids,
+                        "tenant_id": user.tenant_id or "default",
+                        "token": issue_token(user.user_id),
+                    }
+            except Exception as e:
+                logger.warning("LDAP 认证异常：%s", e)
+        # 认证失败审计（登录失败不一定有 user，operator 用请求用户名）
+        get_audit_logger().log(AuditEntry(
+            event_type="auth", module="auth", action="login_failed",
+            operator=req.username, ip=client_ip,
+            detail={"username": req.username},
+        ))
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     # 旧 sha256 格式密码在登录成功时透明升级为 pbkdf2
     if is_legacy_hash(user.password_hash):
         user.password_hash = hash_password(req.password)
         store.save(user)
     store.update_last_login(user.user_id)
+    get_audit_logger().log(AuditEntry(
+        event_type="auth", module="auth", action="login_success",
+        operator=user.username, user_id=user.user_id, ip=client_ip,
+        resource_type="user", resource_id=user.user_id,
+        tenant_id=user.tenant_id,
+    ))
     return {
         "user_id": user.user_id,
         "username": user.username,
@@ -1507,8 +1584,68 @@ async def login(req: LoginRequest):
         "email": user.email,
         "role": user.role.value,
         "project_ids": user.project_ids,
+        "tenant_id": user.tenant_id or "default",
         "token": issue_token(user.user_id),
     }
+
+
+# --- 企业 SSO / LDAP 认证（A2）---
+
+def _sso_enabled() -> bool:
+    from .config import get_config as _gc
+    return _gc().sso.enabled
+
+
+@app.get("/auth/sso/status")
+async def sso_status():
+    """返回 SSO 是否启用（前端据此显示登录按钮）。"""
+    return {"enabled": _sso_enabled()}
+
+
+@app.get("/auth/sso/login")
+async def sso_login(request: Request):
+    """重定向到 IdP 授权端点。"""
+    from .config import get_config as _gc
+    cfg = _gc().sso
+    if not cfg.enabled or not cfg.issuer or not cfg.client_id:
+        raise HTTPException(status_code=400, detail="SSO 未启用或配置不完整")
+    state = sso_module.make_state("sso-login")
+    try:
+        url = sso_module.build_auth_url(cfg, state)
+    except Exception as e:
+        logger.error("构造 SSO 授权 URL 失败：%s", e)
+        raise HTTPException(status_code=502, detail="无法连接企业身份提供商")
+    return RedirectResponse(url)
+
+
+@app.get("/auth/sso/callback")
+async def sso_callback(code: str, state: str):
+    """IdP 回调：校验 state → 换 token → JIT 开户 → 签发本系统 token。"""
+    from .config import get_config as _gc
+    cfg = _gc().sso
+    if not sso_module.verify_state(state):
+        raise HTTPException(status_code=400, detail="state 校验失败，请重新发起登录")
+    try:
+        token_resp = sso_module.exchange_code(cfg, code)
+        claims = sso_module._extract_claims(cfg, token_resp)
+        identity = sso_module.claims_to_identity(claims)
+    except Exception as e:
+        logger.error("SSO 换 token 失败：%s", e)
+        raise HTTPException(status_code=401, detail="SSO 认证失败")
+    store: UserStore = app.state.user_store
+    try:
+        user, created = sso_module.provision_user(store, cfg, identity)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    store.update_last_login(user.user_id)
+    get_audit_logger().log(AuditEntry(
+        event_type="auth", module="auth", action="sso_login",
+        operator=user.username, user_id=user.user_id,
+        resource_type="user", resource_id=user.user_id,
+        tenant_id=user.tenant_id,
+    ))
+    token = issue_token(user.user_id)
+    return RedirectResponse(f"/login?sso_token={token}")
 
 
 @app.get("/auth/me")
@@ -1516,7 +1653,9 @@ async def get_me(current: User | None = Depends(get_current_user)):
     """获取当前登录用户信息（依据 X-Auth-Token 请求头）。"""
     if current is None:
         raise HTTPException(status_code=401, detail="未登录")
-    return _user_to_dict(current)
+    data = _user_to_dict(current)
+    data["permissions"] = user_permissions(current)
+    return data
 
 
 @app.post("/auth/logout")
@@ -1531,9 +1670,9 @@ async def logout(current: User | None = Depends(get_current_user)):
     return {"logged_out": True}
 
 
-@app.get("/auth/users", dependencies=[Depends(require_role(UserRole.ADMIN))])
+@app.get("/auth/users", dependencies=[Depends(require_permission("user.manage"))])
 async def list_users():
-    """列出所有用户（仅 admin）。"""
+    """列出所有用户（user.manage 权限）。"""
     store: UserStore = app.state.user_store
     return [_user_to_dict(u) for u in store.list_all()]
 
@@ -1545,9 +1684,9 @@ async def list_users_brief():
     return [{"user_id": u.user_id, "display_name": u.display_name or u.username} for u in store.list_all()]
 
 
-@app.post("/auth/users", dependencies=[Depends(require_role(UserRole.ADMIN))])
+@app.post("/auth/users", dependencies=[Depends(require_permission("user.manage"))])
 async def create_user(req: UserCreateRequest):
-    """创建用户（仅 admin）。"""
+    """创建用户（user.manage 权限）。"""
     store: UserStore = app.state.user_store
     if not req.username.strip():
         raise HTTPException(status_code=400, detail="用户名不能为空")
@@ -1570,9 +1709,9 @@ async def create_user(req: UserCreateRequest):
     return _user_to_dict(user)
 
 
-@app.put("/auth/users/{user_id}", dependencies=[Depends(require_role(UserRole.ADMIN))])
+@app.put("/auth/users/{user_id}", dependencies=[Depends(require_permission("user.manage"))])
 async def update_user(user_id: str, req: UserUpdateRequest):
-    """更新用户（仅 admin）。password 留空则不修改。"""
+    """更新用户（user.manage 权限）。password 留空则不修改。"""
     store: UserStore = app.state.user_store
     user = store.get(user_id)
     if user is None:
@@ -1596,9 +1735,9 @@ async def update_user(user_id: str, req: UserUpdateRequest):
     return _user_to_dict(user)
 
 
-@app.delete("/auth/users/{user_id}", dependencies=[Depends(require_role(UserRole.ADMIN))])
+@app.delete("/auth/users/{user_id}", dependencies=[Depends(require_permission("user.manage"))])
 async def delete_user(user_id: str):
-    """删除用户（仅 admin）。不允许删除默认 admin 账户以防锁死系统。"""
+    """删除用户（user.manage 权限）。不允许删除默认 admin 账户以防锁死系统。"""
     store: UserStore = app.state.user_store
     default_admin = store.get_by_username("admin")
     if default_admin is not None and default_admin.user_id == user_id:
@@ -1610,10 +1749,68 @@ async def delete_user(user_id: str):
 
 # --- 审计日志 ---
 
-@app.get("/audit/logs", dependencies=[Depends(require_role(UserRole.ADMIN))])
-async def list_audit_logs(module: str | None = None, limit: int = 50):
+# A4：多条件分页查询（兼容旧参数 module/limit）
+@app.get("/audit/logs", dependencies=[Depends(require_permission("audit.view"))])
+async def list_audit_logs(
+    module: str | None = None,
+    action: str | None = None,
+    operator: str | None = None,
+    event_type: str | None = None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+    start_at: str | None = None,
+    end_at: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    limit: int | None = None,
+):
+    """多条件分页查询审计日志（需登录）。
+
+    兼容旧客户端：仅传 module/limit 时退化为简单列表；传分页参数时返回
+    ``{items, total, page, page_size}``。行级可见性受当前用户租户隔离。
+    """
     logger = get_audit_logger()
-    return [e.model_dump() for e in logger.query(module=module, limit=limit)]
+    if limit is not None:
+        return [e.model_dump() for e in logger.query(module=module, limit=limit)]
+    return logger.query_paged(
+        module=module, action=action, operator=operator, event_type=event_type,
+        resource_type=resource_type, resource_id=resource_id,
+        start_at=start_at, end_at=end_at, page=page, page_size=page_size,
+    )
+
+
+@app.post("/audit/archive", dependencies=[Depends(require_permission("audit.view"))])
+async def archive_audit(before_at: str):
+    """归档早于 before_at 的审计记录（仅当前租户）。"""
+    logger = get_audit_logger()
+    count = logger.archive(before_at)
+    return {"archived": count}
+
+
+# --- 租户管理（多租户隔离 A1）---
+
+@app.get("/tenants", dependencies=[Depends(require_permission("tenant.manage"))])
+async def list_tenants():
+    """列出所有租户（tenant.manage 权限）。"""
+    return [t.model_dump() for t in TenantStore().list_all()]
+
+
+@app.post("/tenants", dependencies=[Depends(require_permission("tenant.manage"))])
+async def create_tenant(req: TenantCreateRequest):
+    """创建租户（tenant.manage 权限）。"""
+    store = TenantStore()
+    if store.get(req.tenant_id) is not None:
+        raise HTTPException(status_code=409, detail=f"租户 {req.tenant_id} 已存在")
+    tenant = store.create(req.tenant_id, req.name, req.status or "active")
+    return tenant.model_dump()
+
+
+@app.post("/tenants/{tenant_id}/status", dependencies=[Depends(require_permission("tenant.manage"))])
+async def set_tenant_status(tenant_id: str, status: str):
+    """启用/停用租户（tenant.manage 权限）。"""
+    if not TenantStore().set_status(tenant_id, status):
+        raise HTTPException(status_code=404, detail="租户不存在")
+    return {"ok": True, "tenant_id": tenant_id, "status": status}
 
 
 # --- 异常监控 ---
@@ -8333,6 +8530,109 @@ async def cross_scale_predict(req: CrossScaleRequest):
         except Exception as exc:  # noqa: BLE001
             logger.warning("持久化预测结果失败 candidate_id=%s: %s", req.candidate_id, exc)
     return result
+
+
+# ── 跨尺度求解异步任务（真实 LAMMPS/FEniCSx 通常耗时较长，走异步+轮询） ──
+from collections import OrderedDict as _ODict_for_cross_scale      # noqa: E402
+_cross_scale_tasks: _ODict_for_cross_scale = _ODict_for_cross_scale()  # noqa: E402
+
+
+def _set_cross_scale_status(task_id: str, status: str, progress: int = 0,
+                            step_label: str = "", result: dict | None = None,
+                            error: str = ""):
+    from datetime import datetime as _dt2, timezone as _tz2
+    _cross_scale_tasks[task_id] = {
+        "task_id": task_id,
+        "status": status,  # pending / running / completed / failed
+        "progress": progress,
+        "step_label": step_label,
+        "result": result,
+        "error": error,
+        "updated_at": _dt2.now(_tz2.utc).isoformat(),
+    }
+    _cross_scale_tasks.move_to_end(task_id)
+    while len(_cross_scale_tasks) > 200:
+        _cross_scale_tasks.popitem(last=False)
+
+
+@app.post("/properties/cross_scale/async", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def cross_scale_predict_async(req: CrossScaleRequest):
+    """异步提交跨尺度建模任务，立即返回 task_id 供前端轮询。
+
+    与同步版本一致地解析 material/scales/agent，但执行放到后台任务，
+    真实 LAMMPS/FEniCSx 求解在中途完成时更新进度。
+    """
+    import uuid as _uuid
+    task_id = f"csx-{_uuid.uuid4().hex[:12]}"
+    _set_cross_scale_status(task_id, "pending", progress=0, step_label="队列中…")
+
+    async def _bg_cross_scale():
+        from .cross_scale.engine import CrossScaleEngine
+        try:
+            valid_scales = {"molecular", "reaction", "continuum"}
+            scales = [s for s in req.scales if s in valid_scales]
+            if not scales:
+                raise ValueError("scales 至少包含一个有效值")
+
+            material = {
+                "type": req.material_type,
+                "formula": req.formula,
+                "smiles": req.smiles,
+            }
+            if req.material_type not in ("crystal", "molecule"):
+                raise ValueError("material_type 必须为 crystal 或 molecule")
+
+            _set_cross_scale_status(task_id, "running", progress=10, step_label="构造跨尺度引擎…")
+            a = app.state.agent
+
+            overridden = False
+            original_model_type = None
+            if req.model_type:
+                predictor = a.crystal_predictor if req.material_type == "crystal" else a.polymer_predictor
+                supported = getattr(predictor, "SUPPORTED_MODELS", None) or []
+                if req.model_type in supported:
+                    original_model_type = predictor.model_type
+                    predictor.model_type = req.model_type
+                    overridden = True
+
+            a_actual_id: str | None = None
+            if req.agent_id:
+                try:
+                    _require_agent_team()
+                    agent_def = _registry.get_agent(req.agent_id)
+                    if agent_def is not None and "property_prediction" in (agent_def.capabilities or []):
+                        a_actual_id = agent_def.id or req.agent_id
+                except Exception:  # noqa: BLE001
+                    a_actual_id = req.agent_id
+
+            try:
+                engine = CrossScaleEngine(agent=a)
+                solver_status = engine.solver_status()
+                _set_cross_scale_status(
+                    task_id, "running", progress=30,
+                    step_label=f"求解器：LAMMPS={'可用' if solver_status['lammps']['available'] else '降级'}，"
+                               f"FEniCSx={'可用' if solver_status['fenicsx']['available'] else '降级'}",
+                )
+                result = await engine.run_cross_scale(material, scales, agent_id=a_actual_id)
+                _set_cross_scale_status(task_id, "completed", progress=100,
+                                        step_label="跨尺度建模完成", result=result)
+            finally:
+                if overridden:
+                    predictor.model_type = original_model_type
+        except Exception as exc:  # noqa: BLE001
+            _set_cross_scale_status(task_id, "failed", error=str(exc)[:500])
+
+    _spawn_background(_bg_cross_scale())
+    return {"task_id": task_id, "status": "pending"}
+
+
+@app.get("/properties/cross_scale/status", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def cross_scale_status(task_id: str):
+    """轮询跨尺度异步任务状态。"""
+    entry = _cross_scale_tasks.get(task_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"未找到跨尺度任务: {task_id}")
+    return entry
 
 
 
@@ -15603,6 +15903,96 @@ async def ai_send_message(session_id: str, req: AiSendRequest, user: User = Depe
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── 报表导出 / 定时报表（report.export 权限） ──
+
+class ReportExportRequest(BaseModel):
+    format: str
+    report_type: str
+    title: str | None = None
+
+
+class ReportScheduleRequest(BaseModel):
+    report_type: str
+    format: str
+    cron_expr: str = "daily"
+    owner: str | None = None
+
+
+@app.post("/report/export", dependencies=[Depends(require_permission("report.export"))])
+async def report_export(
+    req: ReportExportRequest,
+    current: User | None = Depends(get_current_user),
+):
+    """导出指定类型的报表（Excel/PDF），并记录导出审计。"""
+    if req.format not in VALID_FORMATS:
+        raise HTTPException(status_code=400, detail=f"不支持的导出格式: {req.format}")
+    if req.report_type not in REPORT_TYPES:
+        raise HTTPException(status_code=400, detail=f"不支持的报表类型: {req.report_type}")
+    data = build_report({"report_type": req.report_type})
+    title = req.title or data["title"]
+    if req.format == "excel":
+        content = export_excel(data["rows"], data["columns"])
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ext = "xlsx"
+    else:
+        content = export_pdf(data["rows"], data["columns"], title)
+        media_type = "application/pdf"
+        ext = "pdf"
+    operator = current.user_id if current else "system"
+    get_audit_logger().log(AuditEntry(
+        event_type="data_change",
+        module="report",
+        action="export",
+        operator=operator,
+        user_id=operator,
+        resource_type="report",
+        resource_id=f"{req.report_type}:{req.format}",
+        detail={"title": title, "rows": len(data["rows"])},
+    ))
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="report.{ext}"'},
+    )
+
+
+@app.get("/report/last", dependencies=[Depends(require_permission("report.export"))])
+async def report_last():
+    """返回最近一次报表导出记录，无则返回 {empty: true}。"""
+    page = get_audit_logger().query_paged(module="report", action="export", page=1, page_size=1)
+    items = page.get("items") or []
+    if not items:
+        return {"empty": True}
+    entry = items[0]
+    rid = entry.get("resource_id") or ""
+    parts = rid.split(":")
+    return {
+        "type": parts[0] if parts else "",
+        "format": parts[1] if len(parts) > 1 else "",
+        "operator": entry.get("operator"),
+        "created_at": entry.get("created_at"),
+    }
+
+
+@app.post("/report/schedule", dependencies=[Depends(require_permission("report.export"))])
+async def report_schedule(
+    req: ReportScheduleRequest,
+    current: User | None = Depends(get_current_user),
+):
+    """注册一个持久化定时报表（APScheduler + PostgreSQL，重启后恢复）。"""
+    try:
+        result = schedule_report({
+            "report_type": req.report_type,
+            "format": req.format,
+            "cron_expr": req.cron_expr,
+            "owner": req.owner or (current.user_id if current else "system"),
+            "tenant_id": get_tenant(),
+        })
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return result
 
 
 if _frontend_dist.is_dir():

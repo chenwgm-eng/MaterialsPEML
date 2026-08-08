@@ -82,18 +82,25 @@
           @click="runCrossScale"
         >
           <template #icon><ThunderboltOutlined /></template>
-          开始预测
+          {{ propsLoading ? '跨尺度求解中…' : '开始预测' }}
         </a-button>
+        <div v-if="propsLoading" class="cs-progress">
+          <a-progress :percent="taskProgress" :status="taskError ? 'exception' : 'active'" />
+          <div class="cs-step-label">
+            <LoadingOutlined v-if="!taskError" spin />
+            <span>{{ taskError || taskStepLabel }}</span>
+          </div>
+        </div>
       </div>
     </div>
   </a-drawer>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { ThunderboltOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
-import { crossScalePredict } from '@/api/properties'
+import { ThunderboltOutlined, InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons-vue'
+import { crossScalePredictAsync, crossScaleStatus } from '@/api/properties'
 import client from '@/api/client'
 
 const props = defineProps({
@@ -129,6 +136,11 @@ const selectedScales = ref(['molecular', 'reaction', 'continuum'])
 const agentsLoading = ref(false)
 const agentOptions = ref([])
 const propsLoading = ref(false)
+// 异步任务轮询状态
+const taskProgress = ref(0)
+const taskStepLabel = ref('')
+const taskError = ref('')
+let pollTimer = null
 // 系统设置中禁用的模型列表
 const disabledModels = ref([])
 
@@ -219,6 +231,9 @@ async function runCrossScale() {
     return
   }
   propsLoading.value = true
+  taskError.value = ''
+  taskProgress.value = 0
+  taskStepLabel.value = '正在提交…'
   try {
     const payload = {
       material_type: props.structureKind === 'crystal' ? 'crystal' : 'molecule',
@@ -229,16 +244,44 @@ async function runCrossScale() {
       agent_id: selectedAgentId.value || undefined,
       candidate_id: props.candidateId,
     }
-    const res = await crossScalePredict(payload)
-    message.success('跨尺度预测完成')
-    innerOpen.value = false
-    emit('predicted', res)
+    const { task_id } = await crossScalePredictAsync(payload)
+    pollTimer = setInterval(() => pollTask(task_id), 2000)
   } catch {
-    // client.js 已统一弹错误提示
-  } finally {
     propsLoading.value = false
+    taskError.value = '提交失败'
   }
 }
+
+async function pollTask(taskId) {
+  try {
+    const entry = await crossScaleStatus(taskId)
+    taskProgress.value = entry.progress || 0
+    taskStepLabel.value = entry.step_label || ''
+    if (entry.status === 'completed') {
+      clearInterval(pollTimer)
+      pollTimer = null
+      propsLoading.value = false
+      message.success('跨尺度预测完成')
+      innerOpen.value = false
+      emit('predicted', entry.result)
+    } else if (entry.status === 'failed') {
+      clearInterval(pollTimer)
+      pollTimer = null
+      propsLoading.value = false
+      taskError.value = entry.error || '跨尺度预测失败'
+    }
+  } catch {
+    // 轮询失败则停止，等待提交侧容错
+  }
+}
+
+// 组件卸载时清理轮询定时器
+onUnmounted(() => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+})
 </script>
 
 <style scoped>
@@ -322,5 +365,27 @@ async function runCrossScale() {
 
 .cs-actions {
   margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cs-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cs-progress :deep(.ant-progress) {
+  margin-bottom: 0;
+}
+
+.cs-step-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  min-height: 18px;
 }
 </style>

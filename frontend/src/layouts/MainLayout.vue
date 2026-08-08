@@ -37,7 +37,7 @@
         <template v-for="group in menuGroups">
           <!-- 单项分组直接渲染为一级菜单项，无需展开二级 -->
           <a-menu-item
-            v-if="group.items.length === 1"
+            v-if="group.items && group.items.length === 1"
             :key="group.items[0].path"
           >
             <router-link :to="group.items[0].path" class="menu-link">
@@ -52,15 +52,35 @@
             <template #title>
               <span v-if="!collapsed">{{ group.title }}</span>
             </template>
-            <a-menu-item
-              v-for="item in group.items"
-              :key="item.path"
-            >
-              <router-link :to="item.path" class="menu-link">
-                <span class="menu-icon"><component :is="item.icon" /></span>
-                <span class="menu-text">{{ item.title }}</span>
-              </router-link>
-            </a-menu-item>
+            <!-- 次级分组：将配置/管理类内容折叠进次级分组，减少一级平铺项 -->
+            <template v-if="group.subGroups">
+              <a-menu-item-group
+                v-for="sub in group.subGroups"
+                :key="sub.title"
+                :title="sub.title"
+              >
+                <a-menu-item
+                  v-for="item in sub.items"
+                  :key="item.path"
+                >
+                  <router-link :to="item.path" class="menu-link">
+                    <span class="menu-icon"><component :is="item.icon" /></span>
+                    <span class="menu-text">{{ item.title }}</span>
+                  </router-link>
+                </a-menu-item>
+              </a-menu-item-group>
+            </template>
+            <template v-else>
+              <a-menu-item
+                v-for="item in group.items"
+                :key="item.path"
+              >
+                <router-link :to="item.path" class="menu-link">
+                  <span class="menu-icon"><component :is="item.icon" /></span>
+                  <span class="menu-text">{{ item.title }}</span>
+                </router-link>
+              </a-menu-item>
+            </template>
           </a-sub-menu>
         </template>
       </a-menu>
@@ -247,6 +267,7 @@ import {
   HomeOutlined,
   BellOutlined,
   DeploymentUnitOutlined,
+  FileSearchOutlined,
 } from '@ant-design/icons-vue'
 import { MESSAGES } from '@/constants/glossary'
 
@@ -264,11 +285,11 @@ function syncMenuState() {
   selectedKeys.value = [path]
   // P1-3：同一 path 若出现在多个分组，优先保留当前已展开的分组，
   // 避免点击后分组被强制切换
-  const matchedGroups = menuGroups.value.filter((g) => g.items.some((it) => it.path === path))
+  const matchedGroups = menuGroups.value.filter((g) => collectPaths(g).includes(path))
   const stayOpen = matchedGroups.find((g) => openKeys.value.includes(g.title))
   const matchedGroup = stayOpen || matchedGroups[0]
   // 仅对多项分组（有 sub-menu）设置 openKeys，单项分组无 sub-menu 无需展开
-  if (matchedGroup && matchedGroup.items.length > 1) {
+  if (matchedGroup && (matchedGroup.items?.length > 1 || matchedGroup.subGroups?.length > 0)) {
     openKeys.value = [matchedGroup.title]
   } else {
     // 单项分组或未匹配到分组时，折叠所有 sub-menu，避免残留展开状态
@@ -424,18 +445,29 @@ const menuGroups = computed(() => {
         { path: '/ecml', title: '实验闭环迭代', icon: markRaw(SyncOutlined) },
       ],
     },
-    // ── 3. 实验与数据（按实验执行对象组织）──
+    // ── 3. 实验与数据（按实验执行对象组织；设备/接入/质量折叠进「数据管理」次级分组）──
     {
       title: '实验与数据',
       icon: markRaw(FormOutlined),
       zone: 'research',
-      items: [
-        { path: '/experiment-workbench', title: '实验工作台', icon: markRaw(FormOutlined) },
-        { path: '/experiments', title: '实验数据', icon: markRaw(DatabaseOutlined) },
-        { path: '/samples', title: '样品与批次', icon: markRaw(InboxOutlined) },
-        { path: '/equipment', title: '设备与校准', icon: markRaw(ToolOutlined) },
-        { path: '/data-ingest', title: '数据接入', icon: markRaw(ImportOutlined) },
-        { path: '/data-quality', title: '数据质量', icon: markRaw(SafetyCertificateOutlined) },
+      subGroups: [
+        {
+          title: '实验执行',
+          items: [
+            { path: '/experiment-dashboard', title: '实验数据看板', icon: markRaw(DashboardOutlined) },
+            { path: '/experiment-workbench', title: '实验工作台', icon: markRaw(FormOutlined) },
+            { path: '/experiments', title: '实验数据', icon: markRaw(DatabaseOutlined) },
+            { path: '/samples', title: '样品与批次', icon: markRaw(InboxOutlined) },
+          ],
+        },
+        {
+          title: '数据管理',
+          items: [
+            { path: '/equipment', title: '设备与校准', icon: markRaw(ToolOutlined) },
+            { path: '/data-ingest', title: '数据接入', icon: markRaw(ImportOutlined) },
+            { path: '/data-quality', title: '数据质量', icon: markRaw(SafetyCertificateOutlined) },
+          ],
+        },
       ],
     },
     // ── 4. 知识资产（统一知识资产入口）──
@@ -451,33 +483,54 @@ const menuGroups = computed(() => {
         { path: '/mdm', title: '主数据治理', icon: markRaw(DatabaseOutlined) },
       ],
     },
-    // ── 5. AI 与编排（研发工作台 + 智能体 + 工具映射 + 评估）──
+    // ── 5. AI 与编排（研发/编排 + 智能体/工具/能力契约 折叠进次级分组）──
     {
       title: 'AI 与编排',
       icon: markRaw(RobotOutlined),
       zone: 'research',
-      items: [
-        { path: '/research', title: '研发工作台', icon: markRaw(ExperimentOutlined) },
-        { path: '/orchestration', title: '智能编排', icon: markRaw(RobotOutlined) },
-        { path: '/agents', title: '智能体管理', icon: markRaw(RobotOutlined) },
-        { path: '/tools', title: '工具与连接器', icon: markRaw(AppstoreOutlined) },
-        { path: '/mappings', title: '映射控制台', icon: markRaw(DeploymentUnitOutlined) },
-        { path: '/capability-center', title: '能力契约', icon: markRaw(ApiOutlined) },
-        { path: '/eval-center', title: '评估中心', icon: markRaw(ExperimentOutlined) },
+      subGroups: [
+        {
+          title: '研发与编排',
+          items: [
+            { path: '/research', title: '研发工作台', icon: markRaw(ExperimentOutlined) },
+            { path: '/orchestration', title: '智能编排', icon: markRaw(RobotOutlined) },
+            { path: '/eval-center', title: '评估中心', icon: markRaw(ExperimentOutlined) },
+          ],
+        },
+        {
+          title: '智能体与工具',
+          items: [
+            { path: '/agents', title: '智能体管理', icon: markRaw(RobotOutlined) },
+            { path: '/tools', title: '工具与连接器', icon: markRaw(AppstoreOutlined) },
+            { path: '/mappings', title: '映射控制台', icon: markRaw(DeploymentUnitOutlined) },
+            { path: '/capability-center', title: '能力契约', icon: markRaw(ApiOutlined) },
+          ],
+        },
       ],
     },
-    // ── 6. 管理（低频或平台/商业化能力，仅 admin/pm 可见）──
+    // ── 6. 管理（低频或平台/商业化能力，仅 admin/pm 可见；运营/系统安全 折叠进次级分组）──
     {
       title: '管理',
       icon: markRaw(ControlOutlined),
       zone: 'admin',
-      items: [
-        { path: '/dashboard', title: '管理看板', icon: markRaw(DashboardOutlined) },
-        { path: '/control-plane', title: '控制平面', icon: markRaw(ControlOutlined) },
-        { path: '/budgets', title: '预算看板', icon: markRaw(WalletOutlined) },
-        { path: '/value-report', title: '收益账单', icon: markRaw(AccountBookOutlined) },
-        { path: '/users', title: '用户与角色', icon: markRaw(UserOutlined) },
-        { path: '/settings', title: '系统设置', icon: markRaw(SettingOutlined) },
+      subGroups: [
+        {
+          title: '运营看板',
+          items: [
+            { path: '/dashboard', title: '管理看板', icon: markRaw(DashboardOutlined) },
+            { path: '/control-plane', title: '控制平面', icon: markRaw(ControlOutlined) },
+            { path: '/budgets', title: '预算看板', icon: markRaw(WalletOutlined) },
+            { path: '/value-report', title: '收益账单', icon: markRaw(AccountBookOutlined) },
+          ],
+        },
+        {
+          title: '系统与安全',
+          items: [
+            { path: '/users', title: '用户与角色', icon: markRaw(UserOutlined) },
+            { path: '/audit', title: '审计日志', icon: markRaw(FileSearchOutlined) },
+            { path: '/settings', title: '系统设置', icon: markRaw(SettingOutlined) },
+          ],
+        },
       ],
     },
   ]
@@ -488,18 +541,34 @@ const menuGroups = computed(() => {
     .map((g) => {
       // admin 区对非管理员完全隐藏
       if (g.zone === 'admin' && !admin) {
-        return { ...g, items: [] }
+        return { ...g, items: [], subGroups: [] }
+      }
+      if (g.subGroups) {
+        return {
+          ...g,
+          subGroups: g.subGroups
+            .map((s) => ({ ...s, items: s.items.filter((it) => isMenuVisible(it.path, role)) }))
+            .filter((s) => s.items.length > 0),
+        }
       }
       return {
         ...g,
         items: g.items.filter((it) => isMenuVisible(it.path, role)),
       }
     })
-    .filter((g) => g.items.length > 0)
+    .filter((g) => (g.subGroups ? g.subGroups.length > 0 : g.items.length > 0))
 })
 
-// 扁平化用于查找当前页标题
-const menuItems = computed(() => menuGroups.value.flatMap((g) => g.items))
+// 收集分组内所有叶子路径（兼容 items 与 subGroups 两种结构）
+function collectPaths(group) {
+  if (group.subGroups) return group.subGroups.flatMap((s) => s.items.map((it) => it.path))
+  return group.items.map((it) => it.path)
+}
+
+// 扁平化用于查找当前页标题（兼容 items 与 subGroups 两种结构）
+const menuItems = computed(() =>
+  menuGroups.value.flatMap((g) => (g.subGroups ? g.subGroups.flatMap((s) => s.items) : g.items)),
+)
 
 // 「新建」下拉菜单项：根据当前页面动态生成上下文快捷入口
 const createMenuItems = computed(() => {

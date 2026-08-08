@@ -239,24 +239,50 @@
       placement="right"
       @update:open="(v) => (compareOpen = v)"
     >
-      <a-table
-        v-if="compareList.length"
-        :row-key="(r) => r._compareKey"
-        :columns="compareColumns"
-        :data-source="compareTableData"
-        :pagination="false"
-        size="small"
-        bordered
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="record.metric === '化学式' && column.key !== 'metric' && record[column.key]">
-            <ChemicalFormula :formula="record[column.key]" size="small" />
+      <template v-if="compareList.length">
+        <!-- B2：综合达成度概览 -->
+        <div class="compare-achievement" v-if="compareAchievement.length">
+          <div
+            v-for="a in compareAchievement"
+            :key="a._compareKey"
+            class="achievement-item"
+            :style="{ '--accent': a.color }"
+          >
+            <span class="achievement-name">{{ a.name }}</span>
+            <a-progress
+              type="circle"
+              :percent="a.percent"
+              :size="64"
+              :stroke-color="a.color"
+              :format="(p) => `${p}%`"
+            />
+            <span class="achievement-score">{{ a.scoreText }}</span>
+          </div>
+        </div>
+
+        <!-- B2：多维目标雷达图 -->
+        <div class="compare-radar" v-if="compareList.length >= 2">
+          <RadarChart :candidates="compareObjectives" />
+        </div>
+
+        <a-table
+          :row-key="(r) => r._compareKey"
+          :columns="compareColumns"
+          :data-source="compareTableData"
+          :pagination="false"
+          size="small"
+          bordered
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="record.metric === '化学式' && column.key !== 'metric' && record[column.key]">
+              <ChemicalFormula :formula="record[column.key]" size="small" />
+            </template>
+            <template v-else-if="record.metric === '化学式' && column.key !== 'metric'">
+              <span>—</span>
+            </template>
           </template>
-          <template v-else-if="record.metric === '化学式' && column.key !== 'metric'">
-            <span>—</span>
-          </template>
-        </template>
-      </a-table>
+        </a-table>
+      </template>
       <EmptyState v-else type="data" description="尚未加入对比" />
     </a-drawer>
     </template>
@@ -296,6 +322,7 @@ import CandidateList from '@/components/CandidateList.vue'
 import CandidateDetail from '@/components/CandidateDetail.vue'
 import CandidateAgentBar from '@/components/candidate/CandidateAgentBar.vue'
 import TemporaryPrediction from '@/views/TemporaryPrediction.vue'
+import RadarChart from '@/components/RadarChart.vue'
 import { useUnitSymbols } from '@/utils/mdmDict'
 import { useDiscoveryStore } from '@/stores/discovery'
 import client from '@/api/client'
@@ -466,6 +493,45 @@ const compareTableData = computed(() => {
       row[`col_${idx}`] = v ?? '—'
     })
     return row
+  })
+})
+
+// 对比雷达图所需的预测目标（对齐 ECML / 临时预测的 objectives 结构）
+const COMPARE_OBJECTIVES = [
+  { key: 'stability_score', name: '稳定性', direction: 'maximize' },
+  { key: 'band_gap', name: '带隙', direction: 'minimize' },
+  { key: 'formation_energy', name: '形成能', direction: 'minimize' },
+  { key: 'ionic_conductivity_estimate', name: '电导率', direction: 'maximize' },
+  { key: 'multi_objective_score', name: '综合评分', direction: 'maximize' },
+]
+
+const compareObjectives = computed(() => {
+  return compareList.value.map((c) => ({
+    ...c,
+    objectives: COMPARE_OBJECTIVES.map((o) => ({
+      name: o.name,
+      key: o.key,
+      value: c[o.key] ?? null,
+      direction: o.direction,
+    })),
+  }))
+})
+
+// 综合达成度：以 multi_objective_score 为主，缺失时按已有目标取平均
+const COMPARE_COLORS = ['#5470c6', '#91cc75', '#fac858', '#ee6666']
+const compareAchievement = computed(() => {
+  return compareList.value.map((c, idx) => {
+    const score = Number.parseFloat(c.multi_objective_score ?? '')
+    const percent = Number.isFinite(score)
+      ? Math.max(0, Math.min(100, Math.round(score * 100)))
+      : 0
+    return {
+      _compareKey: c._compareKey,
+      name: c.name || c.formula || `候选材料 ${idx + 1}`,
+      percent,
+      scoreText: Number.isFinite(score) ? (score * 100).toFixed(1) + '%' : '暂无评分',
+      color: COMPARE_COLORS[idx % COMPARE_COLORS.length],
+    }
   })
 })
 
@@ -1222,5 +1288,44 @@ onMounted(async () => {
   color: var(--text-secondary, #475569);
   margin-bottom: 24px;
   line-height: 1.6;
+}
+
+/* B2：对比抽屉 —— 达成度 + 雷达图 */
+.compare-achievement {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--light-bg-hover, #f8fafc);
+  border-radius: 10px;
+}
+.achievement-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 96px;
+}
+.achievement-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #475569);
+  max-width: 120px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.achievement-score {
+  font-size: 12px;
+  color: var(--text-secondary, #475569);
+  font-variant-numeric: tabular-nums;
+}
+.compare-radar {
+  margin-bottom: 16px;
+  border: 1px solid var(--border, #e8e8e8);
+  border-radius: 10px;
+  padding: 8px;
 }
 </style>

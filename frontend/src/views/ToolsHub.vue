@@ -80,7 +80,7 @@
             <div class="scp-card-actions">
               <a-button size="small" type="link" @click="openSCPDetail(binding)">
                 <template #icon><EyeOutlined /></template>
-                详情
+                查看详情
               </a-button>
               <a-tooltip :title="!isAdmin ? '仅管理员可执行自检' : ''">
                 <span class="tt-btn-wrap">
@@ -166,7 +166,7 @@
           <template v-if="column.key === 'actions'">
             <a-button size="small" type="link" @click="openSCPDetail(record)">
               <template #icon><EyeOutlined /></template>
-              详情
+              查看详情
             </a-button>
           </template>
         </template>
@@ -203,7 +203,7 @@
             <div class="scp-card-actions">
               <a-button size="small" type="link" @click="openSkillDetail(skill)">
                 <template #icon><EyeOutlined /></template>
-                详情
+                查看详情
               </a-button>
               <a-tooltip :title="!isAdmin ? '仅管理员可执行自检' : ''">
                 <span class="tt-btn-wrap">

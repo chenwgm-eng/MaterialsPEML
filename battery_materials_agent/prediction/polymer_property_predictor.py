@@ -5,6 +5,18 @@ from pydantic import BaseModel, Field
 import numpy as np
 
 try:
+    from .chemprop_adapter import is_available as _chemprop_available, predict as _chemprop_predict
+    _CHEMPROP_IMPORTED = True
+except Exception:  # noqa: BLE001
+    _CHEMPROP_IMPORTED = False
+
+try:
+    from .polymer_gnn_adapter import is_available as _polymer_gnn_imported, predict as _polymer_gnn_predict
+    _POLYMER_GNN_IMPORTED = True
+except Exception:  # noqa: BLE001
+    _POLYMER_GNN_IMPORTED = False
+
+try:
     from ase import Atoms
     from ase.calculators.emt import EMT
     _ASE_AVAILABLE = True
@@ -227,6 +239,57 @@ class PolymerPropertyPredictor:
 
         smiles = features.get("smiles", "")
         psmiles = features.get("psmiles", "")
+
+        # PolymerGNN 真实权重路径（试点性质：Tg / 介电常数，model_type=polymernn 且权重已落盘时优先）
+        if (
+            self.model_type == "polymernn"
+            and _POLYMER_GNN_IMPORTED
+            and _polymer_gnn_imported()
+            and property_name in ("glass_transition_temp", "dielectric_constant")
+            and (psmiles or smiles)
+        ):
+            try:
+                gnn_smiles = psmiles or smiles
+                gnn_result = _polymer_gnn_predict(gnn_smiles, property_name)
+                if gnn_result is not None:
+                    value, confidence, model_label = gnn_result
+                    return PolymerPredictionResult(
+                        property_name=property_name,
+                        value=value,
+                        unit=self._model.PROPERTY_MODELS[property_name]["unit"],
+                        confidence=confidence,
+                        model=model_label,
+                        psmiles=psmiles,
+                        smiles=smiles,
+                        formula=features.get("formula", ""),
+                        material_type="polymer",
+                        data_quality="simulated",  # T-029：真实训练权重 ML 预测结果
+                        provenance=[{"model": model_label, "weights": "polymer_gnn_openpoly"}],
+                    )
+            except Exception:  # noqa: BLE001
+                pass  # 回退到后续路径
+
+        # Chemprop 真实权重路径（model_type=polymernn 且权重已落盘时优先）
+        if self.model_type == "polymernn" and _CHEMPROP_IMPORTED and smiles:
+            try:
+                chemprop_result = _chemprop_predict(smiles, property_name)
+                if chemprop_result is not None:
+                    value, confidence, model_label = chemprop_result
+                    return PolymerPredictionResult(
+                        property_name=property_name,
+                        value=value,
+                        unit=self._model.PROPERTY_MODELS[property_name]["unit"],
+                        confidence=confidence,
+                        model=model_label,
+                        psmiles=psmiles,
+                        smiles=smiles,
+                        formula=features.get("formula", ""),
+                        material_type="polymer",
+                        data_quality="simulated",  # T-029：真实 ML 权重预测结果
+                        provenance=[{"model": model_label, "weights": "chemprop_pretrained"}],
+                    )
+            except Exception:  # noqa: BLE001
+                pass  # 回退到描述符路径
 
         # ASE-EMT 路径（mattersim + 能量相关性质）
         if (self.model_type == "mattersim" and self._ase_available

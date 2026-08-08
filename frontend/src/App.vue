@@ -98,10 +98,10 @@ const lightComponents = {
     borderRadiusLG: 10,
   },
   Steps: {
-    colorPrimary: '#2563eb',
+    colorPrimary: '#f97316',
   },
   Timeline: {
-    colorPrimary: '#2563eb',
+    colorPrimary: '#f97316',
   },
 }
 
@@ -150,10 +150,10 @@ const darkComponents = {
     borderRadiusLG: 10,
   },
   Steps: {
-    colorPrimary: '#2563eb',
+    colorPrimary: '#f97316',
   },
   Timeline: {
-    colorPrimary: '#2563eb',
+    colorPrimary: '#f97316',
   },
 }
 

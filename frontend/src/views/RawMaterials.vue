@@ -70,7 +70,7 @@
             </a-button>
           </a-tooltip>
           <a-tooltip :title="selectedMaterial ? '' : '请先选择一行物料'">
-            <a-button size="small" :disabled="!selectedMaterial" @click="onView">
+            <a-button size="small" type="link" :disabled="!selectedMaterial" @click="onView">
               <EyeOutlined /> 查看详情
             </a-button>
           </a-tooltip>

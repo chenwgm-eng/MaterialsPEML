@@ -21,6 +21,15 @@ from ..db import get_engine
 logger = logging.getLogger(__name__)
 
 
+def _cell(row, idx: int, default: str) -> str:
+    """按索引读取行数据，缺列/越界时返回默认值（兼容旧库缺列）。"""
+    try:
+        value = row[idx]
+    except (IndexError, TypeError):
+        return default
+    return value if value is not None else default
+
+
 def _iso(value) -> str:
     """将 datetime 或字符串转换为 ISO 字符串；None 返回空字符串。"""
     if value is None:
@@ -65,6 +74,9 @@ class User(BaseModel):
     created_at: str = ""
     last_login: str = ""
     password_hash: str = ""  # 格式：pbkdf2${iterations}${salt}${hash}；兼容旧 {salt}${hash}
+    tenant_id: str = ""  # 所属租户（多租户隔离）；空=default
+    auth_source: str = "local"  # local / oidc / ldap
+    external_idp_id: str = ""  # SSO JIT 开户用的外部 IdP 标识
 
 
 _PBKDF2_ITERATIONS = 200_000
@@ -160,10 +172,12 @@ class UserStore:
             conn.execute(
                 text("""INSERT INTO auth.users
                 (user_id, username, display_name, email, role, project_ids,
-                 is_active, created_at, last_login, password_hash)
+                 is_active, created_at, last_login, password_hash,
+                 tenant_id, auth_source, external_idp_id)
                 VALUES (:user_id, :username, :display_name, :email, :role,
                         CAST(:project_ids AS JSONB), :is_active,
-                        :created_at, :last_login, :password_hash)
+                        :created_at, :last_login, :password_hash,
+                        :tenant_id, :auth_source, :external_idp_id)
                 ON CONFLICT (user_id) DO UPDATE SET
                     username=EXCLUDED.username,
                     display_name=EXCLUDED.display_name,
@@ -173,7 +187,10 @@ class UserStore:
                     is_active=EXCLUDED.is_active,
                     created_at=EXCLUDED.created_at,
                     last_login=EXCLUDED.last_login,
-                    password_hash=EXCLUDED.password_hash"""),
+                    password_hash=EXCLUDED.password_hash,
+                    tenant_id=EXCLUDED.tenant_id,
+                    auth_source=EXCLUDED.auth_source,
+                    external_idp_id=EXCLUDED.external_idp_id"""),
                 {
                     "user_id": user.user_id,
                     "username": user.username,
@@ -185,6 +202,9 @@ class UserStore:
                     "created_at": user.created_at,
                     "last_login": user.last_login,
                     "password_hash": user.password_hash,
+                    "tenant_id": user.tenant_id or "default",
+                    "auth_source": user.auth_source or "local",
+                    "external_idp_id": user.external_idp_id or "",
                 },
             )
         return user
@@ -237,4 +257,19 @@ class UserStore:
             created_at=_iso(row[7]),
             last_login=_iso(row[8]),
             password_hash=row[9] or "",
+            # 0050 迁移新增列；旧库缺列时容错回退
+            tenant_id=_cell(row, 10, "default"),
+            auth_source=_cell(row, 11, "local"),
+            external_idp_id=_cell(row, 12, ""),
         )
+
+    def get_by_external_idp(self, external_idp_id: str) -> User | None:
+        """按外部 IdP 标识查询用户（SSO JIT 开户幂等用）。"""
+        if not external_idp_id:
+            return None
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT * FROM auth.users WHERE external_idp_id=:idp"),
+                {"idp": external_idp_id},
+            ).fetchone()
+        return self._row_to_user(row) if row else None

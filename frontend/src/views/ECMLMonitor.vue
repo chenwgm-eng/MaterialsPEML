@@ -488,7 +488,7 @@
             <a-tag v-else color="processing">进行中</a-tag>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-button type="link" size="small" @click="viewIteration(record)">查看详情</a-button>
+            <a-button type="link" size="small" @click="viewIteration(record)"><EyeOutlined /> 查看详情</a-button>
           </template>
         </template>
       </a-table>
@@ -788,6 +788,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message, Empty } from 'ant-design-vue'
 import {
   HistoryOutlined,
+  EyeOutlined,
 } from '@ant-design/icons-vue'
 import { useECMLStore } from '@/stores/ecml'
 import { getOptions } from '@/api/properties'

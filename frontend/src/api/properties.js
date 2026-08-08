@@ -35,3 +35,11 @@ export function updateMaterialTypeTemplate(materialType, fieldKeys) {
 export function crossScalePredict(data) {
   return client.post('/properties/cross_scale', data)
 }
+
+// 跨尺度建模（异步提交 + 轮询，真实 LAMMPS/FEniCSx 求解耗时较长时使用）
+export function crossScalePredictAsync(data) {
+  return client.post('/properties/cross_scale/async', data)
+}
+export function crossScaleStatus(taskId) {
+  return client.get('/properties/cross_scale/status', { params: { task_id: taskId } })
+}

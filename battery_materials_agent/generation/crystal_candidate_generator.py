@@ -10,6 +10,9 @@ from pathlib import Path
 import hashlib
 
 from .chemistry_rules import ChemistryRuleSet
+from .formula_utils import extract_elements as _extract_elements
+from .formula_utils import normalize_formula as _normalize_formula
+from .gnome_store import GnomeMaterialStore
 
 logger = logging.getLogger(__name__)
 
@@ -50,39 +53,6 @@ _PROPERTY_DIRECTION = {
 
 
 import re as _re
-
-
-def _normalize_formula(formula: str) -> str:
-    """归一化化学式用于去重：使用 pymatgen 的 reduced_formula 保留化学计量比。
-
-    这样 LiCoO2 与 Li2CoO3 不会被误判为同一材料（仅按元素集合去重会导致此问题）。
-    """
-    if not formula:
-        return ""
-    try:
-        from pymatgen.core import Composition
-        return Composition(formula).reduced_formula
-    except Exception:
-        # 回退：元素符号排序拼接（不精确，但好过无去重）
-        elems = _extract_elements(formula)
-        return "".join(sorted(elems))
-
-
-def _extract_elements(formula: str) -> set[str]:
-    """从化学式中提取元素符号集合（保留原大小写：Co、Li、O、C）。
-
-    使用 pymatgen.core.Composition 精确解析，正确区分 Co（钴）与 C+O（碳+氧）。
-    """
-    if not formula:
-        return set()
-    try:
-        from pymatgen.core import Composition
-        comp = Composition(formula)
-        return {str(e) for e in comp.elements}
-    except Exception:
-        # 回退到正则（不精确，但好过无过滤）
-        matches = _re.findall(r"[A-Z][a-z]?", formula)
-        return {m for m in matches if m}
 
 
 # 支持 thinking_mode 的模型列表（根据 InternLM 官方文档）
@@ -576,6 +546,8 @@ class CrystalCandidateGenerator:
         self._db = MaterialsProjectDatabase()
         self.gnome_use_mp_mirror = gnome_use_mp_mirror
         self.gnome_data_dir = Path(gnome_data_dir)
+        # GNoME 真实数据：统一 PostgreSQL（导入见 scripts/import_gnome.py）
+        self._gnome_db = GnomeMaterialStore()
         # Task 15：最近一次规则引擎硬过滤剔除的候选列表，供委员会决策参考
         self._last_chemistry_filtered_out: list[CrystalCandidate] = []
 
@@ -607,23 +579,55 @@ class CrystalCandidateGenerator:
         查询 GNoME 稳定晶体结构数据。
 
         优先级：
-        1. mp-api 客户端查询 Materials Project 镜像（GNoME 数据已同步至 MP）
-        2. 本地静态数据集（data/gnome/ 目录下的 CSV/JSON 文件）
-        3. 硬编码本地数据库回退
+        1. mp-api 客户端查询 Materials Project 镜像（GNoME 数据已同步至 MP，在线增强）
+        2. 统一 PostgreSQL 真实数据（gnome.gnome_materials，完整 GNoME 稳定集）
+        3. 本地静态数据集（data/gnome/ 目录下的 CSV/JSON 文件，可选离线真实文件）
+
+        无真实数据源命中时返回空列表，不做硬编码伪数据回退。
         """
-        # 方案 A：通过 mp-api 查询 Materials Project 镜像
+        # 方案 A：通过 mp-api 查询 Materials Project 镜像（在线增强）
         if self.gnome_use_mp_mirror and self.api_key:
             candidates = self._search_gnome_via_mp(formula, elements, num_results)
             if candidates:
                 return candidates
 
-        # 方案 B：本地静态数据集
+        # 方案 B：统一 PostgreSQL 真实数据（完整 GNoME 稳定集）
+        candidates = self._search_gnome_db(formula, elements, num_results)
+        if candidates:
+            return candidates
+
+        # 方案 C：本地静态数据集（可选离线真实文件）
         candidates = self._load_gnome_local(formula, num_results)
         if candidates:
             return candidates
 
-        # 回退：硬编码本地数据库
-        return self._search_gnome_fallback(formula, num_results)
+        # 无任何真实数据源命中
+        return []
+
+    def _search_gnome_db(self, formula: str, elements: list[str] | None,
+                         num_results: int) -> list[CrystalCandidate]:
+        """从统一 PostgreSQL 查询完整 GNoME 稳定集（真实数据）。"""
+        try:
+            rows = self._gnome_db.search(formula=formula, elements=elements, num_results=num_results)
+        except Exception as e:
+            logger.warning("GNoME PG query failed: %s", e)
+            return []
+        candidates = []
+        for row in rows:
+            eah = float(row.get("energy_above_hull") or 0.0)
+            candidates.append(CrystalCandidate(
+                formula=row.get("formula", ""),
+                structure_type=row.get("structure_type", ""),
+                space_group=row.get("space_group", ""),
+                energy_above_hull=eah,
+                band_gap=float(row.get("band_gap") or 0.0),
+                formation_energy=float(row.get("formation_energy") or 0.0),
+                source="gnome_pg",
+                material_id=row.get("material_id", ""),
+                ionic_conductivity_estimate=float(row.get("ionic_conductivity") or 0.0),
+                stability_score=1.0 - eah,
+            ))
+        return candidates[:num_results]
 
     def _search_gnome_via_mp(self, formula: str, elements: list[str] | None,
                              num_results: int) -> list[CrystalCandidate]:
@@ -737,26 +741,6 @@ class CrystalCandidateGenerator:
             except Exception as e:
                 logger.warning("GNoME JSON load failed: %s", e)
 
-        return candidates[:num_results]
-
-    def _search_gnome_fallback(self, formula: str, num_results: int) -> list[CrystalCandidate]:
-        """硬编码本地数据库回退（无 API key 且无本地数据集时使用）。"""
-        candidates = []
-        for mat in self._db.KNOWN_BATTERY_MATERIALS:
-            if formula and formula.lower() not in mat["formula"].lower():
-                continue
-            candidates.append(CrystalCandidate(
-                formula=mat["formula"],
-                structure_type=mat["structure_type"],
-                space_group=mat["space_group"],
-                energy_above_hull=mat["e_above_hull"],
-                band_gap=mat["band_gap"],
-                formation_energy=mat["formation_energy"],
-                source="local_db_fallback",
-                material_id=mat["material_id"],
-                ionic_conductivity_estimate=mat["ionic_conductivity"],
-                stability_score=1.0 - mat["e_above_hull"],
-            ))
         return candidates[:num_results]
 
     def generate_candidates(

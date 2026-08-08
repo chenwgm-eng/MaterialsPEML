@@ -25,6 +25,32 @@
 
     <!-- 标准研发流程模式 -->
     <div v-if="mode === 'standard'">
+    <!-- B1：全流程可视化导航条——始终展示研发流水线阶段与当前位置，点击可回退上一阶段 -->
+    <a-card :bordered="false" class="workflow-overview">
+      <div class="workflow-stages">
+        <div
+          v-for="(st, i) in workflowStages"
+          :key="st.key"
+          class="workflow-stage"
+          :class="{ active: st.key === phase, done: isStageDone(st.key), clickable: canGoto(st.key) }"
+          role="button"
+          tabindex="0"
+          @click="gotoStage(st.key)"
+          @keydown.enter="gotoStage(st.key)"
+        >
+          <div class="workflow-node">
+            <span v-if="isStageDone(st.key)" class="node-check">✓</span>
+            <span v-else class="node-index">{{ i + 1 }}</span>
+          </div>
+          <div class="workflow-stage-body">
+            <span class="workflow-stage-title">{{ st.title }}</span>
+            <span class="workflow-stage-desc">{{ stageDesc(st.key) }}</span>
+          </div>
+          <span v-if="i < workflowStages.length - 1" class="workflow-connector" />
+        </div>
+      </div>
+    </a-card>
+
     <!-- 阶段 1：目标输入 -->
     <a-card v-if="phase === 'input'" :bordered="false" class="phase-card">
       <div class="phase-badge">阶段 1 · 目标输入</div>
@@ -427,10 +453,45 @@ const projectContextStore = useProjectContextStore()
 const router = useRouter()
 
 const phase = ref('input') // input | confirm | execute
-// 审查意见0726：同页内模式切换，避免整页跳转丢失已填写内容
 const mode = ref('standard') // standard | orchestration
 function toggleMode() {
   mode.value = mode.value === 'standard' ? 'orchestration' : 'standard'
+}
+
+// ── B1：全流程可视化导航 ──
+const workflowStages = [
+  { key: 'input', title: '目标输入', desc: '定义研发目标与属性' },
+  { key: 'confirm', title: '系统计划', desc: 'AI 生成执行步骤' },
+  { key: 'execute', title: '执行与结果', desc: '运行步骤并沉淀证据' },
+]
+
+function stageDesc(key) {
+  const s = workflowStages.find((x) => x.key === key)
+  return s ? s.desc : ''
+}
+function isStageDone(key) {
+  if (key === 'input') return phase.value !== 'input'
+  if (key === 'confirm') return phase.value === 'execute'
+  return false
+}
+function canGoto(key) {
+  // 仅允许回退到已到达的阶段，避免跳转到未就绪的后续阶段
+  const order = { input: 0, confirm: 1, execute: 2 }
+  return order[key] < order[phase.value]
+}
+function gotoStage(key) {
+  if (!canGoto(key) || phase.value === key) return
+  if (key === 'input') {
+    // 从执行/确认回退到输入：保留已填内容，重置运行状态
+    if (pollTimer) clearTimeout(pollTimer)
+    executing.value = false
+    phase.value = 'input'
+    plan.value = null
+    runResult.value = null
+    explainData.value = null
+  } else if (key === 'confirm') {
+    phase.value = 'confirm'
+  }
 }
 const submitting = ref(false)
 const executing = ref(false)
@@ -976,6 +1037,93 @@ function shortTime(ts) {
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-card);
+}
+
+/* B1：全流程可视化导航条 */
+.workflow-overview {
+  margin-top: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+.workflow-stages {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.workflow-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  padding: var(--space-md) var(--space-lg);
+  cursor: default;
+}
+.workflow-stage.clickable {
+  cursor: pointer;
+}
+.workflow-stage.clickable:hover {
+  background: var(--light-bg-hover);
+}
+.workflow-node {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--light-bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  flex-shrink: 0;
+}
+.workflow-stage.active .workflow-node {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.workflow-stage.done .workflow-node {
+  background: var(--success-bg, rgba(82, 196, 26, 0.12));
+  border-color: var(--success, #52c41a);
+  color: var(--success, #52c41a);
+}
+.node-check {
+  font-size: var(--font-size-md);
+}
+.workflow-stage-body {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.workflow-stage-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-muted);
+}
+.workflow-stage.active .workflow-stage-title {
+  color: var(--primary);
+}
+.workflow-stage.done .workflow-stage-title {
+  color: var(--text-primary);
+}
+.workflow-stage-desc {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+.workflow-connector {
+  position: absolute;
+  right: calc(-1 * var(--space-sm));
+  top: 50%;
+  width: var(--space-lg);
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+.workflow-stage.done .workflow-connector {
+  background: var(--success, #52c41a);
 }
 
 .phase-card :deep(.ant-card-body) {

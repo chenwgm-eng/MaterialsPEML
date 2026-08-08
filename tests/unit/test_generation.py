@@ -63,8 +63,26 @@ class TestCrystalCandidateGenerator:
         assert candidate.source == "materials_project"
 
     def test_search_gnome(self):
-        candidates = self.generator.search_gnome(num_results=5)
-        assert len(candidates) > 0
+        # 无真实数据源命中（PG 查询返回空、无本地文件、无 API key）时返回空，
+        # 不做硬编码伪数据回退。真实 GNoME 已导入统一 PG，故 mock 查询返回空来模拟。
+        with mock.patch.object(self.generator._gnome_db, "search", return_value=[]):
+            candidates = self.generator.search_gnome(num_results=5)
+        assert candidates == []
+
+    def test_search_gnome_from_pg(self):
+        # 统一 PostgreSQL 真实数据源命中时返回候选
+        row = {
+            "formula": "LiCoO2", "reduced_formula": "LiCoO2",
+            "space_group": "R-3m", "structure_type": "Trigonal",
+            "energy_above_hull": 0.0, "band_gap": 2.1,
+            "formation_energy": -2.5, "material_id": "mp-1",
+            "ionic_conductivity": 0.0, "elements": ["Co", "Li", "O"],
+            "source": "gnome_pg",
+        }
+        with mock.patch.object(self.generator._gnome_db, "search", return_value=[row]):
+            candidates = self.generator.search_gnome(num_results=5)
+        assert len(candidates) == 1
+        assert candidates[0].source == "gnome_pg"
 
 
 class TestPolymerCandidateGenerator:

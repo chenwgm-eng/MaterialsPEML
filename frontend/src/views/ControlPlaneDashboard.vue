@@ -106,11 +106,9 @@
           </template>
           <template v-if="column.key === 'actions'">
             <a-space size="small">
-              <a-tooltip title="查看详情">
-                <a-button size="small" aria-label="查看详情" @click="viewTrace(record)">
-                  <EyeOutlined />
-                </a-button>
-              </a-tooltip>
+              <a-button size="small" type="link" aria-label="查看详情" @click="viewTrace(record)">
+                <EyeOutlined /> 查看详情
+              </a-button>
               <a-tooltip :title="canResume(record.status) ? '恢复' : '仅已暂停/已阻断的运行可恢复'">
                 <span class="tt-btn-wrap">
                   <a-button

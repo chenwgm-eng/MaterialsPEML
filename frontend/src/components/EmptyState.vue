@@ -83,10 +83,10 @@ const iconComponent = computed(() => props.actionIcon || iconMap[props.type] || 
   justify-content: center;
 }
 
-.empty-icon--create { color: var(--primary, #2563eb); }
+.empty-icon--create { color: var(--primary); }
 .empty-icon--search { color: var(--text-muted, #94a3b8); }
 .empty-icon--data { color: var(--text-muted, #94a3b8); }
-.empty-icon--team { color: var(--primary, #2563eb); }
+.empty-icon--team { color: var(--primary); }
 
 .empty-description {
   color: var(--text-secondary, #475569);

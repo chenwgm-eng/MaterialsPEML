@@ -52,6 +52,26 @@
       </div>
     </a-card>
 
+    <!-- 质量问题帕累托分析：按问题类型频次降序，叠加累计占比 -->
+    <a-card
+      title="质量问题帕累托分析"
+      size="small"
+      :body-style="{ padding: '12px' }"
+      class="dq-pareto-card"
+    >
+      <template #extra>
+        <span class="dq-distribution-total">共 {{ paretoDataSetTotal }} 项问题</span>
+      </template>
+      <ResultChart
+        v-if="paretoData.length > 0"
+        type="pareto"
+        :data="paretoData"
+        title=""
+        :height="280"
+      />
+      <EmptyState v-else type="data" description="暂无质量问题记录可供分析" />
+    </a-card>
+
     <!-- 统计卡片 -->
     <div class="stat-grid">
       <a-card size="small" :bordered="false" class="stat-card stat-pending">
@@ -243,6 +263,7 @@ import { approveQCResult, rejectQCResult } from '@/api/approvals'
 import { getDashboardDataQuality } from '@/api/dashboard'
 import ScientificNotation from '@/components/ScientificNotation.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import ResultChart from '@/components/ResultChart.vue'
 
 const router = useRouter()
 
@@ -296,6 +317,30 @@ const stats = computed(() => {
   })
   return s
 })
+
+// 帕累托分析：按问题类型聚合频次（降序），并计算累计占比
+const paretoData = computed(() => {
+  const counts = {}
+  allRecords.value.forEach((r) => {
+    if (!Array.isArray(r.qc_issues)) return
+    r.qc_issues.forEach((issue) => {
+      if (typeof issue !== 'string' || !issue) return
+      // 「交叉验证分析: xxx」为一类长文本，归并为同一类
+      const key = issue.startsWith('交叉验证分析: ') ? '交叉验证分析' : issue
+      counts[key] = (counts[key] || 0) + 1
+    })
+  })
+  const items = Object.entries(counts).map(([x, y]) => ({ x, y }))
+  items.sort((a, b) => b.y - a.y)
+  const total = items.reduce((sum, it) => sum + it.y, 0)
+  let acc = 0
+  return items.map((it) => {
+    acc += it.y
+    return { x: it.x, y: it.y, cumulative: total ? Math.round((acc / total) * 100) : 0 }
+  })
+})
+// 问题项总数（用于帕累托卡片副标题）
+const paretoDataSetTotal = computed(() => paretoData.value.reduce((s, it) => s + it.y, 0))
 
 function qcColor(status) {
   const map = {
@@ -523,6 +568,11 @@ onMounted(() => {
   margin-right: 8px;
 }
 
+/* 帕累托分析卡片 */
+.dq-pareto-card {
+  margin-bottom: 16px;
+}
+
 .dq-stat-verified :deep(.ant-statistic-content) { color: var(--success); }
 .dq-stat-estimated :deep(.ant-statistic-content) { color: var(--info); }
 .dq-stat-simulated :deep(.ant-statistic-content) { color: var(--warning); }
@@ -609,7 +659,7 @@ onMounted(() => {
 }
 
 .link-primary {
-  color: var(--primary, #1890ff);
+  color: var(--primary);
   text-decoration: none;
 }
 

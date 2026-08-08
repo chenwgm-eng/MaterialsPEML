@@ -243,7 +243,7 @@
               </a-list-item-meta>
               <template #actions>
                 <a-button type="link" size="small" @click="viewUnitVersionDetail(item)">
-                  <EyeOutlined /> 查看
+                  <EyeOutlined /> 查看详情
                 </a-button>
                 <a-popconfirm
                   :title="`确定激活版本 ${item.version_number}？将用该版本数据覆盖当前记录。`"

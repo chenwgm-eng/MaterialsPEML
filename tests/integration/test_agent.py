@@ -29,7 +29,9 @@ class TestBatteryMaterialsAgent:
         assert result.material_type == MaterialType.POLYMER
 
     def test_discover_crystal(self, agent):
-        result = agent.discover_crystal(elements=["Li", "Co"], num_candidates=5)
+        # 严格子集过滤要求候选元素 ⊆ 目标元素集。真实 GNoME 稳定集中不存在
+        # 纯 Li-Co 二元化合物（Li-Co 合金不稳定），故用真实正极体系 Li-Co-O。
+        result = agent.discover_crystal(elements=["Li", "Co", "O"], num_candidates=5)
         assert result["count"] > 0
         assert len(result["candidates"]) > 0
 

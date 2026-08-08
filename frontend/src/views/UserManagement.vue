@@ -96,7 +96,7 @@
             <a-space size="small">
               <a-tooltip title="查看详情">
                 <a-button size="small" type="link" @click="onDetail(record)">
-                  <EyeOutlined /> 详情
+                  <EyeOutlined /> 查看详情
                 </a-button>
               </a-tooltip>
               <a-tooltip title="编辑用户">

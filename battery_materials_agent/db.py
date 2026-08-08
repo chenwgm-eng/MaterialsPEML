@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextvars import ContextVar
 from functools import lru_cache
 
 from pydantic import BaseModel, Field
@@ -14,6 +15,33 @@ from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.pool import QueuePool
 
 logger = logging.getLogger(__name__)
+
+# 默认租户：存量数据与未显式指定租户的上下文均归属该租户
+DEFAULT_TENANT = "default"
+
+# 当前请求/任务的租户上下文（ContextVar，随 asyncio task 隔离）。
+# 后端中间件解析用户后写入；后台任务（如每日聚合）需显式 set_tenant()。
+_tenant_ctx: ContextVar[str] = ContextVar("tenant_id", default=DEFAULT_TENANT)
+
+
+def set_tenant(tenant_id: str) -> None:
+    """在上下文中设置当前租户。后台任务在无请求上下文时必须显式调用。"""
+    _tenant_ctx.set(tenant_id or DEFAULT_TENANT)
+
+
+def get_tenant() -> str:
+    """获取当前上下文的租户 ID（默认 default）。"""
+    value = _tenant_ctx.get()
+    return value or DEFAULT_TENANT
+
+
+def tenant_filter(column: str = "tenant_id") -> str:
+    """返回追加到 SQL WHERE 的租户过滤片段（须与 :param tenant_id 配合）。
+
+    用法：``WHERE {tenant_filter()} AND ...``，并在参数中传入
+    ``"tenant_id": get_tenant()``。禁止 store 手写租户过滤，统一走本工具。
+    """
+    return f"{column} = :tenant_id"
 
 
 class DatabaseConfig(BaseModel):

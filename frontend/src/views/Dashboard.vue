@@ -1172,7 +1172,7 @@ function sampleStatusColor(status) {
   const map = {
     created: '#64748b',
     in_storage: '#3b82f6',
-    in_use: '#1677ff',
+    in_use: '#f97316',
     consumed: '#f59e0b',
     discarded: '#ef4444',
   }

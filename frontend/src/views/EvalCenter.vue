@@ -70,8 +70,8 @@
             <span class="text-muted">{{ formatMetricsSummary(record.metrics) }}</span>
           </template>
           <template v-if="column.key === 'actions'">
-            <a-button size="small" @click="viewDetail(record)" :loading="detailLoading && selectedId === record.eval_run_id">
-              <EyeOutlined /> 详情
+            <a-button size="small" type="link" @click="viewDetail(record)" :loading="detailLoading && selectedId === record.eval_run_id">
+              <EyeOutlined /> 查看详情
             </a-button>
           </template>
         </template>

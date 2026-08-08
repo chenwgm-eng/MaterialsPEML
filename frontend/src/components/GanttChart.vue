@@ -123,8 +123,8 @@ const stageConfig = [
   {
     key: 'exploration',
     label: '探索',
-    color: '#1890ff',
-    bg: '#e6f7ff',
+    color: '#f97316',
+    bg: '#fff7ed',
     actions: ['route_material', 'generate_crystal_candidates', 'generate_polymer_candidates'],
     route: '/workbench',
   },
@@ -168,12 +168,12 @@ const actionLabels = {
 
 const statusColorMap = {
   '待执行': '#d9d9d9',
-  '进行中': '#1890ff',
+  '进行中': '#3b82f6',
   '已完成': '#52c41a',
   '已延期': '#ff4d4f',
   // 兼容后端 ProjectTask.status
   'draft': '#d9d9d9',
-  'active': '#1890ff',
+  'active': '#3b82f6',
   'completed': '#52c41a',
   'cancelled': '#ff4d4f',
 }

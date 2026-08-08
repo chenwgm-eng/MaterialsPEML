@@ -201,7 +201,7 @@
               </template>
               <template v-else-if="column.key === 'action'">
                 <a-button type="link" size="small" aria-label="查看实验记录详情" @click="onDetail(record)">
-                  <EyeOutlined aria-hidden="true" /> 详情
+                  <EyeOutlined aria-hidden="true" /> 查看详情
                 </a-button>
                 <a-button type="link" size="small" aria-label="编辑实验记录" @click="onEdit(record)">编辑</a-button>
                 <a-popconfirm

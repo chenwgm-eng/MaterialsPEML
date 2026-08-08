@@ -15,8 +15,10 @@ UserStore 实例挂载在 ``app.state.user_store``（由 api.py startup 初始�
 from __future__ import annotations
 import logging
 from fastapi import Depends, HTTPException, Request
+from ..db import set_tenant, DEFAULT_TENANT
 from .tokens import verify_token
 from .user_store import UserRole, User, UserStore, ROLE_RANK
+from .permissions import role_has_permission
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,7 @@ def get_current_user(request: Request) -> User | None:
     # HTTP 中间件已解析过的话直接复用，避免重复查库
     cached = getattr(request.state, "current_user", None)
     if cached is not None:
+        _apply_tenant(request, cached)
         return cached
     store = getattr(request.app.state, "user_store", None)
     if store is None:
@@ -54,7 +57,19 @@ def get_current_user(request: Request) -> User | None:
         )
         return None
     request.state.current_user = user
+    _apply_tenant(request, user)
     return user
+
+
+def _apply_tenant(request: Request, user: User | None) -> None:
+    """将当前用户的租户写入请求上下文与 db 上下文。
+
+    匿名用户归属 default 租户；已登录用户归属其 tenant_id。
+    后台任务（无 request）需自行调用 db.set_tenant()。
+    """
+    tenant_id = (user.tenant_id if user else "") or DEFAULT_TENANT
+    request.state.tenant_id = tenant_id
+    set_tenant(tenant_id)
 
 
 def require_role(min_role: UserRole):
@@ -104,6 +119,43 @@ def require_login(request: Request) -> User:
     return user
 
 
+def require_permission(permission: str):
+    """返回 FastAPI 依赖：校验当前用户是否具备指定权限点（A3）。
+
+    用法：``user: User = Depends(require_permission("candidate.update"))``
+    或 ``dependencies=[Depends(require_permission("candidate.update"))]``。
+
+    - 匿名用户一律 401；
+    - 已登录但缺权限 403，并记录 permission_denied 审计。
+    """
+
+    def _dependency(user: User | None = Depends(get_current_user)) -> User:
+        if user is None:
+            raise HTTPException(
+                status_code=401,
+                detail="未登录或用户失效，请先登录",
+            )
+        if not role_has_permission(user.role, permission):
+            from ..audit import get_audit_logger, AuditEntry
+            try:
+                get_audit_logger().log(AuditEntry(
+                    event_type="permission_denied", module="auth", action="permission_denied",
+                    operator=user.username, user_id=user.user_id,
+                    detail={"permission": permission},
+                    resource_type="permission", resource_id=permission,
+                    tenant_id=user.tenant_id or DEFAULT_TENANT,
+                ))
+            except Exception:
+                logger.debug("权限拒绝审计写入失败", exc_info=True)
+            raise HTTPException(
+                status_code=403,
+                detail=f"权限不足：缺少 {permission}",
+            )
+        return user
+
+    return _dependency
+
+
 def check_project_access(user_id: str, project_id: str, store: UserStore) -> bool:
     """校验用户是否可访问指定项目。
 
@@ -116,3 +168,33 @@ def check_project_access(user_id: str, project_id: str, store: UserStore) -> boo
     if not user.project_ids:
         return True
     return project_id in user.project_ids
+
+
+def require_project_access(permission: str):
+    """行级访问控制（A3）：要求具备 permission 且能访问指定 project。
+
+    用法：``user: User = Depends(require_project_access("experiment.view"))``，
+    同时从 path/query 提取 ``project_id`` 校验行级归属。
+
+    - 匿名 401；
+    - 缺权限 403（并记录 permission_denied 审计）；
+    - project_ids 非空且不含传入 project_id → 403（行级隔离）。
+    """
+
+    def _dependency(
+        request: Request,
+        user: User = Depends(require_permission(permission)),
+    ) -> User:
+        project_id = (
+            request.path_params.get("project_id")
+            or request.query_params.get("project_id")
+            or ""
+        )
+        if project_id and user.project_ids and project_id not in user.project_ids:
+            raise HTTPException(
+                status_code=403,
+                detail=f"无权访问项目 {project_id}",
+            )
+        return user
+
+    return _dependency

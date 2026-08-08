@@ -14,8 +14,8 @@ import json
 import logging
 from typing import Any
 
-from ..db import get_engine
-from ..generation.crystal_candidate_generator import _normalize_formula
+from ..db import get_engine, get_tenant, tenant_filter
+from ..generation.formula_utils import normalize_formula
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +104,7 @@ class CandidateRecord(BaseModel):
     prediction: dict[str, Any] = Field(default_factory=dict)
     # P3-B2：合成可行性（best feasibility_score + 关联任务/时间），持久化于 data JSONB
     synthesis_feasibility: dict[str, Any] = Field(default_factory=dict)
+    tenant_id: str = ""  # 多租户隔离：归属租户；空=default
     data: dict[str, Any] = Field(default_factory=dict)  # full candidate JSON
 
 
@@ -182,9 +183,9 @@ class CandidateStore:
         """计算 content_hash = sha256(normalized_formula + "|" + target_application)。
 
         D-08：去重粒度为"化学式 + 目标应用"。归一化化学式复用
-        _normalize_formula（pymatgen reduced_formula）。
+        normalize_formula（pymatgen reduced_formula）。
         """
-        normalized = _normalize_formula(formula)
+        normalized = normalize_formula(formula)
         payload = f"{normalized}|{target_application or ''}"
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -194,7 +195,7 @@ class CandidateStore:
         """按 content_hash 查询已存在的候选。
 
         content_hash = sha256(normalized_formula + "|" + target_application)。
-        返回已存在的候选或 None。
+        返回已存在的候选或 None。查询按当前租户隔离。
         """
         content_hash = self._compute_content_hash(formula, target_application)
         with self.engine.connect() as conn:
@@ -203,8 +204,9 @@ class CandidateStore:
                      "scenario_id, task_id, project_id, "
                      "multi_objective_score, created_at, data, "
                      "status, owner, assigned_role "
-                     "FROM experiment.candidates WHERE content_hash = :content_hash"),
-                {"content_hash": content_hash},
+                     "FROM experiment.candidates "
+                     f"WHERE content_hash = :content_hash AND {tenant_filter()}"),
+                {"content_hash": content_hash, "tenant_id": get_tenant()},
             ).fetchone()
         if row is None:
             return None
@@ -212,7 +214,8 @@ class CandidateStore:
 
     _SELECT_COLS = (
         "candidate_id, candidate_type, name, smiles, source, scenario_id, task_id, "
-        "project_id, multi_objective_score, created_at, data, status, owner, assigned_role"
+        "project_id, multi_objective_score, created_at, data, status, owner, "
+        "assigned_role, tenant_id"
     )
 
     def save(self, record: CandidateRecord, dedup: bool = True) -> CandidateRecord:
@@ -245,10 +248,10 @@ class CandidateStore:
                 text("""INSERT INTO experiment.candidates
                 (candidate_id, candidate_type, name, smiles, source, scenario_id,
                  task_id, project_id, multi_objective_score, created_at, data, content_hash,
-                 status, owner, assigned_role)
+                 status, owner, assigned_role, tenant_id)
                 VALUES (:candidate_id, :candidate_type, :name, :smiles, :source, :scenario_id,
                  :task_id, :project_id, :multi_objective_score, :created_at, CAST(:data AS JSONB),
-                 :content_hash, :status, :owner, :assigned_role)
+                 :content_hash, :status, :owner, :assigned_role, :tenant_id)
                 ON CONFLICT (candidate_id) DO UPDATE SET
                     candidate_type = EXCLUDED.candidate_type,
                     name = EXCLUDED.name,
@@ -263,7 +266,8 @@ class CandidateStore:
                     content_hash = EXCLUDED.content_hash,
                     status = EXCLUDED.status,
                     owner = EXCLUDED.owner,
-                    assigned_role = EXCLUDED.assigned_role
+                    assigned_role = EXCLUDED.assigned_role,
+                    tenant_id = EXCLUDED.tenant_id
                 """),
                 {
                     "candidate_id": record.candidate_id,
@@ -282,6 +286,7 @@ class CandidateStore:
                     "status": record.status or CandidateStatus.SCREENING.value,
                     "owner": record.owner or "",
                     "assigned_role": record.assigned_role or "",
+                    "tenant_id": record.tenant_id or get_tenant(),
                 },
             )
         return record
@@ -314,9 +319,9 @@ class CandidateStore:
             row = conn.execute(
                 text(f"SELECT {self._SELECT_COLS} "
                      "FROM experiment.candidates "
-                     "WHERE data::text LIKE :pattern "
+                     f"WHERE data::text LIKE :pattern AND {tenant_filter()} "
                      "ORDER BY created_at DESC LIMIT 1"),
-                {"pattern": f"%{origin_temp_id}%"},
+                {"pattern": f"%{origin_temp_id}%", "tenant_id": get_tenant()},
             ).fetchone()
         if row is None:
             return None
@@ -326,8 +331,9 @@ class CandidateStore:
         with self.engine.connect() as conn:
             row = conn.execute(
                 text(f"SELECT {self._SELECT_COLS} "
-                     "FROM experiment.candidates WHERE candidate_id = :candidate_id"),
-                {"candidate_id": candidate_id},
+                     "FROM experiment.candidates "
+                     f"WHERE candidate_id = :candidate_id AND {tenant_filter()}"),
+                {"candidate_id": candidate_id, "tenant_id": get_tenant()},
             ).fetchone()
         if row is None:
             return None
@@ -338,11 +344,11 @@ class CandidateStore:
         """查询候选材料列表。
 
         支持按 candidate_type / scenario_id / task_id / project_id 过滤，
-        所有参数可选，组合使用 AND 关系。
+        所有参数可选，组合使用 AND 关系。始终按当前租户隔离。
         """
         with self.engine.connect() as conn:
-            conditions = []
-            params: dict[str, Any] = {}
+            conditions = [tenant_filter()]
+            params: dict[str, Any] = {"tenant_id": get_tenant()}
             if candidate_type:
                 conditions.append("candidate_type = :candidate_type")
                 params["candidate_type"] = candidate_type
@@ -368,8 +374,9 @@ class CandidateStore:
     def delete(self, candidate_id: str) -> bool:
         with self.engine.begin() as conn:
             cur = conn.execute(
-                text("DELETE FROM experiment.candidates WHERE candidate_id = :candidate_id"),
-                {"candidate_id": candidate_id},
+                text("DELETE FROM experiment.candidates "
+                     f"WHERE candidate_id = :candidate_id AND {tenant_filter()}"),
+                {"candidate_id": candidate_id, "tenant_id": get_tenant()},
             )
             return cur.rowcount > 0
 
@@ -440,23 +447,25 @@ class CandidateStore:
                 conn.execute(
                     text("UPDATE experiment.candidates SET status = :status, "
                          "owner = :owner, assigned_role = :assigned_role "
-                         "WHERE candidate_id = :candidate_id"),
+                         f"WHERE candidate_id = :candidate_id AND {tenant_filter()}"),
                     {
                         "status": to_status,
                         "owner": owner,
                         "assigned_role": expected_role,
                         "candidate_id": candidate_id,
+                        "tenant_id": get_tenant(),
                     },
                 )
             else:
                 conn.execute(
                     text("UPDATE experiment.candidates SET status = :status, "
                          "assigned_role = :assigned_role "
-                         "WHERE candidate_id = :candidate_id"),
+                         f"WHERE candidate_id = :candidate_id AND {tenant_filter()}"),
                     {
                         "status": to_status,
                         "assigned_role": expected_role,
                         "candidate_id": candidate_id,
+                        "tenant_id": get_tenant(),
                     },
                 )
         return self.get(candidate_id)  # type: ignore[return-value]
@@ -511,4 +520,5 @@ class CandidateStore:
             owner=_str(row[12]) if len(row) > 12 else "",
             assigned_role=_str(row[13]) if len(row) > 13 else "",
             synthesis_feasibility=synth_feas_val,
+            tenant_id=_str(row[14]) if len(row) > 14 else "",
         )

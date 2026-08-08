@@ -375,7 +375,7 @@
                             <a-descriptions-item v-if="lineageSelectedNode.meta" label="元信息">{{ lineageSelectedNode.meta }}</a-descriptions-item>
                           </a-descriptions>
                           <div class="lineage-detail-actions" v-if="lineageSelectedNode">
-                            <a-button type="primary" size="small" @click="onLineageJump(lineageSelectedNode)">查看详情</a-button>
+                            <a-button type="link" size="small" @click="onLineageJump(lineageSelectedNode)"><EyeOutlined /> 查看详情</a-button>
                           </div>
                         </a-card>
                         <EmptyState
@@ -504,7 +504,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, reactive } from 'vue'
 import { message } from 'ant-design-vue'
-import { PlusOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, ExperimentOutlined, DatabaseOutlined, AppstoreOutlined, BarChartOutlined, ProjectOutlined, FolderOutlined, ProfileOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, ExperimentOutlined, DatabaseOutlined, AppstoreOutlined, BarChartOutlined, ProjectOutlined, FolderOutlined, ProfileOutlined, ThunderboltOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import GanttChart from '@/components/GanttChart.vue'
 import EntityGraph from '@/components/EntityGraph.vue'
 import DisabledButton from '@/components/DisabledButton.vue'
@@ -1262,8 +1262,8 @@ onMounted(async () => {
 }
 
 .project-row.selected {
-  background: var(--primary-light, #e6f4ff);
-  border-left: 3px solid var(--primary-color, #1677ff);
+  background: var(--primary-bg);
+  border-left: 3px solid var(--primary);
   padding-left: 9px;
 }
 
@@ -1305,7 +1305,7 @@ onMounted(async () => {
 
 .drag-handle:hover,
 .split-layout.is-resizing .drag-handle {
-  background: var(--primary-color, #1677ff);
+  background: var(--primary);
 }
 
 /* Right Panel */
@@ -1341,7 +1341,7 @@ onMounted(async () => {
 }
 
 .back-icon:hover {
-  color: var(--primary-color, #1677ff);
+  color: var(--primary);
 }
 
 .right-header-title {
@@ -1695,7 +1695,7 @@ onMounted(async () => {
 }
 
 .lineage-node-icon {
-  color: var(--primary-color, #1677ff);
+  color: var(--primary);
   font-size: 14px;
 }
 

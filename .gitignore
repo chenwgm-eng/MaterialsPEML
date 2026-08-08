@@ -46,6 +46,9 @@ battery_materials_agent/data/*.db
 battery_materials_agent/data/*.db-*
 battery_materials_agent/data/*.db.bak.*
 
+# ===== 大数据文件（由脚本从官方桶下载，不入库）=====
+data/gnome/*.csv
+
 # ===== 大型模型数据 =====
 askcos-data/
 

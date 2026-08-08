@@ -209,6 +209,32 @@ class ControlPlaneConfig(BaseModel):
     trace_retention_days: int = 30
 
 
+class SSOConfig(BaseModel):
+    """OIDC 企业 SSO 配置（A2）。未配置时 SSO 路由不注册，系统行为与现状一致。"""
+    enabled: bool = False
+    issuer: str = ""                # OIDC 签发方（发现端点基础 URL）
+    client_id: str = ""
+    client_secret: str = ""         # 生产环境经环境变量注入
+    redirect_uri: str = ""          # 本系统回调地址（Abs URL）
+    scope: str = "openid profile email"
+    default_role: str = "viewer"    # JIT 开户默认角色
+    default_tenant: str = "default" # JIT 开户默认租户
+
+
+class LDAPConfig(BaseModel):
+    """可选 LDAP 绑定认证配置（A2）。未配置时不注册 LDAP 认证。"""
+    enabled: bool = False
+    server: str = ""
+    port: int = 389
+    use_tls: bool = False
+    bind_dn: str = ""               # 服务账号 DN（用于搜索用户）
+    bind_password: str = ""
+    search_base: str = ""           # 用户搜索基 DN
+    search_filter: str = "(uid={username})"  # {username} 占位符
+    default_role: str = "viewer"
+    default_tenant: str = "default"
+
+
 class EvalConfig(BaseModel):
     enabled: bool = False
     golden_set_dir: str = "evals/datasets"
@@ -306,6 +332,8 @@ class AgentConfig(BaseModel):
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     chemistry_rules: ChemistryRuleSetConfig = Field(default_factory=ChemistryRuleSetConfig)
     material_domain: MaterialDomainConfig = Field(default_factory=MaterialDomainConfig)
+    sso: SSOConfig = Field(default_factory=SSOConfig)
+    ldap: LDAPConfig = Field(default_factory=LDAPConfig)
     # T-034 SCP 异步任务混合生命周期归档（决策 D-09）
     scp_task_completed_retention_days: int = 30
     scp_task_failed_retention_days: int = 90
@@ -629,6 +657,28 @@ def load_config(env_file: str | None = None) -> AgentConfig:
         ),
         chemistry_rules=_load_chemistry_rules_config(),
         material_domain=_load_material_domain_config(),
+        sso=SSOConfig(
+            enabled=os.getenv("SSO_ENABLED", "false").lower() == "true",
+            issuer=os.getenv("SSO_ISSUER", ""),
+            client_id=os.getenv("SSO_CLIENT_ID", ""),
+            client_secret=os.getenv("SSO_CLIENT_SECRET", ""),
+            redirect_uri=os.getenv("SSO_REDIRECT_URI", ""),
+            scope=os.getenv("SSO_SCOPE", "openid profile email"),
+            default_role=os.getenv("SSO_DEFAULT_ROLE", "viewer"),
+            default_tenant=os.getenv("SSO_DEFAULT_TENANT", "default"),
+        ),
+        ldap=LDAPConfig(
+            enabled=os.getenv("LDAP_ENABLED", "false").lower() == "true",
+            server=os.getenv("LDAP_SERVER", ""),
+            port=int(os.getenv("LDAP_PORT", "389")),
+            use_tls=os.getenv("LDAP_USE_TLS", "false").lower() == "true",
+            bind_dn=os.getenv("LDAP_BIND_DN", ""),
+            bind_password=os.getenv("LDAP_BIND_PASSWORD", ""),
+            search_base=os.getenv("LDAP_SEARCH_BASE", ""),
+            search_filter=os.getenv("LDAP_SEARCH_FILTER", "(uid={username})"),
+            default_role=os.getenv("LDAP_DEFAULT_ROLE", "viewer"),
+            default_tenant=os.getenv("LDAP_DEFAULT_TENANT", "default"),
+        ),
         scp_task_completed_retention_days=int(os.getenv("SCP_TASK_COMPLETED_RETENTION_DAYS", "30")),
         scp_task_failed_retention_days=int(os.getenv("SCP_TASK_FAILED_RETENTION_DAYS", "90")),
     )
@@ -702,6 +752,24 @@ def save_config_to_env(config: AgentConfig, env_path: str = ".env") -> None:
         "EVAL_GOLDEN_SET_DIR",
         "EVAL_BASELINE_DIR",
         "EVAL_REPORT_DIR",
+        "SSO_ENABLED",
+        "SSO_ISSUER",
+        "SSO_CLIENT_ID",
+        "SSO_CLIENT_SECRET",
+        "SSO_REDIRECT_URI",
+        "SSO_SCOPE",
+        "SSO_DEFAULT_ROLE",
+        "SSO_DEFAULT_TENANT",
+        "LDAP_ENABLED",
+        "LDAP_SERVER",
+        "LDAP_PORT",
+        "LDAP_USE_TLS",
+        "LDAP_BIND_DN",
+        "LDAP_BIND_PASSWORD",
+        "LDAP_SEARCH_BASE",
+        "LDAP_SEARCH_FILTER",
+        "LDAP_DEFAULT_ROLE",
+        "LDAP_DEFAULT_TENANT",
     }
 
     internlm_key = config.internlm.api_key.get_secret_value() if config.internlm.api_key else ""

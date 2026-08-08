@@ -111,11 +111,9 @@
           </template>
           <template v-if="column.key === 'actions'">
             <a-space size="small">
-              <a-tooltip title="查看详情">
-                <a-button size="small" @click="openDetail(record)">
-                  <EyeOutlined />
-                </a-button>
-              </a-tooltip>
+              <a-button size="small" type="link" @click="openDetail(record)">
+                <EyeOutlined /> 查看详情
+              </a-button>
               <a-tooltip :title="record.status !== 'pending_review' ? '仅「待审核」状态可人工复核' : '人工复核'">
                 <span class="tt-btn-wrap">
                   <a-button

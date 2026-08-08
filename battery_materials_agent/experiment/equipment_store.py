@@ -6,7 +6,7 @@ from enum import Enum
 from sqlalchemy import text
 import logging
 
-from ..db import get_engine
+from ..db import get_engine, get_tenant, tenant_filter
 from ..mdm.reference_dict import ReferenceDictStore
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,8 @@ class EquipmentStore:
                     next_calibration TEXT,
                     responsible_person TEXT,
                     purchase_date TEXT,
-                    notes TEXT
+                    notes TEXT,
+                    tenant_id TEXT NOT NULL DEFAULT 'default'
                 )
             """))
 
@@ -87,15 +88,16 @@ class EquipmentStore:
     def save(self, equipment: Equipment):
         self._validate_status(equipment.status.value)
         self._validate_category(equipment.category)
+        tenant_id = get_tenant()
         with self.engine.begin() as conn:
             conn.execute(
                 text("""INSERT INTO experiment.equipment
                 (equipment_id, name, model, category, serial_number, location,
                  status, last_calibration, next_calibration, responsible_person,
-                 purchase_date, notes)
+                 purchase_date, notes, tenant_id)
                 VALUES (:equipment_id, :name, :model, :category, :serial_number, :location,
                  :status, :last_calibration, :next_calibration, :responsible_person,
-                 :purchase_date, :notes)
+                 :purchase_date, :notes, :tenant_id)
                 ON CONFLICT (equipment_id) DO UPDATE SET
                     name = EXCLUDED.name,
                     model = EXCLUDED.model,
@@ -122,14 +124,19 @@ class EquipmentStore:
                     "responsible_person": equipment.responsible_person,
                     "purchase_date": equipment.purchase_date,
                     "notes": equipment.notes,
+                    "tenant_id": tenant_id,
                 },
             )
 
     def get(self, equipment_id: str) -> Equipment | None:
         with self.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT * FROM experiment.equipment WHERE equipment_id = :equipment_id"),
-                {"equipment_id": equipment_id},
+                text(
+                    "SELECT * FROM experiment.equipment "
+                    f"WHERE equipment_id = :equipment_id AND {tenant_filter()} "
+                    "LIMIT 1"
+                ),
+                {"equipment_id": equipment_id, "tenant_id": get_tenant()},
             ).fetchone()
         if row is None:
             return None
@@ -139,23 +146,26 @@ class EquipmentStore:
         """按序列号查找设备（用于唯一性校验），可排除指定设备。"""
         if not serial_number:
             return None
+        tenant_id = get_tenant()
         with self.engine.connect() as conn:
             if exclude_id:
                 row = conn.execute(
                     text(
                         "SELECT * FROM experiment.equipment "
-                        "WHERE serial_number = :serial_number AND equipment_id != :exclude_id "
+                        f"WHERE serial_number = :serial_number AND equipment_id != :exclude_id "
+                        f"AND {tenant_filter()} "
                         "ORDER BY equipment_id ASC LIMIT 1"
                     ),
-                    {"serial_number": serial_number, "exclude_id": exclude_id},
+                    {"serial_number": serial_number, "exclude_id": exclude_id, "tenant_id": tenant_id},
                 ).fetchone()
             else:
                 row = conn.execute(
                     text(
                         "SELECT * FROM experiment.equipment "
-                        "WHERE serial_number = :serial_number ORDER BY equipment_id ASC LIMIT 1"
+                        f"WHERE serial_number = :serial_number AND {tenant_filter()} "
+                        "ORDER BY equipment_id ASC LIMIT 1"
                     ),
-                    {"serial_number": serial_number},
+                    {"serial_number": serial_number, "tenant_id": tenant_id},
                 ).fetchone()
         if row is None:
             return None
@@ -164,16 +174,15 @@ class EquipmentStore:
     def list_all(self, category: str = "", status: str = "") -> list[Equipment]:
         with self.engine.connect() as conn:
             query = "SELECT * FROM experiment.equipment"
-            conditions = []
-            params: dict[str, str] = {}
+            conditions = [tenant_filter()]
+            params: dict[str, str] = {"tenant_id": get_tenant()}
             if category:
                 conditions.append("category = :category")
                 params["category"] = category
             if status:
                 conditions.append("status = :status")
                 params["status"] = status
-            if conditions:
-                query += " WHERE " + " AND ".join(conditions)
+            query += " WHERE " + " AND ".join(conditions)
             query += " ORDER BY equipment_id ASC"
             rows = conn.execute(text(query), params).fetchall()
         return [self._row_to_equipment(r) for r in rows]
@@ -184,14 +193,14 @@ class EquipmentStore:
             if notes:
                 conn.execute(
                     text("UPDATE experiment.equipment SET status = :status, notes = :notes "
-                         "WHERE equipment_id = :equipment_id"),
-                    {"status": status, "notes": notes, "equipment_id": equipment_id},
+                         f"WHERE equipment_id = :equipment_id AND {tenant_filter()}"),
+                    {"status": status, "notes": notes, "equipment_id": equipment_id, "tenant_id": get_tenant()},
                 )
             else:
                 conn.execute(
                     text("UPDATE experiment.equipment SET status = :status "
-                         "WHERE equipment_id = :equipment_id"),
-                    {"status": status, "equipment_id": equipment_id},
+                         f"WHERE equipment_id = :equipment_id AND {tenant_filter()}"),
+                    {"status": status, "equipment_id": equipment_id, "tenant_id": get_tenant()},
                 )
 
     def _row_to_equipment(self, row) -> Equipment:

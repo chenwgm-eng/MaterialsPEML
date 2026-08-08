@@ -22,6 +22,7 @@ const routes = [
       { path: 'ecml', name: 'ECMLMonitor', component: () => import('@/views/ECMLMonitor.vue'), meta: { title: '实验闭环迭代', icon: 'SyncOutlined' } },
       { path: 'ecml/runs', name: 'ECMLRuns', component: () => import('@/views/ECMLRuns.vue'), meta: { title: '迭代历史', icon: 'HistoryOutlined' } },
       { path: 'experiments', name: 'Experiments', component: () => import('@/views/Experiments.vue'), meta: { title: '实验数据', icon: 'DatabaseOutlined' } },
+      { path: 'experiment-dashboard', name: 'ExperimentDashboard', component: () => import('@/views/ExperimentDashboard.vue'), meta: { title: '实验数据看板', icon: 'DashboardOutlined' } },
       { path: 'experiment-workbench', name: 'ExperimentWorkbench', component: () => import('@/views/ExperimentWorkbench.vue'), meta: { title: '实验工作台', icon: 'FormOutlined' } },
       // 审查意见0726：决策放行已整合进「我的待办」，旧路径重定向
       { path: 'approvals', redirect: '/my-tasks?tab=approval' },
@@ -56,6 +57,7 @@ const routes = [
       { path: 'mdm', name: 'MdmCenter', component: () => import('@/views/MdmCenter.vue'), meta: { title: '主数据治理', icon: 'DatabaseOutlined' } },
       { path: 'equipment', name: 'EquipmentLedger', component: () => import('@/views/EquipmentLedger.vue'), meta: { title: '设备台账', icon: 'ToolOutlined' } },
       { path: 'users', name: 'UserManagement', component: () => import('@/views/UserManagement.vue'), meta: { title: '用户管理', icon: 'UserOutlined' } },
+      { path: 'audit', name: 'AuditLogs', component: () => import('@/views/AuditLogs.vue'), meta: { title: '审计日志', icon: 'FileSearchOutlined', requiredRole: 'pm' } },
       { path: 'settings', name: 'Settings', component: () => import('@/views/Settings.vue'), meta: { title: '系统设置', icon: 'SettingOutlined' } },
       // P0-3：无权限状态统一页面
       { path: 'forbidden', name: 'Forbidden', component: () => import('@/components/ForbiddenResult.vue'), meta: { title: '无权限访问' } },

@@ -38,7 +38,7 @@ const props = defineProps({
 // 规范态 → 主题色（对齐任务要求）
 const STATUS_COLOR_MAP = {
   success: '#52C41A',
-  running: '#1890FF',
+  running: '#3b82f6',
   warning: '#FAAD14',
   failed: '#F5222D',
   default: '#8C8C8C',

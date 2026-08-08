@@ -130,11 +130,9 @@
           </template>
           <template v-if="column.key === 'actions'">
             <a-space size="small">
-              <a-tooltip title="查看详情">
-                <a-button size="small" @click="openDetail(record)">
-                  <EyeOutlined />
-                </a-button>
-              </a-tooltip>
+              <a-button size="small" type="link" @click="openDetail(record)">
+                <EyeOutlined /> 查看详情
+              </a-button>
               <a-tooltip :title="runTooltip(record)">
                 <span class="tt-btn-wrap">
                   <a-button

@@ -1,9 +1,10 @@
 """跨尺度建模引擎：分子性质 → 反应过程 → 多物理场串联。
 
-模板化实现，无需真实多物理场求解器：
+分层执行：
 - molecular 层：调用现有性质预测（crystal/polymer predictor）
 - reaction 层：调用合成路径规划（synthesis_planner），简化为反应动力学模板
-- continuum 层：多物理场模拟模板（电化学-热耦合、力学性能）
+- continuum 层：优先使用真实求解器（LAMMPS 分子/介观、FEniCSx 连续介质），
+  求解器不可用时回退到多物理场模板近似（标记 estimate/degraded）
 - coupled：汇总各尺度结果，分析耦合关系
 """
 
@@ -11,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import math
+
+from .solvers import FEniCSxAdapter, LAMMPSAdapter, fenicsx_available, lammps_available
 
 
 class CrossScaleEngine:
@@ -34,6 +37,16 @@ class CrossScaleEngine:
 
     def __init__(self, agent=None):
         self.agent = agent
+        # 真实求解器适配器（惰性创建，探测可用性）
+        self._lammps = LAMMPSAdapter()
+        self._fenicsx = FEniCSxAdapter()
+
+    def solver_status(self) -> dict:
+        """返回各级求解器可用性（供前端展示真实求解 vs 模板降级）。"""
+        return {
+            "lammps": {"available": self._lammps.available, "engine": "LAMMPS"},
+            "fenicsx": {"available": self._fenicsx.available, "engine": "FEniCSx"},
+        }
 
     async def run_cross_scale(self, material: dict, scales: list[str], agent_id: str | None = None) -> dict:
         """跨尺度建模主入口。
@@ -54,11 +67,20 @@ class CrossScaleEngine:
         result: dict = {}
         if "molecular" in scales:
             result["molecular"] = await self._run_molecular(material)
+            # 分子尺度可补充 LAMMPS 热导率/RDF/离子扩散（真实 MD，可用时）
+            if lammps_available():
+                result["molecular"]["md"] = await asyncio.to_thread(self._run_lammps_tasks, material)
         if "reaction" in scales:
             result["reaction"] = await self._run_reaction(material)
         if "continuum" in scales:
             result["continuum"] = self._run_continuum(material, result.get("molecular"))
+            # 连续介质尺度优先 FEniCSx 真实 PDE（可用时）
+            if fenicsx_available():
+                result["continuum"]["pde"] = await asyncio.to_thread(
+                    self._run_fenicsx, material, result.get("molecular")
+                )
         result["coupled"] = self._analyze_coupling(result, material, scales)
+        result["solvers"] = self.solver_status()
         # 标注执行 agent（若指定）
         if agent_id:
             result["executed_by"] = agent_id
@@ -119,6 +141,42 @@ class CrossScaleEngine:
             "confidence": avg_conf,
             "material_type": mat_type,
         }
+
+    def _run_lammps_tasks(self, material: dict) -> dict:
+        """运行 LAMMPS 分子动力学任务（热导率/RDF/离子扩散），真实可用时执行。"""
+        # 这些任务较重（MD 仿真），放线程池避免阻塞事件循环
+        results = {}
+        for task in ("thermal_conductivity", "rdf", "ion_diffusion"):
+            try:
+                r = self._lammps.run(task, material)
+                if r is not None:
+                    results[task] = r
+            except Exception:  # noqa: BLE001
+                continue
+        return results
+
+    def _run_fenicsx(self, material: dict, molecular: dict | None) -> dict:
+        """运行 FEniCSx 薄片热-电化学耦合 PDE，真实可用时执行。"""
+        props = (molecular or {}).get("properties_by_name", {}) if molecular else {}
+
+        def _val(name):
+            p = props.get(name)
+            if p is None:
+                return None
+            v = p.get("value")
+            return float(v) if v is not None else None
+
+        thermal_cond = _val("thermal_conductivity") or 1.0
+        ionic_cond = _val("ionic_conductivity") or 1.0e-4
+        formation_e = _val("formation_energy")
+        heat_q = max(0.1, abs(formation_e or -2.0) * 0.5)
+        r = self._fenicsx.run(
+            material,
+            thermal_k=thermal_cond,
+            ec_conductivity=ionic_cond,
+            heat_generation=heat_q,
+        )
+        return {"estimate": False, "result": r} if r else {"estimate": True, "result": None}
 
     # ------------------------------------------------------------------
     # 反应尺度

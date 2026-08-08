@@ -2,7 +2,7 @@
 
 > AI 驱动的电池材料研发闭环系统（基于 OpenScience Agent 架构）
 >
-> 版本：v2.1.0 ｜ 文档更新日期：2026-07-28
+> 版本：v3.0.0 ｜ 文档更新日期：2026-08-08
 >
 > 对标产品：[Deep Principle](https://www.deepprinciple.com/) 的 Agent Mira 六大模块能力
 >
@@ -15,6 +15,15 @@
 > - 新增 **SKILL 声明式流水线层**（`mcp_tools/skill_catalog.py` + `skill_executor.py`）：组合多个 SCP 工具为顺序 pipeline
 > - 新增 **SCP 异步任务系统**（`integrations/scp_task_store.py` + `scp_task_worker.py` + `scp_task_locks.py`，迁移 0026）：长时 SCP 调用走异步 worker + 状态机 + 重试/取消
 > - Alembic 迁移由 23 个增至 **29 个**（新增 0024~0029）
+>
+> **v3.0 重大变更（企业级加固）**：
+> - **多租户隔离（A1）**：共享 schema + `tenant_id` 逻辑隔离，`db.py` 引入 `ContextVar` 租户上下文（`set_tenant`/`get_tenant`/`tenant_filter`），store 层统一追加租户过滤，迁移 0050/0051 为项目/候选/样品/实验/审计/设备等核心表加 `tenant_id` 并回填默认租户
+> - **企业 SSO 与 LDAP 认证（A2）**：OIDC 授权码登录（`auth/sso.py`）+ LDAP 绑定认证兜底（`auth/ldap_auth.py`），JIT 开户按 `external_idp_id`（sub）幂等映射本地用户；`auth.users` 新增 `tenant_id`/`auth_source`/`external_idp_id` 三列
+> - **细粒度权限点（A3）**：`auth/permissions.py` 定义 16 个权限点 + 角色→权限映射，`require_permission`/`require_project_access` 依赖实现端点级与行级访问控制，权限拒绝自动写审计
+> - **审计系统增强（A4）**：`audit.py` 补齐字段（user_id/ip/resource_type/resource_id/before/after）、多条件分页查询、独立归档表 `audit.audit_archive`、DB 层 RULE 追加防篡改（禁止 UPDATE/DELETE）
+> - **报表导出（A5）**：`report/export.py` 支持 Excel（openpyxl）/PDF（reportlab）导出 + 四类报表（candidate/experiment/equipment/sample）+ 轻量定时报表调度（内存级，cron 简化），全部按租户隔离
+> - **GNoME 真实数据接入**：完整 GNoME 稳定集（约 55.4 万条）导入统一 PostgreSQL `gnome.gnome_materials`（迁移 0052），元素走 GIN 索引、化学式/材料 ID 走 btree 索引；`material_id` 唯一索引（0053）与数值列可空（0054）
+> - Alembic 迁移增至 **54 个**（新增 0050~0054）
 
 ---
 
@@ -202,13 +211,17 @@ BatteryEMCL Lab/
 │   │   └── polymer.py                # PolymerRepresentation（PSMILES/RDKit）
 │   ├── generation/                   # 生成层
 │   │   ├── crystal_candidate_generator.py   # 晶体候选（MP/GNoME 检索 + 元素替换）
+│   │   ├── gnome_store.py            # GNoME 真实数据源（gnome.gnome_materials，元素 GIN 索引）
+│   │   ├── formula_utils.py          # 化学式归一化/元素提取（生成器/存储/导入脚本共用）
 │   │   ├── polymer_candidate_generator.py   # 高分子候选（LLM 规则重组）
 │   │   ├── chemistry_rules.py        # 化学规则校验
 │   │   ├── formula_validator.py      # 化学式校验
 │   │   └── gen_model.py              # 生成模型封装
 │   ├── prediction/                   # 预测层
 │   │   ├── crystal_property_predictor.py    # CGCNN/M3GNet 晶体预测
-│   │   └── polymer_property_predictor.py    # PolymerGNN 高分子预测
+│   │   ├── polymer_property_predictor.py    # PolymerGNN 高分子预测
+│   │   ├── polymer_gnn.py                   # PolymerGNN 模型/建图/标准化（训练+推理共用）
+│   │   └── polymer_gnn_adapter.py           # PolymerGNN 真实权重加载与推理适配器
 │   ├── industrialization/            # 工业化验证层
 │   │   ├── compliance_checker.py     # SMARTS 合规 + REACH 核查
 │   │   ├── raw_material_db.py        # 物料规格库（PostgreSQL）
@@ -340,10 +353,16 @@ BatteryEMCL Lab/
 │   │   ├── internlm_provider.py      # InternLM 统一科学模型
 │   │   ├── schemas.py                # ChatRequest/ChatResponse/ProviderHealth
 │   │   └── token_tracker.py          # Token 用量追踪
-│   ├── auth/                         # 认证与授权
-│   │   ├── middleware.py             # get_current_user/require_role/check_project_access
+│   ├── auth/                         # 认证与授权（v3.0 企业级加固）
+│   │   ├── middleware.py             # get_current_user/require_role/require_login/require_permission/require_project_access
+│   │   ├── permissions.py            # 权限点常量 + ROLE_PERMISSIONS 角色→权限映射（v3.0 新增）
 │   │   ├── tokens.py                 # HMAC-SHA256 签名 token（issue/verify）
-│   │   └── user_store.py             # UserStore（用户 CRUD + 密码哈希升级）
+│   │   ├── user_store.py             # UserStore + UserRole（admin/pm/researcher/data_engineer/reviewer/viewer）
+│   │   ├── sso.py                    # OIDC 企业 SSO 授权码登录 + JIT 开户（v3.0 新增）
+│   │   ├── ldap_auth.py              # LDAP 绑定认证兜底（v3.0 新增，可选 ldap3）
+│   │   └── tenant_store.py           # TenantStore 租户 CRUD/状态管理（v3.0 新增）
+│   ├── report/                       # 报表导出（v3.0 新增）
+│   │   └── export.py                 # Excel/PDF 导出 + 四类报表 + 定时调度（按租户隔离）
 │   ├── knowledge/                    # 知识资产层（v2.1 重构）
 │   │   ├── asset_store.py            # PaperStore/MaterialStore/ClaimStore（三层资产 + DOI 去重）
 │   │   ├── credibility.py            # 双维度可信度模型（source_tier × evidence_level）
@@ -351,8 +370,11 @@ BatteryEMCL Lab/
 │   │   └── ingestion.py              # 多源采集管道（LLM/Crossref/Semantic Scholar/本地）
 │   ├── battery/                      # 电池循环数据库
 │   │   └── cycle_database.py         # BatteryCycleDatabase
-│   ├── cross_scale/                  # 跨尺度计算
-│   │   └── engine.py                 # CrossScaleEngine（占位实现）
+│   ├── cross_scale/                  # 跨尺度计算（真实求解器耦合）
+│   │   ├── engine.py                 # CrossScaleEngine（分层串联 + 模板降级）
+│   │   └── solvers/                  # 真实求解器适配层（可选依赖 + 优雅降级）
+│   │       ├── lammps_adapter.py     # LAMMPS MD（本地二进制 / Python 模块 / Docker 常驻容器）
+│   │       └── fenicsx_adapter.py    # FEniCSx 薄片热-电化学耦合 PDE
 │   ├── evals/                        # 评估系统
 │   │   ├── runner.py                 # EvalRunner
 │   │   ├── datasets/                 # 5 个黄金数据集
@@ -383,11 +405,12 @@ BatteryEMCL Lab/
 │
 ├── alembic/                          # 数据库迁移
 │   ├── env.py                        # Alembic 环境（读 DATABASE_URL）
-│   └── versions/                     # 29 个迁移脚本（0001~0029，含 pgvector）
+│   └── versions/                     # 54 个迁移脚本（0001~0054，含 pgvector + 多租户 + GNoME）
 ├── config/
 │   ├── workflows/ecml_v2.yaml        # ECML 工作流配置
 │   └── qc_rules.yaml                 # QC 规则配置
 ├── scripts/                          # 运维脚本
+│   ├── import_gnome.py               # GNoME 稳定集导入（官方 CSV 下载/解析 → gnome.gnome_materials）
 │   ├── migrate_sqlite_to_postgres.py # SQLite → PostgreSQL 迁移脚本
 │   ├── verify_migration_row_counts.py    # 迁移行数核验
 │   ├── verify_business_chain_e2e.py  # 业务链 E2E 验证
@@ -494,7 +517,7 @@ class BatteryMaterialsAgent:
 | 文件 | 关键类 | 职责 |
 |---|---|---|
 | `prediction/crystal_property_predictor.py` | `CrystalPropertyPredictor` | CGCNN + M3GNet 晶体性质预测（带 ASE-EMT 回退） |
-| `prediction/polymer_property_predictor.py` | `PolymerPropertyPredictor` | PolymerGNN 高分子预测（RDKit 描述子回退） |
+| `prediction/polymer_property_predictor.py` | `PolymerPropertyPredictor` | PolymerGNN 高分子预测（Tg/介电常数走真实权重，RDKit 描述子回退） |
 
 ### 4.7 Synthesis 合成层
 
@@ -741,14 +764,41 @@ class BatteryMaterialsAgent:
 
 LLM 响应解析包含非 JSON 格式错误处理，并隔离单候选失败。
 
-### 4.24 认证与授权（`auth/`）
+### 4.24 认证与授权（`auth/`，v3.0 企业级加固）
 
-- `auth/tokens.py` — HMAC-SHA256 签名 token：`issue_token(user_id)` / `verify_token(token)`；密钥 `AUTH_TOKEN_SECRET`（production 必填）。
-- `auth/user_store.py` — `UserStore`：用户 CRUD；`User`（role/project_ids/is_active）；`UserRole` 枚举（viewer/researcher/pm/admin，`ROLE_RANK` 排序）；`hash_password`/`verify_password`/`is_legacy_hash`（旧哈希自动升级）。
-- `auth/middleware.py`：
-  - `get_current_user(request)` — 从 `X-Auth-Token` 解析用户，永不抛异常（匿名返回 None），结果缓存到 `request.state.current_user`。
-  - `require_role(min_role)` — FastAPI 依赖工厂：未登录访问高角色资源返回 401，角色不足返回 403；匿名仅允许 VIEWER 级。
-  - `check_project_access(user_id, project_id, store)` — project_ids 为空表示全部可访问。
+**认证 token**（`tokens.py`）：
+- HMAC-SHA256 签名 token：`issue_token(user_id)` / `verify_token(token)`；密钥 `AUTH_TOKEN_SECRET`（production 必填）。
+
+**用户与角色**（`user_store.py`）：
+- `User` 模型：`role`/`project_ids`/`is_active`/`tenant_id`（多租户归属）/`auth_source`（local/oidc/ldap）/`external_idp_id`（SSO JIT 开户标识，v3.0 新增）。
+- `UserRole` 枚举：`admin`/`pm`/`researcher`/`data_engineer`/`reviewer`/`viewer`，`ROLE_RANK` 排序（viewer=0 … admin=4）。
+- 密码哈希：PBKDF2-HMAC-SHA256（20 万次迭代）；`hash_password`/`verify_password`/`is_legacy_hash`（旧 sha256 登录成功后自动升级）。
+- `_ensure_default_admin()`：首次初始化创建默认 admin；production 必须显式配置 `ADMIN_DEFAULT_PASSWORD`，未配置则拒绝启动。
+
+**权限中间件**（`middleware.py`）：
+- `get_current_user(request)` — 从 `X-Auth-Token` 解析用户，永不抛异常（匿名返回 None），结果缓存到 `request.state.current_user`；解析成功后经 `_apply_tenant()` 将用户租户写入 `db.set_tenant()`。
+- `require_role(min_role)` — 角色层级依赖：未登录访问高角色返回 401，角色不足返回 403；匿名仅放行 VIEWER 级。
+- `require_login()` — 强制登录（匿名一律 401，用于"登录即可读"的敏感端点）。
+- `require_permission(permission)` — 细粒度权限点依赖：匿名 401，缺权限返回 403 并写 `permission_denied` 审计。
+- `require_project_access(permission)` — 行级访问控制：从 path/query 提取 `project_id`，校验用户 `project_ids` 归属（空列表=全部可访问）。
+- `check_project_access(user_id, project_id, store)` — 过程式项目访问校验。
+
+**权限点与角色映射**（`permissions.py`，v3.0 新增）：
+- 16 个权限点常量：`project.view/manage`、`candidate.view/create/update/delete`、`experiment.view/create/update/delete`、`prediction.run`、`report.export`、`audit.view`、`user.manage`、`tenant.manage`、`agent.manage`。
+- `ROLE_PERMISSIONS`：角色→权限点集合；ADMIN 恒为全部权限（由 `role_has_permission` 直接放行）。
+- `user_permissions(user)`（api.py）返回当前用户权限点列表，供前端 UI 门禁用。
+
+**企业 SSO（OIDC）**（`sso.py`，v3.0 新增）：
+- 授权码流程：`/auth/sso/login` → IdP authorize（带 HMAC 签名 state，防 CSRF）→ `/auth/sso/callback` → 用 code 换 token → 从 ID token/claims 提取身份。
+- JIT 开户：`provision_user()` 按 `external_idp_id`（sub）幂等映射本地用户，首登自动创建并归属 `default_role`/`default_tenant`。
+- OIDC 端点发现带 60 秒缓存；未配置（`SSO_ENABLED=false`）时不注册路由。
+
+**LDAP 认证兜底**（`ldap_auth.py`，v3.0 新增）：
+- 服务账号绑定搜索用户 DN → 用户密码绑定校验 → 返回规范化身份；`ldap3` 为非强制依赖。
+- 登录失败时作为本地认证的兜底（`/auth/login` 本地失败后尝试 LDAP），JIT 开户 `auth_source="ldap"`。
+
+**租户管理**（`tenant_store.py`，v3.0 新增）：
+- `TenantStore`：`auth.tenants` 表 CRUD + `set_status`（active/disabled）+ `is_active`；业务数据隔离由 `db.tenant_filter()` 在 store 层统一完成。
 
 ### 4.25 项目管理（`projects.py`）
 
@@ -780,11 +830,42 @@ LLM 响应解析包含非 JSON 格式错误处理，并隔离单候选失败。
 | 可信度模型 | `knowledge/credibility.py` | `SOURCE_TIER_SCORES`/`EVIDENCE_LEVEL_SCORES` | 双维度可信度评分（v2.1 新增） |
 | 知识采集 | `knowledge/ingestion.py` | — | 多源采集管道（v2.1 新增） |
 | 电池循环 | `battery/cycle_database.py` | `BatteryCycleDatabase` | 循环基准数据（占位） |
-| 跨尺度 | `cross_scale/engine.py` | `CrossScaleEngine` | 分子→介观→宏观（占位） |
+| 跨尺度 | `cross_scale/engine.py` | `CrossScaleEngine` | 分子→介观→宏观（分层串联 + 真实求解器 + 模板降级） |
 | 材料属性 | `material_properties.py` | `PropertyRegistry`/`PropertyField`/`PropertyCategory` | 5 大类 54 字段属性注册 |
 | SCP 异步任务 | `integrations/scp_task_store.py` | `ScpTaskStore` | SCP 长时调用持久化 + 状态机（v2.1 新增） |
 | SCP 任务 Worker | `integrations/scp_task_worker.py` | — | 后台轮询执行 + 重试/取消（v2.1 新增） |
 | SCP 任务锁 | `integrations/scp_task_locks.py` | — | 分布式锁防并发重复（v2.1 新增） |
+
+### 4.29 多租户隔离（A1，v3.0 新增）
+
+**设计**：共享 schema + `tenant_id` 列逻辑隔离（企业级 SaaS 常见），从认证态解析租户，store 层统一追加过滤。
+
+- `db.py`：`_tenant_ctx`（`ContextVar[str]`，默认 `default`）+ `set_tenant()` / `get_tenant()` / `tenant_filter()`（返回 `tenant_id = :tenant_id` 片段，配合 `"tenant_id": get_tenant()` 参数）。
+- `auth/middleware.py::_apply_tenant()`：登录用户按 `user.tenant_id` 写入请求上下文与 `db` 上下文；匿名归属 `default` 租户。
+- 后台任务（无请求上下文）须显式 `db.set_tenant()`（如定时报表调度 `_execute_scheduled`）。
+- 迁移 0050：新建 `auth.tenants` 表 + 为 projects/experiment.candidates/experiment.samples/experiment.experiment_orders/experiment.experiment_result_records/audit.audit_log 加 `tenant_id` 并回填 `default` + 建复合索引；`auth.users` 加 `tenant_id`/`auth_source`/`external_idp_id`。
+- 迁移 0051：补 `experiment.equipment` 的 `tenant_id`（0050 遗漏，设备台账此前无法租户过滤）。
+- 租户管理：`auth/tenant_store.py` 提供 `TenantStore` CRUD + 启停；REST 端点 `/tenants*`（`tenant.manage` 权限）。
+
+### 4.30 审计系统增强（A4，v3.0 增强）
+
+原 `audit.py` 由基础事件日志升级为合规级审计：
+
+- **字段补齐**：`AuditEntry` 新增 `user_id`/`ip`/`resource_type`/`resource_id`/`before`/`after`；`event_type` 覆盖 ai_suggestion/human_edit/decision/agent_action/auth/permission_denied/data_change。
+- **全链路埋点**：认证（login_success/login_failed/ldap_login/sso_login）、权限拒绝（permission_denied）、报表导出（export/scheduled_export）、关键数据变更（候选状态迁移/审批/删除）。
+- **多条件分页查询**：`query_paged()` 支持 module/action/operator/event_type/resource_type/resource_id/start_at/end_at 组合过滤 + 分页，始终按当前租户隔离；`/audit/logs` REST 兼容旧 limit 参数。
+- **DB 层追加防篡改**：迁移 0050 创建 `audit_log_no_update` / `audit_log_no_delete` 两个 RULE，禁止应用层 UPDATE/DELETE。
+- **独立归档**：`audit.audit_archive` 表结构同主表；`archive(before_at)` 将超期记录迁入归档（归档路径临时禁用 DELETE RULE 仅作用于本事务），`/audit/archive` 端点触发。
+
+### 4.31 报表导出（A5，v3.0 新增）
+
+**文件**：`report/export.py`
+
+- **四类报表**：`REPORT_TYPES` = candidate / experiment / equipment / sample，各定义来源表 + 列定义 + `tenant_scoped` 标记。
+- **导出格式**：`export_excel()`（openpyxl，.xlsx）+ `export_pdf()`（reportlab Platypus Table，横版 A4）。
+- **数据构建**：`build_report()` 按报表类型查询，按当前租户过滤（`tenant_scoped=True`）。
+- **定时报表**：`schedule_report()` 注册 APScheduler 任务（`_build_trigger()` 仅支持标准 5/6 段 cron）；`start_report_scheduler()` 启动全局 `BackgroundScheduler`，任务持久化于 PostgreSQL `apscheduler_jobs` 表（SQLAlchemyJobStore 自动建表），进程重启后恢复；产物落盘 `evals/reports/scheduled/<tenant>/`（租户目录名净化防路径注入）。**持久化调度，重启后继续。**
+- **REST 端点**：`/report/export`（导出）、`/report/last`（最近一次）、`/report/schedule`（注册定时）；均需 `report.export` 权限。
 
 ---
 
@@ -850,13 +931,14 @@ LLM 响应解析包含非 JSON 格式错误处理，并隔离单候选失败。
 | `/samples` | SampleManager | 样品管理 | — |
 | `/equipment` | EquipmentLedger | 设备台账 | — |
 | `/users` | UserManagement | 用户管理 | — |
+| `/audit` | **AuditLogs** | 审计日志（v3.0 新增） | pm+ |
 | `/settings` | Settings | 系统设置 | — |
 
 **菜单合并重定向**：`/approvals → /my-tasks?tab=approval`、`/committees → /my-tasks?tab=committee`、`/release-cards → /my-tasks?tab=release`、`/discovery → /workbench`、`/tool-catalog → /tools`。另有 9 条常见错误路径 301 重定向 + 404 通配页（NotFound）。
 
-### 5.3 API 层（35 个模块）
+### 5.3 API 层（36 个模块）
 
-`agentEvents`、`agents`、`approvals`、`auth`、`battery`、`candidates`、`capabilities`、`client`（axios 实例，baseURL=`/api`，X-Auth-Token 注入 + 错误转译）、`committees`、`controlPlane`、`dashboard`、`discovery`、`ecml`、`equipment`、`experiments`、`formula`、`ideas`、`ingest`、`knowledge`、`mappings`（v2.1 新增，活动↔Agent↔工具映射）、`materialRequests`、`mdm`、`orchestration`、`properties`、`rawMaterials`、`releaseCards`、`research`、`researchEvents`、`samples`、`synthesis`、`system`、`valueReports`、`versions`。
+`agentEvents`、`agents`、`approvals`、`auth`、`battery`、`candidates`、`capabilities`、`client`（axios 实例，baseURL=`/api`，X-Auth-Token 注入 + 错误转译）、`committees`、`controlPlane`、`dashboard`、`discovery`、`ecml`、`equipment`、`experiments`、`formula`、`ideas`、`ingest`、`knowledge`、`mappings`（v2.1 新增，活动↔Agent↔工具映射）、`materialRequests`、`mdm`、`orchestration`、`properties`、`rawMaterials`、`releaseCards`、`reports`（v3.0 新增，报表导出/定时）、`research`、`researchEvents`、`samples`、`synthesis`、`system`、`valueReports`、`versions`。
 
 **关键工具函数**（`utils/`）：
 - `errorHandler.js` — 全局错误转译（P0），生成工单编号 `ERR-<ts>-<seq>`，幂等 GET 提供重试按钮
@@ -1014,9 +1096,9 @@ get_session()  # 兼容性别名（需事务场景）
 - **生产守卫**：`RUN_MODE=production` 且未显式配置 `DATABASE_URL` 时直接抛错，禁止静默回退开发连接串。
 - **pgvector 扩展**（v2.1 新增）：docker-compose 使用 `pgvector/pgvector:pg16` 镜像；迁移 0028 检测并启用 `CREATE EXTENSION IF NOT EXISTS vector`，迁移 0029 将知识资产 embedding TEXT 占位列升级为 `vector(1024)`，支持语义相似度检索。
 - **迁移完成度**：49+ 个 Store 文件全部走 `get_engine()`；全代码库 **零 `import sqlite3`**。Store 构造器的 `db_path` 参数仅为兼容旧调用方保留，实际已忽略。
-- **Schema 划分**：按域分 schema — `mdm.*`（主数据 27+ 表）、`data_ingest.*`（imports/import_rows）、`audit.*`（含 `qc_decisions` JSONB 快照表）、`knowledge.*`（papers/materials/claims/graphs，含 vector(1024) embedding 列）、`agent_team.*`（activity_bindings/tool_registrations，v2.1 新增）、`integrations.*`（scp_tasks，v2.1 新增）及公共业务表。
+- **Schema 划分**：按域分 schema — `mdm.*`（主数据 27+ 表）、`data_ingest.*`（imports/import_rows）、`audit.*`（含 `qc_decisions` JSONB 快照表）、`knowledge.*`（papers/materials/claims/graphs，含 vector(1024) embedding 列）、`agent_team.*`（activity_bindings/tool_registrations，v2.1 新增）、`integrations.*`（scp_tasks，v2.1 新增）、`gnome.*`（gnome_materials，GNoME 真实数据集）及公共业务表。
 
-### 7.2 Alembic 迁移（29 个版本）
+### 7.2 Alembic 迁移（54 个版本）
 
 | 版本 | 内容 |
 |---|---|
@@ -1046,6 +1128,31 @@ get_session()  # 兼容性别名（需事务场景）
 | 0027 | 活动↔Agent↔工具映射表（agent_team.activity_bindings/tool_registrations） |
 | 0028 | 知识资产基础表（knowledge.papers/materials/claims）+ pgvector 扩展检测 |
 | 0029 | pgvector embedding 列升级（TEXT → vector(1024)） |
+| 0030 | 修复 category 外键 schema |
+| 0031 | 结果数据质量（结果字段） |
+| 0032 | 实验结果唯一约束 |
+| 0033 | 候选 content-hash 去重 |
+| 0034 | 外部调用入参全量存储 |
+| 0035 | SCP 任务归档 |
+| 0036 | 高风险 AI 动作维度 |
+| 0037 | 规范化 QC issues 历史 |
+| 0038 | 科学执行内核（scientific_execution） |
+| 0039 | AI 助手会话表 |
+| 0040 | 双层配方工艺流程 |
+| 0041 | 委员会证据核验 |
+| 0042 | ECML rounds 迭代轮次 |
+| 0043 | 委员会案例候选数据 |
+| 0044 | de-batterify Agent 覆写 |
+| 0045 | 领域包（domain_packs） |
+| 0046 | 领域包流水线（kingfa） |
+| 0047 | kingfa 材料体系 |
+| 0048 | 研发请求 material_system |
+| 0049 | 电池材料体系（battery_material_systems） |
+| 0050 | 多租户隔离（auth.tenants + 核心表 tenant_id + 审计 RULE 防篡改） |
+| 0051 | 设备台账租户隔离（experiment.equipment.tenant_id） |
+| 0052 | GNoME 材料表（gnome.gnome_materials + 元素 GIN / 化学式 / 材料 ID 索引） |
+| 0053 | GNoME material_id 唯一索引（去重交给 DB） |
+| 0054 | GNoME 数值列可空（区分"未测得"NULL 与真实 0） |
 
 ### 7.3 遗留 SQLite 文件
 
@@ -1135,7 +1242,7 @@ docker compose up -d postgres
 cp .env.example .env        # 按需填写 LLM_API_KEY / INTERNLM_API_KEY 等
 
 # 4. 执行数据库迁移
-alembic upgrade head        # 29 个迁移，含 MDM 种子数据 + pgvector 扩展 + 知识资产表
+alembic upgrade head        # 54 个迁移，含 MDM 种子数据 + pgvector 扩展 + 知识资产表 + 多租户 + GNoME
 ```
 
 ### 9.2 启动服务
@@ -1231,20 +1338,19 @@ pytest --cov=battery_materials_agent   # 覆盖率
 ### 11.3 已知限制
 
 1. DFT 验证受 Python 版本限制（PySCF 需 3.11+）。
-2. GNoME 数据集未真实接入（本地硬编码，仅标记 source="gnome"）。
-3. ECML start_time 时区不一致（UTC vs 本地时间混用）。
-4. 前端 ECharts chunk 过大（500KB+ gzip，待按需加载拆分）。
-5. 聚合物预测模型（PolymerGNN）未接入真实预训练权重，使用 ASE-EMT/RDKit 描述子回退。
-6. 跨尺度计算引擎（CrossScaleEngine）为占位实现。
-7. 电池循环数据库（BatteryCycleDatabase）为占位实现。
-8. ASKCOS 服务需独立部署 Docker 容器，本地开发可能不可用。
-9. Committee 与 Control Plane 默认关闭，需显式配置环境变量启用。
-10. SCP 外部工具依赖外部 API 可用性，默认关闭；SKILL 流水线与 SCP 异步任务系统（v2.1 新增）依赖 SCP 启用。
-11. 认证为 HMAC 签名 token 方案（`X-Auth-Token`），非标准 JWT/OAuth2。
-12. `value_realization/calculator.py` 中部分 Store 调用仍传旧 `db_path` 参数（兼容残留，实际已走全局 Engine）。
-13. `data/` 目录遗留 SQLite `.db`/`.bak` 文件未清理（运行期不再读写）。
-14. 知识资产层（v2.1 新增）的 embedding 向量检索需 pgvector 扩展；未启用 pgvector 时退化为空检索。
-15. 业务活动↔Agent↔工具三层映射（v2.1 新增）的绑定关系需在映射控制台手工配置或由 seed 数据初始化。
+2. ECML start_time 时区不一致（UTC vs 本地时间混用）。
+3. 前端 ECharts chunk 过大（500KB+ gzip，待按需加载拆分）。
+4. 聚合物预测模型（PolymerGNN）已接入真实预训练权重（Tg + 介电常数试点，OpenPoly 自训练，见 line 515 附近说明）；其余性质仍走 ASE-EMT/RDKit 描述子回退。
+5. 跨尺度计算引擎（CrossScaleEngine）的分子层接入真实预测器（crystal/polymer predictor），反应层调用合成规划，连续介质层优先真实求解器（LAMMPS 分子/介观 MD、FEniCSx 连续介质 PDE），求解器不可用时回退模板近似并标记 `estimate/degraded`（不参与多目标评分）。
+6. 电池循环数据库（BatteryCycleDatabase）为占位实现。
+7. ASKCOS 服务需独立部署 Docker 容器，本地开发可能不可用。
+8. Committee 与 Control Plane 默认关闭，需显式配置环境变量启用。
+9. SCP 外部工具依赖外部 API 可用性，默认关闭；SKILL 流水线与 SCP 异步任务系统（v2.1 新增）依赖 SCP 启用。
+10. 认证为 HMAC 签名 token 方案（`X-Auth-Token`），非标准 JWT/OAuth2。
+11. `value_realization/calculator.py` 中部分 Store 调用仍传旧 `db_path` 参数（兼容残留，实际已走全局 Engine）。
+12. `data/` 目录遗留 SQLite `.db`/`.bak` 文件未清理（运行期不再读写）。
+13. 知识资产层（v2.1 新增）的 embedding 向量检索需 pgvector 扩展；未启用 pgvector 时退化为空检索。
+14. 业务活动↔Agent↔工具三层映射（v2.1 新增）的绑定关系需在映射控制台手工配置或由 seed 数据初始化。
 
 ---
 
@@ -1295,4 +1401,4 @@ pytest --cov=battery_materials_agent   # 覆盖率
 ---
 
 *本文档基于源代码分析生成，所有信息均直接来源于代码事实。*
-*文档版本 v2.0.0，更新日期 2026-07-27（PostgreSQL 统一架构 + MDM/能力契约/放行卡/收益证明/数据接入五大新模块）。*
+*文档版本 v3.0.0，更新日期 2026-08-08（企业级加固：多租户隔离 / SSO+LDAP 认证 / 细粒度权限 / 审计增强 / 报表导出）。*
