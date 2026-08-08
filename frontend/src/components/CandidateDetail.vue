@@ -204,7 +204,7 @@
               <div class="cs-result-subtitle">连续介质尺度</div>
               <a-descriptions size="small" :column="2" bordered>
                 <a-descriptions-item label="工作电压">
-                  {{ crossScaleResult.continuum.electrochemical?.operating_voltage_V?.toFixed(2) ?? '—' }} {{ voltageUnit }}
+                  {{ crossScaleResult.continuum.electrochemical?.operating_voltage?.toFixed(2) ?? '—' }} {{ voltageUnit }}
                 </a-descriptions-item>
                 <a-descriptions-item label="理论容量">
                   {{ crossScaleResult.continuum.electrochemical?.theoretical_capacity?.toFixed(2) ?? '—' }} {{ capUnit }}

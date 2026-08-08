@@ -367,6 +367,10 @@ def _apply_multi_objective(
         return filtered
 
     # 2. min-max 归一化
+    # 先重置评分：本函数可能被多次调用（generate_candidates 生成阶段 + agent 回填后复评分），
+    # 若不清零会因 `+=` 累加导致评分 >1 且排序错乱。重置后函数幂等，多次调用等价一次。
+    for c in filtered:
+        c.multi_objective_score = 0.0
     total_weight = sum(cfg["weight"] for cfg in configs) or 1.0
     for cfg in configs:
         vals = [_PROPERTY_GETTERS[cfg["property"]](c) for c in filtered]
@@ -410,6 +414,26 @@ def _apply_multi_objective(
         )
     )
     return nonzero + zero_candidates
+
+
+def _coerce_multi_objective_config(
+    target_property: str,
+    target_properties: list[dict] | None,
+) -> list[dict] | None:
+    """P0-4：target_properties 为空但 target_property 已知时，自动构造默认单属性配置，
+    强制触发 _apply_multi_objective，避免单目标回退导致 0.0% 评分排首位。
+
+    作为评分配置构造的单一事实来源，供 generate_candidates 与
+    agent.discover_crystal 回填后复评分共享，避免两处各自拼装规则。
+    """
+    if target_properties:
+        return target_properties
+    if target_property in _PROPERTY_GETTERS:
+        default_direction = _PROPERTY_DIRECTION.get(target_property, "maximize")
+        return [
+            {"property": target_property, "direction": default_direction, "weight": 1.0}
+        ]
+    return target_properties
 
 
 class MaterialsProjectDatabase:
@@ -838,15 +862,13 @@ class CrystalCandidateGenerator:
 
         # P0-4：target_properties 为空但 target_property 已知时，自动构造默认多目标配置
         # 强制触发 _apply_multi_objective，避免单目标回退导致 0.0% 评分排首位
-        if not target_properties and target_property in _PROPERTY_GETTERS:
-            default_direction = _PROPERTY_DIRECTION.get(target_property, "maximize")
-            target_properties = [
-                {"property": target_property, "direction": default_direction, "weight": 1.0}
-            ]
+        coerced = _coerce_multi_objective_config(target_property, target_properties)
+        if coerced is not target_properties:
             logger.info(
                 "P0-4 自动构造默认多目标配置：target_property=%s → %s",
-                target_property, target_properties,
+                target_property, coerced,
             )
+        target_properties = coerced
 
         # 多目标优化：target_properties 为 [{property, weight, direction, min, max}, ...]
         if target_properties:

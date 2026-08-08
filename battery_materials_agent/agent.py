@@ -8,7 +8,11 @@ from .representation.crystal import CrystalRepresentation
 from .representation.polymer import PolymerRepresentation
 from .prediction.crystal_property_predictor import CrystalPropertyPredictor
 from .prediction.polymer_property_predictor import PolymerPropertyPredictor
-from .generation.crystal_candidate_generator import CrystalCandidateGenerator
+from .generation.crystal_candidate_generator import (
+    CrystalCandidateGenerator,
+    _apply_multi_objective,
+    _coerce_multi_objective_config,
+)
 from .generation.polymer_candidate_generator import PolymerCandidateGenerator
 from .synthesis.synthesis_planner import SynthesisPlanner
 from .verification.dft_verifier import DFTVerifier
@@ -215,6 +219,12 @@ class BatteryMaterialsAgent:
                 valid_candidates.append(c)
         if blocked_count:
             candidates = valid_candidates
+        # P0-4 复评分：综合评分依赖的 ionic_conductivity_estimate 在候选生成后才由
+        # 预测器回填（MP API 不返回该字段，生成时默认为 0），故需在回填完成后
+        # 重新计算一次，否则单目标 ionic_conductivity 候选中评分恒为 0。
+        eff_target_props = _coerce_multi_objective_config(target_property, target_properties)
+        if eff_target_props:
+            candidates = _apply_multi_objective(candidates, eff_target_props)
         # P0-4：候选数不足 num_candidates 时加 degraded 标记
         degraded = len(candidates) < num_candidates
         return {
