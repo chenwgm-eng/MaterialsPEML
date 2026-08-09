@@ -30,6 +30,16 @@ export const ROLE_LABEL_MAP = {
   viewer: '访客',
 }
 
+// 专业画像 → 中文标签（只影响默认体验，不影响权限）
+export const DISCIPLINE_LABEL_MAP = {
+  material_research: '材料研发',
+  process_design: '工艺设计',
+  experiment_analysis: '实验分析',
+}
+
+// 专业画像选项（供 a-select 使用）
+export const DISCIPLINE_OPTIONS = Object.entries(DISCIPLINE_LABEL_MAP).map(([value, label]) => ({ value, label }))
+
 /**
  * 获取角色对应的 antd Tag 颜色。
  * @param {string} role

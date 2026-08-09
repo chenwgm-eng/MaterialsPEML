@@ -9,13 +9,21 @@ import json
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
 from .execution_adapter import ExecutionAdapter
 
-# Retrosynthesis API 端点
+# 远程 Retrosynthesis API 端点（FastAPI 网关）
 _RETROSYNTHESIS_API_URL = "http://101.126.18.187:8100/api/v1/multi-step"
+
+# 本地 USPTO 模板 ASKCOS treebuilder 端点（nginx -> app）
+_LOCAL_TREEBUILDER_API_URL = "http://localhost:5000/api/treebuilder/"
+
+
+class _NoRouteError(Exception):
+    """远程服务可用但未返回可用路线，触发回退本地。"""
 
 # 离子/盐 → 中性母体归一化规则
 _ION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
@@ -126,6 +134,16 @@ def _get_expansion_timeout_from_stats(stats: dict[str, Any]) -> float:
     return float(stats.get("expansion_timeout", 300))
 
 
+def _template_count_for_depth(search_depth: int) -> int:
+    """按搜索深度动态调大候选模板数。
+
+    本地 ASKCOS 使用全局反应频率对模板排序，电池/高分子材料相关的低频模板
+    （如碳酸酯、异氰酸酯、环醚）会被高频通用模板挤出前几十名。深度越深越需要
+    更多候选模板，否则会漏掉这些低频业务模板。深度<=3 取 200，更深取 500。
+    """
+    return 500 if search_depth > 3 else 200
+
+
 def _call_retrosynthesis_api(
     target_smiles: str,
     search_depth: int,
@@ -153,7 +171,7 @@ def _call_retrosynthesis_api(
         "max_paths": max_paths,
         "max_depth": search_depth,
         "max_iterations": 2000,
-        "template_max_count": 80 if search_depth > 6 else 20,
+        "template_max_count": _template_count_for_depth(search_depth),
         "expansion_time": expansion_timeout,
         "session_id": f"peml-{int(time.time())}",
     }
@@ -239,12 +257,149 @@ def parse_retrosynthesis_response(
     return result
 
 
+def _call_local_treebuilder(
+    target_smiles: str,
+    search_depth: int,
+    max_paths: int,
+    expansion_timeout: int,
+) -> dict[str, Any]:
+    """调用本地 USPTO 模板 ASKCOS treebuilder 执行逆合成搜索。
+
+    本地端点为 GET /api/treebuilder/，返回 ASKCOS 的 trees 结构（与远程
+    ReactNavi FastAPI 的 pathways 结构不同），由
+    parse_local_treebuilder_response() 统一转换为上层期望的路由格式。
+
+    Args:
+        target_smiles: 目标分子 SMILES（已归一化）。
+        search_depth: 搜索深度。
+        max_paths: 最大返回路线数。
+        expansion_timeout: 搜索超时（秒）。
+
+    Returns:
+        treebuilder 原始响应字典。
+
+    Raises:
+        ConnectionError: 连接失败时。
+        TimeoutError: 请求超时。
+        ValueError: 响应不可解析或缺少 trees 时。
+    """
+    query = urllib.parse.urlencode({
+        "smiles": target_smiles,
+        "max_depth": search_depth,
+        "max_branching": 20,
+        "expansion_time": expansion_timeout,
+        "template_count": _template_count_for_depth(search_depth),
+        "max_cum_prob": 0.999,
+        "max_ppg": 10,
+        "filter_threshold": 0,  # 关闭 fast-filter，避免误过滤业务分子
+        "return_first": "True",
+    })
+    url = f"{_LOCAL_TREEBUILDER_API_URL}?{query}"
+    request_timeout = expansion_timeout + 60
+
+    try:
+        with urllib.request.urlopen(url, timeout=request_timeout) as resp:
+            result: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as exc:
+        raise ConnectionError(f"本地 ASKCOS 连接失败: {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise TimeoutError(f"本地 ASKCOS 请求超时 ({request_timeout}s)") from exc
+
+    if "trees" not in result:
+        raise ValueError(f"本地 ASKCOS 响应缺少 trees 字段: {result}")
+    return result
+
+
+def _collect_tree_leaves(
+    node: dict[str, Any],
+    depth: int,
+    leaves: list[tuple[int, list[str]]],
+) -> tuple[int, int]:
+    """递归收集树节点，返回 (反应节点数, 分子节点数)。
+
+    leaves 追加 (深度, 自根到该叶子的前体 SMILES 链)。
+    """
+    children: list[dict[str, Any]] = node.get("children", []) or []
+    reactions = 1 if children else 0
+    chemicals = 1
+    if not children:
+        leaves.append((depth, []))
+        return reactions, chemicals
+    for child in children:
+        cr, cc = _collect_tree_leaves(child, depth + 1, leaves)
+        reactions += cr
+        chemicals += cc
+    return reactions, chemicals
+
+
+def parse_local_treebuilder_response(
+    api_response: dict[str, Any],
+    search_time_s: float = 0.0,
+) -> dict[str, Any]:
+    """解析本地 treebuilder 响应（trees 结构）为统一 result 格式。
+
+    Args:
+        api_response: treebuilder 原始响应。
+        search_time_s: 实际搜索耗时（秒）。
+
+    Returns:
+        与 parse_retrosynthesis_response 相同结构的 result 字典。
+    """
+    result: dict[str, Any] = {
+        "success": True,
+        "stats": {},
+        "routes": [],
+        "diagnostics": None,
+    }
+
+    trees: list[dict[str, Any]] = (api_response.get("trees") or []) if api_response.get(
+        "success", True) else []
+    # treebuilder 无显式 error 时 success 恒真；若响应含 error 字段则视为失败
+    if api_response.get("error"):
+        result["success"] = False
+        result["diagnostics"] = {
+            "error_type": "api_error",
+            "error_message": str(api_response.get("error")),
+        }
+        return result
+
+    total_reactions = 0
+    total_chemicals = 0
+    leaves: list[tuple[int, list[str]]] = []
+    for tree in trees:
+        cr, cc = _collect_tree_leaves(tree, 0, leaves)
+        total_reactions += cr
+        total_chemicals += cc
+
+    result["stats"] = {
+        "total_iterations": total_reactions,
+        "total_chemicals": total_chemicals,
+        "total_reactions": total_reactions,
+        "total_templates": total_reactions,
+        "total_paths": len(leaves),
+        "search_time_s": search_time_s,
+    }
+
+    # 将每条叶子路径整理为一条路线（本地无 ff_score，统一给 0 + E0 模板匹配）
+    for rank, (_depth, _chain) in enumerate(leaves):
+        result["routes"].append({
+            "route_rank": rank,
+            "avg_ff_score": 0.0,
+            "min_ff_score": 0.0,
+            "num_reactions": _depth,
+            "evidence_grade": "E0",
+            "image_url": "",
+        })
+
+    return result
+
+
 class SynthesisAdapter(ExecutionAdapter):
     """ReactNavi 逆合成分析执行适配器。
 
     封装：
     - SMILES 归一化（离子/盐 → 中性母体）
-    - call_retrosynthesis API 调用
+    - call_retrosynthesis API 调用（远程优先，失败回退本地 USPTO ASKCOS）
     - 路线解析与评分
     - 错误诊断与回退策略
     """
@@ -280,7 +435,10 @@ class SynthesisAdapter(ExecutionAdapter):
             "diagnostics": None,
         }
 
-        # 2. 调用 API
+        # 2. 调用远程 API（优先）
+        #    远程失败（连接/超时/无路线/返回失败）时，回退到本地 USPTO 模板 ASKCOS，
+        #    保证目标企业（金发/华峰）的低频业务分子也能出路线。
+        result["fallback"] = False
         try:
             api_response = _call_retrosynthesis_api(
                 target_smiles=normalized,
@@ -288,18 +446,42 @@ class SynthesisAdapter(ExecutionAdapter):
                 max_paths=max_paths,
                 expansion_timeout=expansion_timeout,
             )
-        except (ConnectionError, TimeoutError, ValueError) as exc:
-            result["diagnostics"] = {
-                "error_type": "api_error",
-                "error_message": str(exc),
-            }
-            return result
+            parsed = parse_retrosynthesis_response(api_response)
+            if not parsed.get("success") or not parsed.get("routes"):
+                raise _NoRouteError("远程未返回可用路线")
+        except (ConnectionError, TimeoutError, ValueError, _NoRouteError) as exc:
+            result["fallback"] = True
+            remote_error = str(exc)
+            try:
+                start = time.time()
+                local_response = _call_local_treebuilder(
+                    target_smiles=normalized,
+                    search_depth=search_depth,
+                    max_paths=max_paths,
+                    expansion_timeout=expansion_timeout,
+                )
+                parsed = parse_local_treebuilder_response(
+                    local_response, search_time_s=round(time.time() - start, 1))
+            except (ConnectionError, TimeoutError, ValueError) as fb_exc:
+                result["fallback"] = True
+                result["diagnostics"] = {
+                    "error_type": "api_error",
+                    "error_message": f"远程及本地均失败: {fb_exc}",
+                    "remote_error": remote_error,
+                }
+                return result
 
-        # 3. 解析响应
-        parsed = parse_retrosynthesis_response(api_response)
+        # 3. 组装结果
         result["stats"] = parsed.get("stats", {})
         result["routes"] = parsed.get("routes", [])
         result["diagnostics"] = parsed.get("diagnostics")
+        if result["fallback"]:
+            result["diagnostics"] = {
+                **(result["diagnostics"] or {}),
+                "fallback": True,
+                "fallback_source": "local_uspto_askcos",
+                "remote_error": remote_error,
+            }
 
         return result
 

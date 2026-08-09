@@ -952,15 +952,17 @@ class TestReactionNetworkAdapter(unittest.TestCase):
         self.assertEqual(len(result["reactions"]), 1)
 
     def test_execute_ts_search(self):
-        """验证 TS 搜索执行应返回正确结构。"""
+        """验证 TS 搜索执行应返回正确结构（占位实现需显式标记降级）。"""
         result = self.adapter.execute({
             "command": "ts_search",
             "reaction_smiles": "CCO>>CC(=O)O",
         })
         self.assertEqual(result["status"], "completed")
-        self.assertTrue(result["ts_found"])
-        self.assertIn("barrier_kcal", result)
-        self.assertIn("frequency", result)
+        # 占位实现不得伪造真实 TS 证据
+        self.assertFalse(result["ts_found"])
+        self.assertTrue(result.get("degraded"))
+        self.assertIsNone(result["barrier_kcal"])
+        self.assertIsNone(result["frequency"])
 
     def test_execute_grow_network(self):
         """验证网络扩展执行应返回正确结构。"""
@@ -1015,13 +1017,15 @@ class TestReactionNetworkAdapter(unittest.TestCase):
         })
         self.assertEqual(len(result["reactions"]), 3)
 
-    def test_ts_search_returns_negative_frequency(self):
-        """验证 TS 搜索返回的虚频应为负数。"""
+    def test_ts_search_placeholder_marks_degraded(self):
+        """验证占位 TS 搜索不伪造虚频，显式标记 degraded。"""
         result = self.adapter.execute({
             "command": "ts_search",
             "reaction_smiles": "CCO>>C=C",
         })
-        self.assertLess(result["frequency"], 0)
+        self.assertFalse(result["ts_found"])
+        self.assertTrue(result.get("degraded"))
+        self.assertIsNone(result["frequency"])
 
 
 # =============================================================================

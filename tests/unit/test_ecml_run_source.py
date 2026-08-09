@@ -33,7 +33,7 @@ def _cleanup_ecml_runs():
         conn.execute(text("DELETE FROM ecml.ecml_runs"))
 
 
-def _save_run(store, run_id, target, is_complete=True, status="completed", updated_at=None):
+def _save_run(store, run_id, target, is_complete=True, status="completed", updated_at=None, project_id=""):
     state = ECMLState(
         run_id=run_id,
         target=target,
@@ -41,6 +41,7 @@ def _save_run(store, run_id, target, is_complete=True, status="completed", updat
         is_complete=is_complete,
         status=status,
         iteration=1,
+        project_id=project_id,
     )
     store.save(run_id, target, "ionic_conductivity", state)
     if updated_at is not None:
@@ -216,3 +217,35 @@ class TestBulkDeleteAPI:
         runs = {r["run_id"]: r for r in client.get("/api/ecml/runs?limit=50").json()["runs"]}
         assert runs["t0"]["run_source"] == "test"
         assert runs["p0"]["run_source"] == "production"
+
+
+class TestProjectIdFilter:
+    """Step C 4.C1：list_runs 与 /ecml/runs API 按 project_id 过滤。"""
+
+    def test_save_writes_project_id(self, store):
+        _save_run(store, "r1", "LiCoO2", project_id="proj-a")
+        runs = {r["run_id"]: r for r in store.list_runs(10)}
+        assert runs["r1"]["project_id"] == "proj-a"
+
+    def test_list_runs_filters_by_project_id(self, store):
+        _save_run(store, "a1", "LiCoO2", project_id="proj-a")
+        _save_run(store, "a2", "Li3PS4", project_id="proj-a")
+        _save_run(store, "b1", "PEO", project_id="proj-b")
+        _save_run(store, "none", "NaCl")  # 无 project_id
+
+        only_a = store.list_runs(50, project_id="proj-a")
+        assert {r["run_id"] for r in only_a} == {"a1", "a2"}
+
+        # 空过滤条件返回全部
+        all_runs = store.list_runs(50)
+        assert {r["run_id"] for r in all_runs} >= {"a1", "a2", "b1", "none"}
+
+    def test_api_filters_by_project_id(self, client):
+        import battery_materials_agent.api as api_module
+        store = api_module.agent.ecml.state_store
+        _save_run(store, "a1", "LiCoO2", project_id="proj-a")
+        _save_run(store, "b1", "PEO", project_id="proj-b")
+
+        runs = {r["run_id"]: r for r in client.get("/api/ecml/runs?limit=50&project_id=proj-a").json()["runs"]}
+        assert set(runs.keys()) == {"a1"}
+        assert runs["a1"]["project_id"] == "proj-a"

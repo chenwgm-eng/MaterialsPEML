@@ -2,6 +2,7 @@
   <a class="skip-link" href="#main-content">跳转到主内容</a>
   <a-layout class="main-layout">
     <a-layout-sider
+      v-if="!navShellEnabled"
       v-model:collapsed="collapsed"
       collapsible
       :width="220"
@@ -97,10 +98,53 @@
       </div>
     </a-layout-sider>
 
+    <!-- Step B：稳定导航壳层（IconRail 64px + 一级入口联动分组）。VITE_FF_NAV_SHELL=true 时启用 -->
+    <div v-else class="nav-shell">
+      <IconRail
+        :active-entry="activeEntry"
+        :entries="stableNavEntries"
+        :user="currentUser"
+        :health-text="healthText"
+        :health-class="healthClass"
+        @select="onEntrySelect"
+      />
+      <!-- Step C：项目中心中栏（ContextColumn 260px，VITE_FF_PROJECT_CENTER=true 时启用） -->
+      <ContextColumn
+        v-if="projectCenterEnabled"
+        :active-entry="activeEntry"
+        :shell-groups="shellGroups"
+        :selected-keys="selectedKeys"
+        :collapsed="contextCollapsed"
+        :create-items="createMenuItems"
+        @toggle="contextCollapsed = !contextCollapsed"
+        @refresh="onContextRefresh"
+      />
+      <div v-else class="nav-groups">
+        <a-empty v-if="shellGroups.length === 0" :description="'暂无可用菜单'" class="nav-groups-empty" />
+        <template v-for="g in shellGroups" :key="g.key">
+          <div class="shell-group-title">{{ g.title }}</div>
+          <a-menu
+            :selected-keys="selectedKeys"
+            mode="inline"
+            theme="dark"
+            class="shell-menu"
+          >
+            <a-menu-item v-for="item in g.items" :key="item.path">
+              <router-link :to="item.path" class="menu-link">
+                <span class="menu-icon"><component :is="item.icon" /></span>
+                <span class="menu-text">{{ item.title }}</span>
+              </router-link>
+            </a-menu-item>
+          </a-menu>
+        </template>
+      </div>
+    </div>
+
     <a-layout>
       <a-layout-header class="top-header">
         <div class="header-left">
-          <a-dropdown placement="bottomLeft" trigger="click">
+          <!-- Step E：navShell 开启时精简 Header（新建入口由 ContextColumn 提供），隐藏旧 Header 残留 -->
+          <a-dropdown v-if="!navShellEnabled" placement="bottomLeft" trigger="click">
             <a-tooltip title="快速发起研发任务">
               <a-button type="primary" size="small" @click.stop>
                 <PlusOutlined /> 新建 <DownOutlined />
@@ -122,7 +166,7 @@
           <span class="page-label">{{ currentPageTitle }}</span>
         </div>
         <div class="header-right">
-          <a-dropdown placement="bottomRight" trigger="click">
+          <a-dropdown v-if="!navShellEnabled" placement="bottomRight" trigger="click">
             <a-tooltip title="最近的闭环迭代运行记录，点击可跳转查看">
               <a-button size="small" :loading="recentLoading" @click.stop>
                 <ClockCircleOutlined /> 最近 <DownOutlined />
@@ -168,6 +212,16 @@
                 <a-menu-item v-if="currentUser.role === 'admin'" key="users">
                   <TeamOutlined /> 用户管理
                 </a-menu-item>
+                <!-- Step D：专业视角切换（只改默认体验，不改权限） -->
+                <a-sub-menu key="perspective" title="专业视角">
+                  <a-menu-item v-for="d in DISCIPLINE_OPTIONS" :key="`persp:${d.value}`">
+                    <CheckOutlined v-if="systemStore.primaryDiscipline === d.value" class="persp-check" />
+                    <span :class="{ 'persp-muted': systemStore.primaryDiscipline && systemStore.primaryDiscipline !== d.value }">{{ d.label }}</span>
+                  </a-menu-item>
+                  <a-menu-item key="persp:clear">
+                    <span :class="{ 'persp-muted': systemStore.primaryDiscipline }">通用（关闭聚焦）</span>
+                  </a-menu-item>
+                </a-sub-menu>
                 <a-menu-item key="logout"><LogoutOutlined /> 退出登录</a-menu-item>
               </a-menu>
             </template>
@@ -223,6 +277,7 @@
 import { ref, computed, watch, onMounted, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
+import { useProjectContextStore } from '@/stores/projectContext'
 import { getEcmlRuns } from '@/api/ecml'
 import { login as authLogin, getCurrentUser, logout as authLogout } from '@/api/auth'
 import { setUserId, getUserId } from '@/api/client'
@@ -231,6 +286,13 @@ import { roleColor, roleLabel } from '@/constants/roles'
 import { message } from 'ant-design-vue'
 import TaskNotifier from '@/components/TaskNotifier.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import IconRail from '@/layouts/IconRail.vue'
+import ContextColumn from '@/layouts/ContextColumn.vue'
+import { STABLE_ENTRIES, MENU_GROUPS } from '@/layouts/menuConfig'
+import { sortItemsByDiscipline } from '@/utils/discipline'
+import { track } from '@/utils/telemetry'
+import { DISCIPLINE_OPTIONS } from '@/constants/roles'
+import { updateMyDisciplines } from '@/api/auth'
 import {
   DashboardOutlined,
   ProjectOutlined,
@@ -268,6 +330,7 @@ import {
   BellOutlined,
   DeploymentUnitOutlined,
   FileSearchOutlined,
+  CheckOutlined,
 } from '@ant-design/icons-vue'
 import { MESSAGES } from '@/constants/glossary'
 
@@ -278,6 +341,58 @@ const systemStore = useSystemStore()
 const collapsed = ref(false)
 const selectedKeys = ref([route.path])
 const openKeys = ref([])
+
+// Step B：稳定导航壳层特性开关（VITE_FF_NAV_SHELL=true 时启用）
+const navShellEnabled = import.meta.env.VITE_FF_NAV_SHELL === 'true'
+// Step C：项目中心中栏特性开关（VITE_FF_PROJECT_CENTER=true 时启用）
+const projectCenterEnabled = import.meta.env.VITE_FF_PROJECT_CENTER === 'true'
+const contextCollapsed = ref(false)
+const activeEntry = ref('workbench')
+
+// 当前路径 → 所属稳定入口 key
+function pathToEntry(path) {
+  const g = MENU_GROUPS.find(
+    (gr) =>
+      gr.items?.some((i) => i.path === path) ||
+      gr.subGroups?.some((s) => s.items.some((i) => i.path === path)),
+  )
+  return g ? g.entryKey : 'workbench'
+}
+
+// IconRail 可点入口：满足权限下限 ∧ 未被 nav_visibility 隐藏
+const stableNavEntries = computed(() => {
+  const perms = systemStore.permissions
+  const visible = systemStore.visibleEntries
+  return STABLE_ENTRIES.filter(
+    (e) =>
+      (!e.requiredAnyPermission?.length || e.requiredAnyPermission.some((p) => perms.includes(p))) &&
+      visible.includes(e.key),
+  )
+})
+
+// 当前选中入口下的分组（按权限点过滤 + 专业画像聚焦排序）
+const shellGroups = computed(() => {
+  const perms = systemStore.permissions
+  const visible = systemStore.visibleEntries
+  return MENU_GROUPS.filter(
+    (g) => g.entryKey === activeEntry.value && visible.includes(g.entryKey),
+  )
+    .map((g) => {
+      const items = g.subGroups ? g.subGroups.flatMap((s) => s.items) : g.items
+      const filtered = items.filter(
+        (it) => !it.requiredAnyPermission?.length || it.requiredAnyPermission.some((p) => perms.includes(p)),
+      )
+      // Step D：专业画像聚焦排序（只改默认顺序，空画像/无匹配保持原顺序，不改权限过滤）
+      const sorted = sortItemsByDiscipline(filtered, systemStore.disciplines, systemStore.primaryDiscipline)
+      return { ...g, items: sorted }
+    })
+    .filter((g) => g.items.length > 0)
+})
+
+function onEntrySelect(key) {
+  activeEntry.value = key
+  track('entry_select', { entry: key })
+}
 
 // 根据当前路由同步菜单高亮与展开分组
 function syncMenuState() {
@@ -354,9 +469,13 @@ async function onLogin() {
     setUserId(data.user_id, data.token)
     setUser({ id: data.user_id, role: data.role, token: data.token })
     currentUser.value = data
+    // 写入权限点并拉取导航可见入口（供守卫/导航壳层使用）
+    await systemStore.fetchMe()
+    activeEntry.value = pathToEntry(route.path)
     showLogin.value = false
     loginForm.value = { username: '', password: '' }
     message.success(`欢迎，${data.display_name || data.username}`)
+    track('login', { user_id: data.user_id, role: data.role })
     // 若当前页对新角色不可见，跳回总览
     if (!isMenuVisible(route.path, data.role) && route.path !== '/') {
       router.push('/')
@@ -378,6 +497,7 @@ async function onLogout() {
   setUserId(null)
   clearUser()
   currentUser.value = null
+  track('logout')
   message.success('已退出登录')
   if (!isMenuVisible(route.path, 'viewer') && route.path !== '/') {
     router.push('/')
@@ -389,6 +509,25 @@ function onUserMenuClick({ key }) {
     onLogout()
   } else if (key === 'users') {
     router.push('/users')
+  } else if (key.startsWith('persp:')) {
+    switchPrimaryDiscipline(key.slice('persp:'.length))
+  }
+}
+
+// Step D：切换专业视角（只改默认体验，不改权限）。
+// 持久化到后端（保证 primary ∈ disciplines 不变量），成功后刷新本地画像与聚焦排序。
+async function switchPrimaryDiscipline(disc) {
+  const ds = systemStore.disciplines || []
+  const nextPrimary = disc === 'clear' ? '' : disc
+  const nextDs = nextPrimary && !ds.includes(nextPrimary) ? [...ds, nextPrimary] : ds
+  try {
+    await updateMyDisciplines({ disciplines: nextDs, primary_discipline: nextPrimary })
+    await systemStore.fetchMe()
+    const label = nextPrimary ? (DISCIPLINE_OPTIONS.find((o) => o.value === nextPrimary)?.label || nextPrimary) : '通用'
+    track('discipline_switch', { discipline: nextPrimary })
+    message.success(`专业视角已切换为「${label}」`)
+  } catch {
+    message.error('切换专业视角失败')
   }
 }
 
@@ -404,6 +543,9 @@ async function restoreSession() {
     const data = await getCurrentUser()
     currentUser.value = data
     setUser({ id: data.user_id, role: data.role, token: null })
+    // 恢复会话时同步权限点与导航可见入口
+    await systemStore.fetchMe()
+    activeEntry.value = pathToEntry(route.path)
   } catch {
     // 会话失效（用户被禁用/删除），清理本地状态
     setUserId(null)
@@ -635,7 +777,17 @@ const currentPageTitle = computed(() => {
 })
 
 function onCreateMenuClick({ key }) {
+  track('create_click', { path: key })
   router.push(key)
+}
+
+// Step C：项目定位变更后刷新（由 ContextColumn 触发，不整页重建）
+async function onContextRefresh() {
+  try {
+    useProjectContextStore().fetchProjects()
+  } catch {
+    /* ignore */
+  }
 }
 
 async function fetchRecentRuns() {
@@ -652,8 +804,12 @@ async function fetchRecentRuns() {
 
 watch(
   () => route.path,
-  () => {
+  (to) => {
     syncMenuState()
+    if (navShellEnabled) {
+      activeEntry.value = pathToEntry(route.path)
+    }
+    track('page_view', { path: to })
   },
 )
 
@@ -669,6 +825,11 @@ watch(
 onMounted(async () => {
   // 恢复登录会话（依据 localStorage 中的 userId 调用 /auth/me 校验）
   await restoreSession()
+  // 会话失效/未登录：清除 useAuth 残留内存态并自动弹出登录框
+  if (!getUserId()) {
+    clearUser()
+    showLogin.value = true
+  }
   try {
     await systemStore.fetchHealth()
   } catch {
@@ -710,6 +871,93 @@ onMounted(async () => {
   background: var(--sidebar-bg) !important;
   box-shadow: 2px 0 16px rgba(11, 18, 32, 0.22);
   position: relative;
+}
+
+/* —— Step B：稳定导航壳层 —— */
+.nav-shell {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.nav-groups {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0 16px;
+}
+
+.nav-groups-empty {
+  margin-top: 40px;
+  color: var(--sidebar-text) !important;
+}
+
+.shell-group-title {
+  color: var(--sidebar-text);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 12px 16px 4px;
+}
+
+.shell-menu {
+  background: transparent !important;
+  border-right: none;
+}
+
+.shell-menu :deep(.ant-menu-item) {
+  color: var(--sidebar-text);
+  margin: 2px 10px;
+  border-radius: var(--radius-md);
+  height: 38px;
+  line-height: 38px;
+  font-size: 13px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.shell-menu :deep(.ant-menu-item:hover) {
+  color: var(--text-on-dark) !important;
+  background: var(--sidebar-hover) !important;
+}
+
+.shell-menu :deep(.ant-menu-item-selected) {
+  background: var(--sidebar-active) !important;
+  color: var(--sidebar-text-active) !important;
+}
+
+.shell-menu :deep(.ant-menu-item-selected::after) {
+  display: none;
+}
+
+.shell-menu :deep(.ant-menu-item .menu-link) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  width: 100%;
+  height: 100%;
+}
+
+.shell-menu :deep(.ant-menu-item .menu-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+  width: 18px;
+}
+
+.shell-menu :deep(.ant-menu-item .menu-text) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar :deep(.ant-layout-sider-children) {
@@ -980,6 +1228,15 @@ onMounted(async () => {
 .role-tag {
   margin: 0;
   font-size: 11px;
+}
+
+/* —— 专业视角切换 —— */
+.persp-check {
+  color: var(--primary);
+  margin-right: 8px;
+}
+.persp-muted {
+  color: var(--text-muted);
 }
 
 .login-hint {

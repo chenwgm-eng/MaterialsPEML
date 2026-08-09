@@ -100,6 +100,9 @@ desktop.ini
 input.in
 log.lammps
 trajectory.dump
+lot_jobs_*.txt
+*.xyz
+data/models/polymer_gnn/model.pt
 check_libs.py
 diag_tmp.py
 test_scientific_results*.json

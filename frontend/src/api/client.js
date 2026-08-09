@@ -100,6 +100,20 @@ client.interceptors.response.use(
   // 若后续需要可改为返回 resp 或在 data 上挂载 _headers 字段。
   (resp) => resp.data,
   (error) => {
+    // 401 会话失效：清除本地凭证，不在首页则整页跳转首页（清空内存态）。
+    // 普通未登录（无 token）的 401 静默 reject，不弹错误通知。
+    if (error.response?.status === 401) {
+      const hadToken = !!getAuthToken()
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('userId')
+      localStorage.removeItem('userRole')
+      localStorage.removeItem('permissions')
+      if (hadToken && window.location.pathname !== (import.meta.env.BASE_URL || '/')) {
+        window.location.href = import.meta.env.BASE_URL || '/'
+      }
+      return Promise.reject(error)
+    }
+
     // 忽略请求被取消的情况（页面切换/组件卸载导致），避免弹无关错误
     if (axios.isCancel(error) || error.code === 'ERR_CANCELED' || error.message === 'canceled' || error.message === 'Request aborted') {
       return Promise.reject(error)

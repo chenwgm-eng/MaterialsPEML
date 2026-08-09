@@ -3,7 +3,7 @@ import client from './client'
 export const runECML = (data) => client.post('/discover', data, { timeout: 120000 })
 export const runECMLStep = (data) => client.post('/ecml/run_step', data, { timeout: 120000 })
 export const getECMLRun = (run_id) => client.get(`/ecml/runs/${encodeURIComponent(run_id)}`, { skipErrorNotification: true })
-export const getEcmlRuns = (limit = 20) => client.get('/ecml/runs', { params: { limit } })
+export const getEcmlRuns = (limit = 20, projectId = '') => client.get('/ecml/runs', { params: { limit, project_id: projectId || undefined } })
 export const deleteECMLRun = (run_id) => client.delete(`/ecml/runs/${encodeURIComponent(run_id)}`)
 export const bulkDeleteECMLRuns = (run_ids) => client.post('/ecml/runs/bulk-delete', { run_ids })
 export const getECMLNextRound = (run_id) => client.get(`/ecml/runs/${encodeURIComponent(run_id)}/next-round`, { timeout: 60000 })

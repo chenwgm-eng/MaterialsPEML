@@ -145,6 +145,7 @@ import {
   orderStatusColor,
   sampleStatusColor,
   equipmentStatusColor,
+  equipmentStatusLabel,
 } from '@/utils/enumLabels'
 
 // 样品状态中文标签（含 proposed=待提案，扩展 enumLabels 缺失项）

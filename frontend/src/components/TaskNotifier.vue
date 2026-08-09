@@ -1,6 +1,6 @@
 <template>
-  <div v-if="visible" class="task-notifier">
-    <!-- 折叠态：徽章 -->
+  <div class="task-notifier">
+    <!-- 折叠态：徽章（常驻右下角，徽标数 = 运行中后台任务数） -->
     <div v-if="!expanded" class="notifier-badge" @click="expanded = true">
       <a-badge :count="taskStore.activeCount" :offset="[6, 0]">
         <div class="badge-inner">
@@ -46,15 +46,51 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { SyncOutlined, CheckCircleOutlined, CloseOutlined } from '@ant-design/icons-vue'
 import { useTaskStore } from '@/stores/tasks'
+import { getAsyncTasks } from '@/api/system'
 
 const taskStore = useTaskStore()
 const expanded = ref(false)
 
-// 有任务时才显示
-const visible = computed(() => taskStore.tasks.length > 0)
+// 轮询后端全局异步任务接口，把后台运行中的计算任务同步进全局任务列表
+let pollTimer = null
+const POLL_INTERVAL = 3000
+
+async function poll() {
+  try {
+    const res = await getAsyncTasks()
+    syncTasks(res?.tasks || [])
+  } catch (e) {
+    // 接口不可用/网络异常时静默，保留本地已有任务
+  }
+}
+
+function syncTasks(backendTasks) {
+  for (const t of backendTasks) {
+    const exists = taskStore.tasks.find((x) => x.id === t.id)
+    if (t.status === 'running') {
+      if (exists) {
+        taskStore.updateTask(t.id, { name: t.name, type: t.type, detail: t.detail, status: 'running' })
+      } else {
+        taskStore.addTask({ id: t.id, name: t.name, type: t.type, detail: t.detail })
+      }
+    } else if (exists) {
+      taskStore.updateTask(t.id, { status: t.status, detail: t.detail })
+    }
+  }
+  taskStore.prune()
+}
+
+onMounted(() => {
+  poll()
+  pollTimer = setInterval(poll, POLL_INTERVAL)
+})
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 
 function statusColor(status) {
   if (status === 'running') return 'processing'

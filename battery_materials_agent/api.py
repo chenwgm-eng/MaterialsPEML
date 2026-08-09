@@ -53,7 +53,8 @@ from .auth import (
     get_current_user, require_role, require_login, check_project_access,
     require_permission,
 )
-from .auth.user_store import hash_password, is_legacy_hash, verify_password
+from .auth.user_store import hash_password, is_legacy_hash, verify_password, normalize_disciplines
+from .auth.permissions import role_has_permission
 from .auth.tokens import issue_token, verify_token
 from .auth import sso as sso_module
 from .auth import ldap_auth
@@ -177,6 +178,10 @@ app.include_router(_reaction_network_router)
 app.include_router(_wavefunction_analysis_router)
 app.include_router(_fluid_simulation_router)
 app.include_router(_molecular_docking_router)
+
+# ── 全局后台异步任务查询 ──
+from .scientific_routes.async_task_routes import router as _async_task_router
+app.include_router(_async_task_router)
 
 # ── 工作流混编执行路由 ──
 from .scientific_routes.workflow_routes import router as _workflow_router
@@ -572,6 +577,10 @@ async def startup():
     app.state.idea_store = IdeaStore()
     # 初始化用户存储（含默认 admin 用户）
     app.state.user_store = UserStore()
+    # Step B：导航可见性覆盖存储（含默认隐藏矩阵 seed）
+    from .auth import nav_visibility_store as _nvs
+    app.state.nav_visibility_store = _nvs.NavVisibilityStore()
+    app.state.nav_entries = list(_nvs.NAV_ENTRIES)
     # P1 参考字典中心：状态码/分类码/单位/方法标准/GHS/通用维度
     from .mdm.reference_dict import ReferenceDictStore
     app.state.reference_dict_store = ReferenceDictStore()
@@ -1495,6 +1504,18 @@ class UserUpdateRequest(BaseModel):
     project_ids: list[str] | None = None
     password: str | None = None  # 留空则不修改密码
     is_active: bool | None = None
+    disciplines: list[str] | None = None
+    primary_discipline: str | None = None
+
+
+class MyDisciplinesRequest(BaseModel):
+    disciplines: list[str] = Field(default_factory=list)
+    primary_discipline: str = ""
+
+
+class NavVisibilityUpdateRequest(BaseModel):
+    """nav_visibility 批量覆盖：{role: {entry_key: visible}}。"""
+    matrix: dict[str, dict[str, bool]] = Field(default_factory=dict)
 
 
 class TenantCreateRequest(BaseModel):
@@ -1710,7 +1731,7 @@ async def create_user(req: UserCreateRequest):
 
 
 @app.put("/auth/users/{user_id}", dependencies=[Depends(require_permission("user.manage"))])
-async def update_user(user_id: str, req: UserUpdateRequest):
+async def update_user(user_id: str, req: UserUpdateRequest, current: User = Depends(require_login)):
     """更新用户（user.manage 权限）。password 留空则不修改。"""
     store: UserStore = app.state.user_store
     user = store.get(user_id)
@@ -1731,8 +1752,106 @@ async def update_user(user_id: str, req: UserUpdateRequest):
         user.is_active = req.is_active
     if req.password:
         user.password_hash = hash_password(req.password)
+    # 专业画像：任一字段非 None 时整体归一化并校验（P0 不变量）
+    if req.disciplines is not None or req.primary_discipline is not None:
+        before = {"disciplines": user.disciplines, "primary_discipline": user.primary_discipline}
+        try:
+            ds, p = normalize_disciplines(
+                req.disciplines if req.disciplines is not None else user.disciplines,
+                req.primary_discipline if req.primary_discipline is not None else user.primary_discipline,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        user.disciplines, user.primary_discipline = ds, p
+        get_audit_logger().log(AuditEntry(
+            event_type="human_edit", module="auth", action="update_user_disciplines",
+            operator=current.username, user_id=current.user_id,
+            resource_type="user", resource_id=user.user_id,
+            before=before, after={"disciplines": ds, "primary_discipline": p},
+            tenant_id=user.tenant_id,
+        ))
     store.save(user)
     return _user_to_dict(user)
+
+
+@app.put("/auth/me/disciplines")
+async def update_my_disciplines(req: MyDisciplinesRequest, current: User = Depends(require_login)):
+    """当前用户自助修改自己的专业画像（无需 user.manage 权限）。"""
+    try:
+        ds, p = normalize_disciplines(req.disciplines, req.primary_discipline)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    before = {"disciplines": current.disciplines, "primary_discipline": current.primary_discipline}
+    current.disciplines, current.primary_discipline = ds, p
+    app.state.user_store.save(current)
+    get_audit_logger().log(AuditEntry(
+        event_type="human_edit", module="auth", action="update_my_disciplines",
+        operator=current.username, user_id=current.user_id,
+        resource_type="user", resource_id=current.user_id,
+        before=before, after={"disciplines": ds, "primary_discipline": p},
+        tenant_id=current.tenant_id,
+    ))
+    return _user_to_dict(current)
+
+
+# --- 导航可见性（Step B） ---
+
+@app.get("/nav-visibility")
+async def get_nav_visibility(current: User = Depends(require_login)):
+    """导航可见性。
+
+    - 普通角色：返回其角色的可见 entry_key 列表；
+    - 具备 ``user.manage`` 权限（系统管理员）：返回全量矩阵（role × entry_key）。
+    visible=true 不能把无最小权限入口变可见；权限下限由后端 permission 判定保证。
+    """
+    store = app.state.nav_visibility_store
+    if role_has_permission(current.role, "user.manage"):
+        return {
+            "entries": list(app.state.nav_entries),
+            "matrix": {
+                role: store.role_matrix(role)
+                for role in sorted({r.role for r in store.list_all()})
+                if role
+            },
+        }
+    role_entries = store.visible_entries(current.role.value)
+    return {"entries": role_entries, "visible": role_entries}
+
+
+@app.put("/nav-visibility", dependencies=[Depends(require_permission("user.manage"))])
+async def update_nav_visibility(
+    req: NavVisibilityUpdateRequest,
+    current: User = Depends(require_login),
+):
+    """批量覆盖导航可见性（user.manage 权限）。审计 before/after + 操作人。"""
+    store = app.state.nav_visibility_store
+    # 归一化：仅接受合法 role 与 entry_key，忽略非法 key
+    valid_roles = {"admin", "pm", "researcher", "reviewer", "viewer", "data_engineer"}
+    updates: dict[str, dict[str, bool]] = {}
+    for role, entries in (req.matrix or {}).items():
+        if role not in valid_roles:
+            continue
+        updates[role] = {k: v for k, v in (entries or {}).items() if k in app.state.nav_entries}
+    if not updates:
+        raise HTTPException(status_code=400, detail="没有有效的导航可见性覆盖项")
+
+    before = {role: store.role_matrix(role) for role in updates}
+    store.upsert_batch(updates, updated_by=current.username)
+    after = {role: store.role_matrix(role) for role in updates}
+    get_audit_logger().log(AuditEntry(
+        event_type="human_edit", module="auth", action="update_nav_visibility",
+        operator=current.username, user_id=current.user_id,
+        resource_type="nav_visibility", resource_id=",".join(updates),
+        before=before, after=after,
+        tenant_id=current.tenant_id,
+    ))
+    # 返回全量矩阵供前端刷新（缓存失效信号：前端收到后重拉/重算）
+    return {
+        "ok": True,
+        "before": before,
+        "after": after,
+        "matrix": {role: store.role_matrix(role) for role in sorted(updates)},
+    }
 
 
 @app.delete("/auth/users/{user_id}", dependencies=[Depends(require_permission("user.manage"))])
@@ -2026,12 +2145,16 @@ def _serve_spa_if_browser(request: Request):
 
 
 @app.get("/ecml/runs")
-async def list_ecml_runs(request: Request, limit: int = Query(default=20, ge=1, le=500)):
-    """列出最近的 ECML 运行记录（来自 SQLite 持久化）。"""
+async def list_ecml_runs(request: Request, limit: int = Query(default=20, ge=1, le=500),
+                         project_id: str = Query(default="")):
+    """列出最近的 ECML 运行记录（来自 SQLite 持久化）。
+
+    project_id 非空时仅返回该项目的运行记录。
+    """
     spa = _serve_spa_if_browser(request)
     if spa is not None:
         return spa
-    return {"runs": agent.ecml.state_store.list_runs(limit)}
+    return {"runs": agent.ecml.state_store.list_runs(limit, project_id=project_id)}
 
 
 @app.get("/ecml/runs/{run_id}")

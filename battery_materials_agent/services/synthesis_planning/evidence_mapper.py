@@ -89,7 +89,7 @@ def map_route_evidence(
         unit="",
         confidence=grade_info["confidence"],
         level=grade_info["level"],
-        method="ReactNavi retrosynthesis",
+        method="ASKCOS retrosynthesis",
         source_type=sf["source_type"],
         source_service=sf["source_service"],
         metadata={
@@ -146,7 +146,7 @@ def map_stats_evidence(
         unit="",
         confidence=grade_info["confidence"],
         level=grade_info["level"],
-        method="ReactNavi retrosynthesis",
+        method="ASKCOS retrosynthesis",
         source_type=sf["source_type"],
         source_service=sf["source_service"],
         metadata={
@@ -235,7 +235,7 @@ def map_error_evidence(
         unit="",
         confidence=0.0,
         level=EvidenceLevel.ASSISTIVE,
-        method="ReactNavi error diagnosis",
+        method="ASKCOS error diagnosis",
         source_type=sf["source_type"],
         source_service=sf["source_service"],
         metadata={

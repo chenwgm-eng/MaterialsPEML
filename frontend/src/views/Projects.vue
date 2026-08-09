@@ -503,6 +503,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, reactive } from 'vue'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, ExperimentOutlined, DatabaseOutlined, AppstoreOutlined, BarChartOutlined, ProjectOutlined, FolderOutlined, ProfileOutlined, ThunderboltOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import GanttChart from '@/components/GanttChart.vue'
@@ -564,6 +565,17 @@ const loading = ref(false)
 const searchText = ref('')
 const progressMap = ref({})
 const selectedProject = ref(null)
+
+// Step C 4.C2：资源型 URL——从路由参数选中项目（watch 局部刷新，不整页重建）
+const route = useRoute()
+watch(
+  () => route.params.projectId,
+  (pid) => {
+    if (!pid) return
+    const p = projects.value.find((x) => x.project_id === pid)
+    if (p) selectedProject.value = p
+  },
+)
 // 右侧面板视图：'list'（基本信息/任务/甘特图/空态）| 'new'（内嵌新建项目表单）
 const rightView = ref('list')
 // 右侧 Tab：'info'（基本信息）| 'tasks'（项目任务与交付要求）| 'gantt'（甘特图）| 'graph'（实体图谱）| 'lineage'（数据血缘）

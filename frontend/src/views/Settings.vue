@@ -287,6 +287,47 @@
         </a-form-item>
       </a-form>
     </a-card>
+
+    <!-- 4. 我的画像 -->
+    <a-card :bordered="false" class="settings-card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">我的画像</div>
+          <div class="card-subtitle">标注专业方向，仅影响默认展示与排序，不影响权限与数据范围</div>
+        </div>
+      </div>
+
+      <a-form layout="vertical">
+        <a-form-item label="专业画像（可多选）">
+          <a-select
+            v-model:value="disciplines"
+            mode="multiple"
+            :options="DISCIPLINE_OPTIONS"
+            placeholder="选择专业方向…"
+            style="width: 100%"
+            allow-clear
+          />
+          <div class="form-help">可同时选择多个专业方向；为空时按通用视角展示全部模块。</div>
+        </a-form-item>
+
+        <a-form-item label="主专业（仅可选已选画像）">
+          <a-select
+            v-model:value="primaryDiscipline"
+            :options="primaryOptions"
+            placeholder="选择主专业…"
+            style="width: 100%"
+            allow-clear
+          />
+          <div class="form-help">主专业决定项目内模块的默认聚焦顺序；为空时回退到通用落点（概览）。</div>
+        </a-form-item>
+
+        <a-form-item>
+          <a-button id="settings-save-disciplines" type="primary" :loading="saving.disciplines" @click="saveMyDisciplines">
+            保存专业画像
+          </a-button>
+        </a-form-item>
+      </a-form>
+    </a-card>
       </a-col>
       <a-col v-if="isAdmin" :xs="24" :xl="8" class="settings-aside">
     <!-- 运行模式（仅管理员可见） -->
@@ -347,6 +388,8 @@ import { message } from 'ant-design-vue'
 import SectionHeader from '@/components/SectionHeader.vue'
 import OnboardingTooltip from '@/components/OnboardingTooltip.vue'
 import { updateConfig, getModelCatalog } from '@/api/system'
+import { updateMyDisciplines, getCurrentUser } from '@/api/auth'
+import { DISCIPLINE_OPTIONS } from '@/constants/roles'
 import { useSystemStore } from '@/stores/system'
 import { useAuth } from '@/composables/useAuth'
 import { useMdmDict } from '@/utils/mdmDict'
@@ -355,7 +398,43 @@ import { MESSAGES } from '@/constants/glossary'
 
 const systemStore = useSystemStore()
 
-const saving = reactive({ api: false, models: false, engine: false, runMode: false })
+const saving = reactive({ api: false, models: false, engine: false, runMode: false, disciplines: false })
+
+// ── 我的画像 ──
+const disciplines = ref([])
+const primaryDiscipline = ref('')
+const primaryOptions = computed(() =>
+  (disciplines.value || []).map(v => ({ value: v, label: DISCIPLINE_OPTIONS.find(o => o.value === v)?.label || v }))
+)
+
+async function loadMyDisciplines() {
+  try {
+    const me = await getCurrentUser()
+    disciplines.value = me?.data?.disciplines || me?.disciplines || []
+    primaryDiscipline.value = me?.data?.primary_discipline || me?.primary_discipline || ''
+  } catch {
+    // 后端不可达时保持空画像（通用视角），不阻塞设置页
+  }
+}
+
+async function saveMyDisciplines() {
+  const ds = disciplines.value || []
+  const primary = primaryDiscipline.value || ''
+  if (primary && !ds.includes(primary)) {
+    message.warning('主专业必须是已选的专业画像之一')
+    return
+  }
+  saving.disciplines = true
+  try {
+    await updateMyDisciplines({ disciplines: ds, primary_discipline: primary })
+    await loadMyDisciplines()
+    message.success('专业画像已保存')
+  } catch (e) {
+    message.error('专业画像' + MESSAGES.saveFailed + '，请检查网络或联系管理员')
+  } finally {
+    saving.disciplines = false
+  }
+}
 
 // P1-FORM-001：表单校验 ref 与规则
 const apiFormRef = ref()
@@ -549,6 +628,7 @@ onMounted(async () => {
   }
 
   maybeStartTour()
+  loadMyDisciplines()
 })
 
 async function saveApi() {

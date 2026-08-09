@@ -21,15 +21,6 @@ from ..db import get_engine
 logger = logging.getLogger(__name__)
 
 
-def _cell(row, idx: int, default: str) -> str:
-    """按索引读取行数据，缺列/越界时返回默认值（兼容旧库缺列）。"""
-    try:
-        value = row[idx]
-    except (IndexError, TypeError):
-        return default
-    return value if value is not None else default
-
-
 def _iso(value) -> str:
     """将 datetime 或字符串转换为 ISO 字符串；None 返回空字符串。"""
     if value is None:
@@ -63,6 +54,31 @@ ROLE_RANK = {
 }
 
 
+class Discipline(str, Enum):
+    """专业画像（只影响默认体验，不影响权限）。"""
+    MATERIAL_RESEARCH = "material_research"      # 材料研发
+    PROCESS_DESIGN = "process_design"            # 工艺设计
+    EXPERIMENT_ANALYSIS = "experiment_analysis"  # 实验分析
+
+
+_VALID_DISCIPLINES = {d.value for d in Discipline}
+
+
+def normalize_disciplines(disciplines, primary):
+    """归一化专业画像：去重去空、校验枚举、primary 必须 ∈ disciplines。
+
+    非法输入抛 ``ValueError``，由调用方转为 400。
+    """
+    ds = sorted({d for d in (disciplines or []) if d})  # 去重去空
+    bad = [d for d in ds if d not in _VALID_DISCIPLINES]
+    if bad:
+        raise ValueError(f"非法专业画像: {bad}")
+    p = primary or ""
+    if p and p not in ds:
+        raise ValueError("primary_discipline 必须属于 disciplines")
+    return ds, p
+
+
 class User(BaseModel):
     user_id: str = ""
     username: str = ""
@@ -77,6 +93,8 @@ class User(BaseModel):
     tenant_id: str = ""  # 所属租户（多租户隔离）；空=default
     auth_source: str = "local"  # local / oidc / ldap
     external_idp_id: str = ""  # SSO JIT 开户用的外部 IdP 标识
+    disciplines: list[str] = Field(default_factory=list)  # 0-3 个 Discipline 值，去重
+    primary_discipline: str = ""  # 空串=NULL 语义；非空必须 ∈ disciplines
 
 
 _PBKDF2_ITERATIONS = 200_000
@@ -173,11 +191,13 @@ class UserStore:
                 text("""INSERT INTO auth.users
                 (user_id, username, display_name, email, role, project_ids,
                  is_active, created_at, last_login, password_hash,
-                 tenant_id, auth_source, external_idp_id)
+                 tenant_id, auth_source, external_idp_id,
+                 disciplines, primary_discipline)
                 VALUES (:user_id, :username, :display_name, :email, :role,
                         CAST(:project_ids AS JSONB), :is_active,
                         :created_at, :last_login, :password_hash,
-                        :tenant_id, :auth_source, :external_idp_id)
+                        :tenant_id, :auth_source, :external_idp_id,
+                        CAST(:disciplines AS JSONB), :primary_discipline)
                 ON CONFLICT (user_id) DO UPDATE SET
                     username=EXCLUDED.username,
                     display_name=EXCLUDED.display_name,
@@ -190,7 +210,9 @@ class UserStore:
                     password_hash=EXCLUDED.password_hash,
                     tenant_id=EXCLUDED.tenant_id,
                     auth_source=EXCLUDED.auth_source,
-                    external_idp_id=EXCLUDED.external_idp_id"""),
+                    external_idp_id=EXCLUDED.external_idp_id,
+                    disciplines=EXCLUDED.disciplines,
+                    primary_discipline=EXCLUDED.primary_discipline"""),
                 {
                     "user_id": user.user_id,
                     "username": user.username,
@@ -205,6 +227,8 @@ class UserStore:
                     "tenant_id": user.tenant_id or "default",
                     "auth_source": user.auth_source or "local",
                     "external_idp_id": user.external_idp_id or "",
+                    "disciplines": json.dumps(sorted(set(user.disciplines))),
+                    "primary_discipline": user.primary_discipline or None,
                 },
             )
         return user
@@ -249,18 +273,21 @@ class UserStore:
             )
 
     def _row_to_user(self, row) -> User:
+        # 用 _mapping 按名读取，避免新增列导致位置索引漂移
+        m = row._mapping
         return User(
-            user_id=row[0], username=row[1], display_name=row[2], email=row[3],
-            role=UserRole(row[4]),
-            project_ids=row[5] or [],
-            is_active=bool(row[6]),
-            created_at=_iso(row[7]),
-            last_login=_iso(row[8]),
-            password_hash=row[9] or "",
-            # 0050 迁移新增列；旧库缺列时容错回退
-            tenant_id=_cell(row, 10, "default"),
-            auth_source=_cell(row, 11, "local"),
-            external_idp_id=_cell(row, 12, ""),
+            user_id=m["user_id"], username=m["username"], display_name=m["display_name"],
+            email=m["email"], role=UserRole(m["role"]),
+            project_ids=list(m["project_ids"] or []),
+            is_active=bool(m["is_active"]),
+            created_at=_iso(m["created_at"]),
+            last_login=_iso(m["last_login"]),
+            password_hash=m["password_hash"] or "",
+            tenant_id=m.get("tenant_id") or "default",
+            auth_source=m.get("auth_source") or "local",
+            external_idp_id=m.get("external_idp_id") or "",
+            disciplines=list(m.get("disciplines") or []),
+            primary_discipline=m.get("primary_discipline") or "",
         )
 
     def get_by_external_idp(self, external_idp_id: str) -> User | None:

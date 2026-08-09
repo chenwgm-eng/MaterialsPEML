@@ -108,15 +108,16 @@ class _PlaceholderReactionAdapter:
         return {
             "status": "completed",
             "reaction_smiles": reaction_smiles,
-            "ts_found": True,
-            "barrier_kcal": 25.0,
-            "frequency": -350.0,
+            "ts_found": False,
+            "barrier_kcal": None,
+            "frequency": None,
+            "degraded": True,
             "reactions": [
                 {
                     "reaction_smiles": reaction_smiles,
                     "evidence_stage": 2,
                     "confidence": 0.8,
-                    "metadata": {"method": "placeholder_ts", "ts_found": True},
+                    "metadata": {"method": "placeholder_ts", "ts_found": False},
                 },
             ],
             "warnings": ["ReactionAdapter 不可用，使用占位 TS 搜索"],

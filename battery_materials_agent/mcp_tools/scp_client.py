@@ -23,7 +23,10 @@ import itertools
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from ..config import SCPConfig
+from ..integrations.audit_store import AuditStore
+from ..integrations.models import ExternalInvocation
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +146,7 @@ class SCPClientPool:
         request_id = f"scp_{int(time.time() * 1000)}_{tool_name}"
         start_time = time.time()
         response_status = "unknown"
+        error_message = None
 
         try:
             result = await self._call_tool_impl(server_id, tool_name, arguments, server_url)
@@ -151,6 +155,7 @@ class SCPClientPool:
             return result
         except Exception as e:
             response_status = "failed"
+            error_message = str(e)
             logger.error("SCP tool call failed: %s/%s - %s", server_id, tool_name, e)
             raise
         finally:
@@ -159,7 +164,52 @@ class SCPClientPool:
                 "SCP_AUDIT | request_id=%s | server_id=%s | tool_name=%s | status=%s | elapsed=%.2fs",
                 request_id, server_id, tool_name, response_status, elapsed,
             )
-            # TODO: 持久化到 audit 表（可后续迭代）
+            # 持久化到 audit 表：审计失败不影响主流程
+            try:
+                self._persist_audit(
+                    request_id, server_id, tool_name, arguments,
+                    response_status, error_message, int(elapsed * 1000),
+                )
+            except Exception as audit_exc:
+                logger.error("SCP audit persistence failed: %s", audit_exc)
+
+    @staticmethod
+    def _map_audit_status(response_status: str) -> str:
+        """将传输层 status 映射为 ExternalInvocation.status 枚举值。"""
+        if response_status == "success":
+            return "success"
+        if response_status == "blocked":
+            return "blocked"
+        if response_status == "timeout":
+            return "timeout"
+        return "failed"
+
+    def _persist_audit(
+        self,
+        request_id: str,
+        server_id: str,
+        tool_name: str,
+        arguments: dict,
+        response_status: str,
+        error_message: str | None,
+        latency_ms: int,
+    ) -> None:
+        """将 SCP 调用写入审计表（append-only）。"""
+        invocation = ExternalInvocation(
+            invocation_id=request_id,
+            correlation_id=request_id,
+            project_id=arguments.get("project_id"),
+            run_id=arguments.get("run_id"),
+            actor_id=arguments.get("actor_id"),
+            provider="scp",
+            capability=tool_name,
+            status=self._map_audit_status(response_status),
+            input_redacted={"tool": tool_name, "args_keys": list(arguments.keys())},
+            error_code=error_message,
+            latency_ms=latency_ms,
+            created_at=datetime.now(timezone.utc),
+        )
+        AuditStore().append(invocation)
 
     async def _call_tool_impl(
         self,

@@ -345,9 +345,9 @@ class ECMLStateStore:
             conn.execute(
                 text(
                     """INSERT INTO ecml.ecml_runs_index
-                    (run_id, status, iteration, is_complete, created_at, run_status, iteration_id, parent_run_id, scenario_id, task_id)
+                    (run_id, status, iteration, is_complete, created_at, run_status, iteration_id, parent_run_id, scenario_id, task_id, project_id)
                     VALUES (:run_id, :status, :iteration, :is_complete, :created_at,
-                            :run_status, :iteration_id, :parent_run_id, :scenario_id, :task_id)"""
+                            :run_status, :iteration_id, :parent_run_id, :scenario_id, :task_id, :project_id)"""
                 ),
                 {
                     "run_id": run_id,
@@ -361,6 +361,8 @@ class ECMLStateStore:
                     "scenario_id": state.scenario_id or "",
                     # FK 约束：空字符串需转为 NULL
                     "task_id": (state.task_id or None),
+                    # 业务隔离：本项目/跨项目过滤（无则 NULL）
+                    "project_id": (state.project_id or None),
                 },
             )
         return run_id
@@ -413,11 +415,12 @@ class ECMLStateStore:
                 {"run_source": self._infer_run_source(target), "run_id": run_id},
             )
 
-    def list_runs(self, limit: int = 20) -> list[dict]:
+    def list_runs(self, limit: int = 20, project_id: str = "") -> list[dict]:
         """列出最近的运行（按更新时间倒序）。
 
         对于长时间未更新且未完成的运行，自动标记为 timeout，
         避免运行历史中出现永久"进行中"的僵尸记录。
+        project_id 非空时仅返回该项目的运行（:project_id='' 表示不过滤）。
         """
         now_dt = datetime.now(timezone.utc)
         with self.engine.begin() as conn:
@@ -427,18 +430,19 @@ class ECMLStateStore:
                 text(
                     """SELECT r.run_id, r.target, r.target_property, r.updated_at,
                               i.iteration, i.is_complete, i.run_status, i.iteration_id, i.parent_run_id,
-                              r.run_source, i.scenario_id
+                              r.run_source, i.scenario_id, i.project_id
                        FROM ecml.ecml_runs r
                        LEFT JOIN (
-                           SELECT run_id, iteration, is_complete, run_status, iteration_id, parent_run_id, scenario_id
+                           SELECT run_id, iteration, is_complete, run_status, iteration_id, parent_run_id, scenario_id, project_id
                            FROM ecml.ecml_runs_index
                            WHERE ctid IN (
                                SELECT MAX(ctid) FROM ecml.ecml_runs_index GROUP BY run_id
                            )
                        ) i ON r.run_id = i.run_id
+                       WHERE (:project_id = '' OR i.project_id = :project_id)
                        ORDER BY r.updated_at DESC LIMIT :limit"""
                 ),
-                {"limit": limit},
+                {"limit": limit, "project_id": project_id or ""},
             ).all()
             # 检测并修复僵尸运行：未完成 + 长时间未更新 + 状态仍为 running
             for r in rows:
@@ -469,6 +473,7 @@ class ECMLStateStore:
                 "parent_run_id": r[8] or "",
                 "run_source": r[9] or "production",
                 "scenario_id": r[10] or "",
+                "project_id": r[11] or "",
             }
             for r in rows
         ]
