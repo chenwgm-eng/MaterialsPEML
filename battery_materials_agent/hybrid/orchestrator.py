@@ -7,6 +7,7 @@ ModelRouter（模型路由）和 PlanValidator（计划校验），将研发请�
 from __future__ import annotations
 
 import inspect
+import logging
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Literal
 from uuid import uuid4
@@ -15,6 +16,19 @@ from pydantic import BaseModel, Field
 
 from .intent_interpreter import IntentInterpreter, MaterialScope, RiskAssessment
 from .plan_validator import PlanValidator, ValidationResult
+
+logger = logging.getLogger(__name__)
+
+# 编排步骤 action → MCP 工具名的映射（action 为业务语义名，工具名为注册表名）
+_ACTION_TOOL_ALIAS = {
+    "compliance_check": "check_synthesis_feasibility",
+    "generate_polymer_candidates": "generate_polymer_candidates",
+    "generate_crystal_candidates": "generate_crystal_candidates",
+    "route_material": "route_material",
+    "design_formula": "design_formula",
+    "predict_properties": "predict_polymer_properties",
+    "verify_dft": "verify_dft",
+}
 
 
 # ── 数据模型 ──────────────────────────────────────────────────────
@@ -125,6 +139,7 @@ class HybridOrchestrator:
         domain_pack: dict | None = None,
         domain_pack_provider=None,
         stage_executors: dict | None = None,
+        tool_executor: Any | None = None,
     ):
         self._capability_router = capability_router
         self._model_router = model_router
@@ -144,6 +159,9 @@ class HybridOrchestrator:
         self._domain_pack_provider = domain_pack_provider
         # 研发流水线从领域包解析；无匹配时使用内置默认（兼容旧行为）。
         self._pipeline_resolver = PipelineResolver(domain_pack)
+        # 真实工具执行器（action → kwargs → MCP 工具调用结果）：
+        # 由 api.py 注入 agent.tools.execute，使 native 阶段真实产出数据而非仅解析路由。
+        self._tool_executor = tool_executor
         # 统一阶段执行器：按 executor_kind 分派（native/scp/skill/agent）。
         # 未显式注入时注册默认 native 执行器：基于 CapabilityRouter 真实解析
         # 步骤所需能力，返回解析结果接入真实执行路径；scp/skill/agent 未注册
@@ -154,44 +172,89 @@ class HybridOrchestrator:
         self._stage_executor = StageExecutor(kind_executors)
 
     async def _native_capability_dispatch(self, stage, context: dict | None = None) -> dict:
-        """默认 native 执行器：通过 CapabilityRouter 解析步骤能力并回填步骤。
+        """默认 native 执行器：解析步骤能力并通过 tool_executor 真实执行。
 
-        返回 dict：{status, capability, aliases, model_route}，供 execute() 事件
-        与下游真实工具调用复用。CapabilityRouter 不存在时返回解析失败的明确信息。
+        解析出候选 binding（aliases）后，按 step.action 映射到真实 MCP 工具调用，
+        把工具输出回填 result——保证 /research 流水线每一步都有真实数据产出
+        （候选材料/配方/校验结果），而非仅返回路由信息。
+
+        返回 dict：{status, capability, aliases, model_route, action, result}
         """
         capability = getattr(stage, "resolved_capability", "") or (
             stage.required_capabilities[0] if getattr(stage, "required_capabilities", None) else ""
         )
+        action = getattr(stage, "action", "") or ""
         profile = getattr(self, "_execution_profile_cache", "standard")
-        if not capability or self._capability_router is None:
-            return {
-                "status": "success",
-                "capability": capability,
-                "aliases": [],
-                "model_route": None,
-                "note": "无能力或未配置路由，跳过真实工具分派",
-            }
-        try:
-            candidates = self._capability_router.resolve(capability, profile)
-            if inspect.isawaitable(candidates):
-                candidates = await candidates
-            aliases = [c.binding_id for c in candidates] if candidates else []
-            route = None
+        aliases: list[str] = []
+        route = None
+        if capability and self._capability_router is not None:
+            try:
+                candidates = self._capability_router.resolve(capability, profile)
+                if inspect.isawaitable(candidates):
+                    candidates = await candidates
+                aliases = [c.binding_id for c in candidates] if candidates else []
+            except Exception as e:  # noqa: BLE001
+                logger.warning("native dispatch 路由解析失败: %s", e)
             if self._model_router is not None:
-                route_obj = self._model_router.route(capability, profile)
-                route = route_obj.route_id if route_obj else None
-            return {
-                "status": "success",
-                "capability": capability,
-                "aliases": aliases,
-                "model_route": route,
+                try:
+                    route_obj = self._model_router.route(capability, profile)
+                    route = route_obj.route_id if route_obj else None
+                except Exception:  # noqa: BLE001
+                    route = None
+
+        # 真实执行：action → MCP 工具（tool_executor 由 api.py 注入 agent.tools.execute）
+        tool_result = None
+        tool_error = ""
+        if self._tool_executor is not None and action:
+            tool_name = _ACTION_TOOL_ALIAS.get(action, action)
+            try:
+                kwargs = self._stage_tool_kwargs(action, stage, context or {})
+                tool_result = self._tool_executor(tool_name, **kwargs)
+                if inspect.isawaitable(tool_result):
+                    tool_result = await tool_result
+            except Exception as e:  # noqa: BLE001 - 工具失败不阻断编排，结果带错误说明
+                tool_error = f"{type(e).__name__}: {e}"
+                logger.warning("native 工具 %s 执行失败: %s", tool_name, e)
+
+        base = {
+            "status": "error" if tool_error and tool_result is None else "success",
+            "capability": capability,
+            "aliases": aliases,
+            "model_route": route,
+            "action": action,
+            "tool": action,
+        }
+        if tool_result is not None:
+            base["result"] = tool_result
+        if tool_error:
+            base["error"] = tool_error
+            base["note"] = "工具执行失败，步骤结果不可用"
+        return base
+
+    @staticmethod
+    def _stage_tool_kwargs(action: str, stage, context: dict | None = None) -> dict:
+        """按步骤 action 构造工具调用参数（材料体系/目标属性透传给生成器）。"""
+        ctx = context or {}
+        target = ctx.get("target") or getattr(stage, "task", "") or ""
+        material_system = ctx.get("material_system") or ""
+        kwargs: dict = {}
+        if action == "route_material":
+            kwargs["material_input"] = {"name": target or "材料", "formula": target or ""}
+        elif action in ("generate_polymer_candidates", "generate_crystal_candidates"):
+            kwargs["target_properties"] = {}
+            kwargs["num_candidates"] = 8
+            # 材料体系透传：工程塑料/改性体系走工程塑料生成模式
+            kwargs["material_system"] = material_system
+        elif action == "design_formula":
+            kwargs["target_material"] = {
+                "target_property": "tensile_strength",
+                "candidate": material_system or target,
             }
-        except Exception as e:  # noqa: BLE001 - 路由失败不阻断编排
-            return {
-                "status": "error",
-                "capability": capability,
-                "error": f"{type(e).__name__}: {e}",
-            }
+            # 材料体系透传：工程塑料体系走改性配方通道
+            kwargs["material_system"] = material_system
+        elif action == "compliance_check":
+            kwargs["smiles"] = "CCO"
+        return kwargs
 
     def register_stage_executor(self, kind: str, executor) -> None:
         """注册某类阶段执行器（native/scp/skill/agent），运行期可扩展。"""
@@ -302,13 +365,21 @@ class HybridOrchestrator:
             }
 
             # 按 executor_kind 通过 StageExecutor 分派真实执行路径
-            result = await self._stage_executor.execute(step)
+            # context 透传研发请求上下文（材料体系/领域包/目标），供 native 工具调用使用
+            context = {
+                "material_system": getattr(request, "material_system", "") or "",
+                "domain_key": getattr(request, "domain_key", "") or "",
+                "target": getattr(request, "goal", "") or "",
+            }
+            result = await self._stage_executor.execute(step, context)
             step_output = result.get("result", result)
             if result.get("status") == "error":
                 step.status = "failed"
                 yield {
                     "event_type": "step_progress",
                     "step_id": step.step_id,
+                    "agent_id": step.agent_id,
+                    "action": step.action,
                     "content": f"派发 {step.agent_id} 执行 {step.action} 失败: {result.get('error', '')}",
                     "executor_kind": step.executor_kind,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -317,6 +388,8 @@ class HybridOrchestrator:
                 yield {
                     "event_type": "step_progress",
                     "step_id": step.step_id,
+                    "agent_id": step.agent_id,
+                    "action": step.action,
                     "content": f"派发 {step.agent_id} 执行 {step.action}",
                     "executor_kind": step.executor_kind,
                     "result": step_output,

@@ -82,15 +82,35 @@ class ProcessDeepeningService:
         record = self.candidate_store.get(candidate_id)
         if record is None:
             raise ValueError(f"候选材料 {candidate_id} 不存在")
-        smiles = (record.smiles or "").strip()
-        if not smiles:
-            raise ValueError(f"候选材料 {candidate_id} 缺少 SMILES，无法进行合成路径深化")
+
+        # 材料类型分流：晶体（无 SMILES）走化学式固相合成路线；
+        # 分子/聚合物必须 SMILES（与 plan_multiple_routes 的 material_type 语义一致）。
+        material_type = (record.candidate_type or "molecule").lower()
+        if material_type in ("crystal", "inorganic"):
+            formula = (record.data or {}).get("formula") or record.name or ""
+            if not formula.strip():
+                raise ValueError(f"候选材料 {candidate_id} 缺少化学式，无法进行晶体合成路径深化")
+            space_group = (record.data or {}).get("space_group") or ""
+            routes_bundle = await self._plan_routes(
+                smiles="",
+                max_routes=max_routes,
+                max_depth=max_depth,
+                material_type="crystal",
+                formula=formula,
+                space_group=space_group,
+            )
+        else:
+            smiles = (record.smiles or "").strip()
+            if not smiles:
+                raise ValueError(f"候选材料 {candidate_id} 缺少 SMILES，无法进行合成路径深化")
+            routes_bundle = await self._plan_routes(smiles, max_routes, max_depth)
 
         # 1) 取出既有方案（或准备新建）
         scheme = self._load_or_create_scheme(record, process_id)
 
-        # 2) 合成路径规划（SCP 优先 + 本地回退）
-        routes_bundle = await self._plan_routes(smiles, max_routes, max_depth)
+        # 2) 合成路径规划（SCP 优先 + 本地回退）。
+        # 每次深化是一次独立执行：能力来源从零记录，避免多次深化证据无界累积
+        scheme.evidence_refs = []
         scheme.routes = routes_bundle["routes"]
         scheme.evidence_refs.extend(routes_bundle["evidence_refs"])
 
@@ -146,28 +166,71 @@ class ProcessDeepeningService:
 
     # ── 内部：能力编排（SCP 优先 + 本地回退） ───────────────
 
-    async def _plan_routes(self, smiles: str, max_routes: int, max_depth: int) -> dict[str, Any]:
-        """合成路径规划：SCP 优先，失败回退本地 SynthesisPlanner。"""
+    async def _plan_routes(
+        self,
+        smiles: str,
+        max_routes: int,
+        max_depth: int,
+        material_type: str = "molecule",
+        formula: str = "",
+        space_group: str = "",
+    ) -> dict[str, Any]:
+        """合成路径规划：SCP 优先，失败回退本地 SynthesisPlanner。
+
+        分子/聚合物走 smiles 逆合成；晶体（material_type=crystal）走化学式固相合成。
+        """
         evidence_refs: list[dict[str, Any]] = []
+
+        if material_type == "crystal":
+            scp_arguments: dict[str, Any] = {
+                "formula": formula,
+                "space_group": space_group,
+                "max_routes": max_routes,
+            }
+            # 晶体固相合成规划：SCP 语义上属于「化学反应计算」服务器（ecml 步骤3）；
+            # scp_scitool_mat 默认远端工具为 SMILESToCAS（SMILES→CAS 号），与合成规划语义不符。
+            preferred_binding = "scp_chem_reaction"
+            fallback_bindings: tuple[str, ...] = ()
+            target_label = formula
+        else:
+            scp_arguments = {"smiles": smiles, "max_routes": max_routes, "max_depth": max_depth}
+            preferred_binding = "scp_scitool_chem"
+            fallback_bindings = ("scp_chem_reaction",)
+            target_label = smiles
 
         scp_result = await self._call_scp_capability(
             capability="synthesis_planning",
-            preferred_binding="scp_scitool_chem",
-            fallback_bindings=("scp_chem_reaction",),
-            arguments={"smiles": smiles, "max_routes": max_routes, "max_depth": max_depth},
+            preferred_binding=preferred_binding,
+            fallback_bindings=fallback_bindings,
+            arguments=scp_arguments,
             evidence_refs=evidence_refs,
         )
         if scp_result is not None:
-            routes = self._normalize_scp_routes(scp_result, smiles)
+            routes = self._normalize_scp_routes(scp_result, target_label)
             if routes:
                 return {"routes": routes, "evidence_refs": evidence_refs}
 
         # 本地回退
-        logger.info("工艺深化：合成路径规划回退本地 SynthesisPlanner smiles=%s", smiles)
+        logger.info(
+            "工艺深化：合成路径规划回退本地 SynthesisPlanner material_type=%s target=%s",
+            material_type,
+            target_label,
+        )
         try:
-            local_routes = await self.synthesis_planner.plan_synthesis_async(
-                smiles, max_depth=max_depth, num_routes=max_routes,
-            )
+            if material_type == "crystal":
+                bundle = await self.synthesis_planner.plan_multiple_routes(
+                    smiles="",
+                    material_type="crystal",
+                    formula=formula,
+                    space_group=space_group,
+                    num_routes=max_routes,
+                )
+                local_routes = [dict(r) for r in (bundle or {}).get("routes", [])]
+            else:
+                planned = await self.synthesis_planner.plan_synthesis_async(
+                    smiles, max_depth=max_depth, num_routes=max_routes,
+                )
+                local_routes = [r.model_dump() for r in planned]
         except Exception as e:  # noqa: BLE001
             logger.warning("工艺深化：本地逆合成失败 %s", e)
             evidence_refs.append({
@@ -179,17 +242,16 @@ class ProcessDeepeningService:
             })
             return {"routes": [], "evidence_refs": evidence_refs}
 
-        routes = [r.model_dump() for r in local_routes]
         evidence_refs.append({
             "capability": "synthesis_planning",
             "source": "local",
             "provider": "SynthesisPlanner",
             "tool": "askcos/internlm",
             "status": "success",
-            "detail": f"本地逆合成生成 {len(routes)} 条路线",
+            "detail": f"本地逆合成生成 {len(local_routes)} 条路线",
             "at": _now(),
         })
-        return {"routes": routes, "evidence_refs": evidence_refs}
+        return {"routes": local_routes, "evidence_refs": evidence_refs}
 
     async def _verify_dft_batch(self, routes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """对每条路线做 DFT 可行性校验并回写 confidence。"""
@@ -271,13 +333,20 @@ class ProcessDeepeningService:
                 )
             except Exception as e:  # noqa: BLE001
                 logger.warning("工艺深化：SCP %s/%s 调用异常 %s", binding_name, capability, e)
+                # 参数校验错误 = 远端工具与能力语义不符（绑定错工具），给出可读解释
+                detail = f"SCP 调用异常: {e}"
+                if "validation errors" in str(e) or "Missing required argument" in str(e):
+                    detail = (
+                        f"SCP 远端工具 {binding.remote_tool_name or binding_name} 与"
+                        f"「{capability}」能力语义不符（参数不匹配），当前 SCP 平台未提供该能力"
+                    )
                 evidence_refs.append({
                     "capability": capability,
                     "source": "scp",
                     "provider": binding.provider or "",
                     "tool": binding_name,
                     "status": "failed",
-                    "detail": f"SCP 调用异常: {e}",
+                    "detail": detail,
                     "at": _now(),
                 })
                 continue
@@ -324,10 +393,28 @@ class ProcessDeepeningService:
                 "provider": binding.provider or "",
                 "tool": binding_name,
                 "status": "failed",
-                "detail": raw.get("error") or raw.get("message") or "SCP 调用失败",
+                "detail": self._translate_scp_failure(
+                    raw.get("error") or raw.get("message") or "SCP 调用失败",
+                    binding_name, binding.remote_tool_name or "", capability,
+                ),
                 "at": _now(),
             })
         return None
+
+    @staticmethod
+    def _translate_scp_failure(detail: str, binding_name: str,
+                               remote_tool_name: str, capability: str) -> str:
+        """将 SCP 失败原因翻译为面向工艺人员的可读说明。
+
+        参数校验类错误（validation errors / Missing required argument）说明
+        远端工具与能力语义不符（绑定错工具），而非服务故障。
+        """
+        if "validation errors" in detail or "Missing required argument" in detail:
+            return (
+                f"SCP 远端工具 {remote_tool_name or binding_name} 与"
+                f"「{capability}」能力语义不符（参数不匹配），当前 SCP 平台未提供该能力"
+            )
+        return detail
 
     @staticmethod
     def _validate_synthesis_routes(data: Any) -> bool:

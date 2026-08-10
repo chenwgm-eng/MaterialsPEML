@@ -132,7 +132,7 @@ onMounted(load)
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #8a92a6;
+  color: var(--text-muted);
 }
 .meta-text { flex: 1; }
 </style>

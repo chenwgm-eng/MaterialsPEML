@@ -24,8 +24,22 @@ DEFAULT_SIGNING_KEY = "dev-control-plane-signing-key-CHANGE-ME"
 
 
 def _load_signing_key() -> str:
-    """Load the HMAC signing key from the environment (dev default fallback)."""
-    return os.environ.get("CONTROL_PLANE_SIGNING_KEY", DEFAULT_SIGNING_KEY)
+    """Load the HMAC signing key from the environment.
+
+    生产模式（RUN_MODE=production）必须显式配置 CONTROL_PLANE_SIGNING_KEY，
+    拒绝使用内置开发密钥——否则知情者可伪造任意角色/项目的签名上下文
+    绕过治理链（与 auth/tokens.py 的 production 守卫策略一致）。
+    """
+    key = os.environ.get("CONTROL_PLANE_SIGNING_KEY", "")
+    if key:
+        return key
+    run_mode = (os.environ.get("RUN_MODE", "demo") or "").lower()
+    if run_mode == "production":
+        raise RuntimeError(
+            "RUN_MODE=production 时必须显式配置 CONTROL_PLANE_SIGNING_KEY，"
+            "禁止使用内置开发签名密钥"
+        )
+    return DEFAULT_SIGNING_KEY
 
 # Role hierarchy: higher rank == more permissions.
 ROLE_RANK: dict[str, int] = {

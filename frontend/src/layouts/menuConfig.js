@@ -138,6 +138,7 @@ export const MENU_GROUPS = [
     items: [
       { path: '/technology-intelligence', title: '技术情报', icon: markRaw(BookOutlined), requiredAnyPermission: ['project.view'] },
       { path: '/knowledge-graph', title: '知识图谱', icon: markRaw(ShareAltOutlined), requiredAnyPermission: ['candidate.view'] },
+      { path: '/knowledge-base', title: '知识库', icon: markRaw(DatabaseOutlined), requiredAnyPermission: ['project.view'] },
       { path: '/materials', title: '物料规格库', icon: markRaw(ShopOutlined), requiredAnyPermission: ['project.view'] },
       { path: '/properties', title: '属性字典', icon: markRaw(ProfileOutlined), requiredAnyPermission: ['project.view'] },
       { path: '/mdm', title: '主数据治理', icon: markRaw(DatabaseOutlined), requiredAnyPermission: ['tenant.manage'] },
@@ -165,6 +166,7 @@ export const MENU_GROUPS = [
           { path: '/agents', title: '智能体管理', icon: markRaw(RobotOutlined), requiredAnyPermission: ['agent.manage'] },
           { path: '/tools', title: '工具与连接器', icon: markRaw(AppstoreOutlined), requiredAnyPermission: ['agent.manage'] },
           { path: '/mappings', title: '映射控制台', icon: markRaw(DeploymentUnitOutlined), requiredAnyPermission: ['agent.manage'] },
+          { path: '/topology', title: '调用关系', icon: markRaw(ShareAltOutlined), requiredAnyPermission: ['agent.manage'] },
           { path: '/capability-center', title: '能力契约', icon: markRaw(ApiOutlined), requiredAnyPermission: ['agent.manage'] },
         ],
       },

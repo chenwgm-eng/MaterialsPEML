@@ -1,5 +1,9 @@
 <template>
   <div class="kg-view">
+    <div class="page-header">
+      <h1 class="page-title">知识图谱</h1>
+      <p class="page-subtitle">查看已保存的知识图谱，探索材料-性能-文献关联</p>
+    </div>
     <!-- 顶部：已保存图谱列表 -->
     <a-card :bordered="false" class="kg-list-card">
       <template #title>

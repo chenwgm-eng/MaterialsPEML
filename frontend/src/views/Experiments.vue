@@ -26,7 +26,6 @@
                 v-model:value="filterForm.sample_id"
                 :options="sampleIdOptions"
                 placeholder="输入或选择样品编号…"
-                allow-clear
                 autocomplete="off"
                 :filter-option="fuzzyFilter"
               />
@@ -38,7 +37,6 @@
                 v-model:value="filterForm.batch_id"
                 :options="batchIdOptions"
                 placeholder="输入或选择批次号…"
-                allow-clear
                 autocomplete="off"
                 :filter-option="fuzzyFilter"
               />
@@ -61,7 +59,6 @@
                 v-model:value="filterForm.formula"
                 :options="formulaOptions"
                 placeholder="输入或选择候选材料 ID…"
-                allow-clear
                 autocomplete="off"
                 :filter-option="fuzzyFilter"
               />
@@ -103,7 +100,6 @@
                 v-model:value="filterForm.operator"
                 :options="operatorOptions"
                 placeholder="输入或选择操作员…"
-                allow-clear
                 autocomplete="off"
                 :filter-option="fuzzyFilter"
               />
@@ -115,7 +111,6 @@
                 v-model:value="filterForm.order_id"
                 :options="orderIdOptions"
                 placeholder="输入或选择任务单号…"
-                allow-clear
                 autocomplete="off"
                 :filter-option="fuzzyFilter"
               />
@@ -141,12 +136,18 @@
 
     <!-- 内容 Tabs：实验记录 + 测量值分布 -->
     <a-tabs v-model:activeKey="activeTab" class="content-tabs" size="small">
-      <a-tab-pane key="records" tab="实验记录">
+          <a-tab-pane key="records" tab="实验记录">
         <a-card class="table-card" :bordered="false">
           <template #title>
             <div class="card-title-row">
               <span class="card-title-text">实验记录</span>
-              <a-tag color="blue" class="count-tag">{{ experimentsStore.records.length }} 条</a-tag>
+              <a-tag color="blue" class="count-tag">{{ contextRecords.length }} 条</a-tag>
+              <a-tag v-if="projectCtx.currentProject" color="orange" class="count-tag">
+                {{ projectCtx.currentProject.name }}
+              </a-tag>
+              <a-tag v-if="projectCtx.currentTask" color="cyan" class="count-tag">
+                {{ projectCtx.currentTask.title }}
+              </a-tag>
             </div>
           </template>
           <SmartLoading
@@ -158,8 +159,8 @@
             @cancel="onCancelLoadExperiments"
           />
           <a-table
-            v-else-if="experimentsStore.records.length > 0"
-            :data-source="experimentsStore.records"
+            v-else-if="contextRecords.length > 0"
+            :data-source="contextRecords"
             :row-key="(r) => r.record_id || r.result_id || r.id"
             :loading="experimentsStore.loading"
             :pagination="{ pageSize: 10, size: 'small', showTotal: (t) => `共 ${t} 条` }"
@@ -440,6 +441,7 @@ import {
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useExperimentsStore } from '@/stores/experiments'
+import { useProjectContextStore } from '@/stores/projectContext'
 import {
   listExperimentTypes,
   updateExperiment,
@@ -607,7 +609,7 @@ const columns = [
 ]
 
 const facetChartData = computed(() => {
-  const records = experimentsStore.records
+  const records = contextRecords.value
   if (records.length === 0) return []
 
   // 收集所有 measured_values 的键名
@@ -640,6 +642,20 @@ const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
   hour: '2-digit',
   minute: '2-digit',
   hour12: false,
+})
+
+// #3：实验记录按左侧「项目定位」全局上下文过滤（project_id + task_id 匹配）
+const projectCtx = useProjectContextStore()
+const contextRecords = computed(() => {
+  const records = experimentsStore.records || []
+  const pid = projectCtx.currentProjectId
+  const tid = projectCtx.currentTaskId
+  if (!pid && !tid) return records
+  return records.filter((r) => {
+    if (pid && r.project_id && r.project_id !== pid) return false
+    if (tid && r.task_id && r.task_id !== tid) return false
+    return true
+  })
 })
 
 function formatDateTime(value) {

@@ -1,5 +1,10 @@
 <template>
   <div class="projects-page">
+    <!-- 页面标题（跨页一致：#9 补齐语义标题） -->
+    <div class="page-header">
+      <h1 class="page-title">项目管理</h1>
+      <p class="page-subtitle">创建、跟踪研发项目进度，查看任务与数据血缘</p>
+    </div>
     <div
       class="split-layout"
       :class="{ 'is-resizing': isResizing }"
@@ -67,7 +72,7 @@
           :total="filteredProjects.length"
           :page-size="pageSize"
           size="small"
-          show-total
+          :show-total="(total) => `共 ${total} 条`"
           :show-size-changer="true"
           :page-size-options="['10', '20', '50']"
           @showSizeChange="onPageSizeChange"
@@ -342,6 +347,7 @@
                           default-expand-all
                           :selectable="true"
                           v-model:selectedKeys="lineageSelectedKeys"
+                          @select="onLineageSelect"
                           class="lineage-tree"
                         >
                           <template #title="node">
@@ -482,9 +488,16 @@
 
       <template #footer>
         <div class="drawer-footer">
-          <a-button v-if="taskDrawerMode === 'edit'" danger @click="onDeleteTask" style="margin-right: auto">
-            删除任务
-          </a-button>
+          <a-popconfirm
+            title="确认删除该任务？关联的实验数据可能丢失，删除后不可恢复。"
+            ok-text="删除"
+            cancel-text="取消"
+            @confirm="onDeleteTask"
+          >
+            <a-button v-if="taskDrawerMode === 'edit'" danger style="margin-right: auto">
+              删除任务
+            </a-button>
+          </a-popconfirm>
           <a-button @click="taskDrawerOpen = false">取消</a-button>
           <DisabledButton
             type="primary"
@@ -503,7 +516,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, reactive } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, ExperimentOutlined, DatabaseOutlined, AppstoreOutlined, BarChartOutlined, ProjectOutlined, FolderOutlined, ProfileOutlined, ThunderboltOutlined, EyeOutlined } from '@ant-design/icons-vue'
 import GanttChart from '@/components/GanttChart.vue'
@@ -568,6 +581,7 @@ const selectedProject = ref(null)
 
 // Step C 4.C2：资源型 URL——从路由参数选中项目（watch 局部刷新，不整页重建）
 const route = useRoute()
+const router = useRouter()
 watch(
   () => route.params.projectId,
   (pid) => {
@@ -751,6 +765,88 @@ function reloadLineage() {
     lineageLoaded.value = false
     loadLineage(selectedProject.value.project_id)
   }
+}
+
+// 血缘树选中：同步详情面板
+const lineageSelectedKeys = ref([])
+const lineageSelectedNode = ref(null)
+
+function findLineageNode(nodes, key) {
+  if (!nodes) return null
+  for (const n of nodes) {
+    if (n.key === key) return n
+    const hit = findLineageNode(n.children, key)
+    if (hit) return hit
+  }
+  return null
+}
+
+function onLineageSelect(selectedKeys) {
+  lineageSelectedKeys.value = selectedKeys || []
+  lineageSelectedNode.value = findLineageNode(lineageData.value, lineageSelectedKeys.value[0]) || null
+}
+
+// 血缘节点「查看详情」：按实体类型跳转到对应业务页面
+function onLineageJump(node) {
+  if (!node) return
+  const key = String(node.key || '')
+  const id = key.includes(':') ? key.slice(key.indexOf(':') + 1) : key
+  const type = node.type || ''
+  switch (type) {
+    case 'project':
+      router.push({ path: `/projects/${id}` })
+      break
+    case 'task':
+      router.push({ path: '/projects', query: { task_id: id } })
+      break
+    case 'candidate':
+      router.push({ name: 'CandidateDetail', params: { id } })
+      break
+    case 'bom':
+      router.push({ path: '/formula-design', query: { formula_id: id } })
+      break
+    case 'process':
+      router.push({ path: '/synthesis' })
+      break
+    case 'experiment_order':
+      router.push({ name: 'ExperimentDetail', params: { id } })
+      break
+    case 'test_task':
+      router.push({ path: '/experiments', query: { order_id: node.order_id || '' } })
+      break
+    case 'sample':
+      router.push({ path: '/samples' })
+      break
+    case 'result_record':
+      router.push({ path: '/experiments', query: { order_id: id } })
+      break
+    case 'ecml_run':
+      router.push({ name: 'ECMLRunDetail', params: { runId: id } })
+      break
+    default:
+      router.push({ path: '/projects' })
+  }
+}
+
+// 血缘节点类型中文标签与标签色
+function lineageTypeLabel(t) {
+  return _ENTITY_TYPE_LABELS[t] || t || ''
+}
+
+function lineageStatusColor(t) {
+  const map = {
+    project: 'blue',
+    task: 'cyan',
+    candidate: 'geekblue',
+    bom: 'purple',
+    process: 'orange',
+    experiment_order: 'blue',
+    test_task: 'cyan',
+    sample: 'green',
+    result_record: 'default',
+    ecml_run: 'magenta',
+  }
+  return map[t] || 'default'
 }
 
 const paginatedProjects = computed(() => {

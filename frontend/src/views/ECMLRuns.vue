@@ -76,7 +76,7 @@
         :row-selection="{ selectedRowKeys, onChange: (keys) => (selectedRowKeys = keys) }"
         :scroll="{ x: 1400 }"
         row-key="run_id"
-        @row-click="(record) => viewRun(record)"
+        :custom-row="runRowProps"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'is_complete'">
@@ -116,15 +116,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { getEcmlRuns, deleteECMLRun, bulkDeleteECMLRuns } from '@/api/ecml'
 import { listProjects } from '@/api/projects'
+import { useProjectContextStore } from '@/stores/projectContext'
 import client from '@/api/client'
 
 const router = useRouter()
+const projectCtx = useProjectContextStore()
 
 const runs = ref([])
 const loading = ref(false)
@@ -132,11 +134,30 @@ const loading = ref(false)
 const envFilter = ref('production')
 const selectedRowKeys = ref([])
 
-// 筛选条件：项目 + 任务
+// 筛选条件：项目 + 任务（#3：自动跟随左侧「项目定位」全局上下文）
 const filterProjectId = ref(undefined)
 const filterTaskId = ref(undefined)
 const projectOptions = ref([])
 const taskOptions = ref([])
+
+// 全局上下文联动：左侧选择项目/任务后，本页筛选自动跟随
+watch(
+  () => [projectCtx.currentProjectId, projectCtx.currentTaskId],
+  ([pid, tid]) => {
+    if (pid && filterProjectId.value !== pid) {
+      filterProjectId.value = pid
+      loadProjectTasks(pid)
+    }
+    if (tid && filterTaskId.value !== tid) {
+      filterTaskId.value = tid
+    }
+    if (!pid && filterProjectId.value) {
+      filterProjectId.value = undefined
+      filterTaskId.value = undefined
+    }
+  },
+  { immediate: true },
+)
 
 // 数据来源以后端持久化的 run_source 为准（服务端对存量数据做懒迁移回填）
 function isSandboxRun(record) {
@@ -265,6 +286,13 @@ async function fetchRuns() {
     runs.value = []
   } finally {
     loading.value = false
+  }
+}
+
+function runRowProps(record) {
+  return {
+    style: { cursor: 'pointer' },
+    onClick: () => viewRun(record),
   }
 }
 

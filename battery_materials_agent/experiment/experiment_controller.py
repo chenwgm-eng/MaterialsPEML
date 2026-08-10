@@ -566,6 +566,49 @@ class ExperimentDataStore:
         "idempotency_key"
     )
 
+    def update_order_meta(self, order_id: str, assignee: str = "",
+                          priority: str = "", notes: str = "") -> bool:
+        """更新实验任务单元数据（负责人/优先级/备注）。仅未开始执行的任务可改。"""
+        existing = self.get_order(order_id)
+        if existing is None:
+            return False
+        editable = {ExperimentOrderStatus.DRAFT.value,
+                    ExperimentOrderStatus.PENDING_APPROVAL.value,
+                    ExperimentOrderStatus.APPROVED.value}
+        if existing.status not in editable:
+            raise ValueError(
+                f"任务 {order_id} 状态为 {existing.status}，仅草稿/待审批/已审批状态可编辑"
+            )
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("""UPDATE experiment.experiment_orders
+                        SET assignee = :assignee, priority = :priority, notes = :notes
+                        WHERE order_id = :order_id"""),
+                {"order_id": order_id, "assignee": assignee,
+                 "priority": priority, "notes": notes},
+            )
+        return True
+
+    def delete_order(self, order_id: str) -> bool:
+        """删除实验任务单（仅草稿/待审批状态；已审批或已录入数据的不允许删除）。"""
+        existing = self.get_order(order_id)
+        if existing is None:
+            return False
+        deletable = {ExperimentOrderStatus.DRAFT.value,
+                     ExperimentOrderStatus.PENDING_APPROVAL.value}
+        if existing.status not in deletable:
+            raise ValueError(
+                f"任务 {order_id} 状态为 {existing.status}，仅草稿/待审批状态可删除"
+            )
+        if self.count_result_records(order_id) > 0:
+            raise ValueError(f"任务 {order_id} 已存在实验数据，禁止删除")
+        with self.engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM experiment.experiment_orders WHERE order_id = :order_id"),
+                {"order_id": order_id},
+            )
+        return True
+
     def save_order(self, order: "ExperimentOrder"):
         with self.engine.begin() as conn:
             conn.execute(
@@ -1105,6 +1148,16 @@ class ExperimentController:
             order.created_at = datetime.now(timezone.utc).isoformat()
         self._store.save_order(order)
         return order
+
+    def update_order_meta(self, order_id: str, assignee: str = "",
+                          priority: str = "", notes: str = "") -> bool:
+        """更新实验任务单元数据（负责人/优先级/备注）。"""
+        return self._store.update_order_meta(order_id, assignee=assignee,
+                                             priority=priority, notes=notes)
+
+    def delete_order(self, order_id: str) -> bool:
+        """删除实验任务单（仅草稿/待审批；已有实验数据的禁止删除）。"""
+        return self._store.delete_order(order_id)
 
     def create_order_for_candidate_and_process(
         self,

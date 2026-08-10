@@ -5,25 +5,28 @@ import { translateError, isIdempotentRequest } from '@/utils/errorHandler'
 
 // 认证凭证：登录后后端签发带 HMAC 签名与过期时间的 token，
 // 本地保存 token（鉴权用）与 userId（路由守卫/展示用）。
-export const setUserId = (id, token) => {
-  if (!id) {
-    localStorage.removeItem('userId')
-    localStorage.removeItem('authToken')
-    return
-  }
-  localStorage.setItem('userId', id)
+// remember=true 写 localStorage（持久会话）；false 写 sessionStorage（关闭浏览器即失效）。
+export const setUserId = (id, token, remember = true) => {
+  // 先清空两处存储，避免双份凭证残留
+  localStorage.removeItem('userId')
+  localStorage.removeItem('authToken')
+  sessionStorage.removeItem('userId')
+  sessionStorage.removeItem('authToken')
+  if (!id) return
+  const store = remember ? localStorage : sessionStorage
+  store.setItem('userId', id)
   if (token) {
-    localStorage.setItem('authToken', token)
+    store.setItem('authToken', token)
   }
 }
 
 export const getUserId = () => {
   // 无 token 视为未登录（token 才是有效凭证）
-  if (!localStorage.getItem('authToken')) return null
-  return localStorage.getItem('userId')
+  if (!getAuthToken()) return null
+  return localStorage.getItem('userId') || sessionStorage.getItem('userId')
 }
 
-const getAuthToken = () => localStorage.getItem('authToken')
+const getAuthToken = () => localStorage.getItem('authToken') || sessionStorage.getItem('authToken')
 
 const client = axios.create({
   baseURL: '/api',
@@ -100,7 +103,7 @@ client.interceptors.response.use(
   // 若后续需要可改为返回 resp 或在 data 上挂载 _headers 字段。
   (resp) => resp.data,
   (error) => {
-    // 401 会话失效：清除本地凭证，不在首页则整页跳转首页（清空内存态）。
+    // 401 会话失效：清除本地凭证，不在登录页则整页跳转登录页（清空内存态）。
     // 普通未登录（无 token）的 401 静默 reject，不弹错误通知。
     if (error.response?.status === 401) {
       const hadToken = !!getAuthToken()
@@ -108,8 +111,11 @@ client.interceptors.response.use(
       localStorage.removeItem('userId')
       localStorage.removeItem('userRole')
       localStorage.removeItem('permissions')
-      if (hadToken && window.location.pathname !== (import.meta.env.BASE_URL || '/')) {
-        window.location.href = import.meta.env.BASE_URL || '/'
+      sessionStorage.removeItem('authToken')
+      sessionStorage.removeItem('userId')
+      const loginPath = `${import.meta.env.BASE_URL || '/'}login`
+      if (hadToken && window.location.pathname !== loginPath) {
+        window.location.href = loginPath
       }
       return Promise.reject(error)
     }

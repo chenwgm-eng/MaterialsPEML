@@ -86,9 +86,17 @@
           <a-button size="small" @click="onReset">
             <ReloadOutlined /> 重置
           </a-button>
-          <a-button size="small" type="danger" ghost :disabled="!archiveDate" @click="onArchive">
-            <ClockCircleOutlined /> 归档
-          </a-button>
+          <a-popconfirm
+            title="确认归档该日期之前的全部审计记录？归档后主表记录将被清除且不可恢复。"
+            ok-text="归档"
+            cancel-text="取消"
+            :disabled="!archiveDate"
+            @confirm="onArchive"
+          >
+            <a-button size="small" type="danger" ghost :disabled="!archiveDate">
+              <ClockCircleOutlined /> 归档
+            </a-button>
+          </a-popconfirm>
         </a-space>
       </template>
 

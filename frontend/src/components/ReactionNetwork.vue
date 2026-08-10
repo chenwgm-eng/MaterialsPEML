@@ -359,7 +359,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #8a92a6;
+  color: var(--text-muted);
   font-size: 14px;
 }
 

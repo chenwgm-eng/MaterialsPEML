@@ -382,26 +382,26 @@ export async function loadUnitSymbols() {
 
   _unitSymbolsLoading = (async () => {
     const result = {}
-    const dimensions = Object.keys(PREFERRED_UNIT_CODE)
-    await Promise.all(
-      dimensions.map(async (dim) => {
-        try {
-          const data = await mdmApi.listUnits(dim)
-          const list = Array.isArray(data) ? data : (data?.units || [])
-          const preferred = list.find(
-            (u) => u.unit_code === PREFERRED_UNIT_CODE[dim] && u.is_active,
-          )
-          if (preferred?.symbol) {
-            // 温度特殊处理：MDM symbol 为 "C"，显示为 "°C"
-            result[dim] = dim === 'temperature' ? '°C' : preferred.symbol
-          } else {
-            result[dim] = FALLBACK_SYMBOL[dim]
-          }
-        } catch {
-          result[dim] = FALLBACK_SYMBOL[dim]
-        }
-      }),
-    )
+    try {
+      // 一次拉取全部单位主数据（dimension 为空即返回全部），
+      // 避免并行发起 20+ 个按维度请求，防止浏览器中断产生 ERR_ABORTED 日志。
+      const data = await mdmApi.listUnits()
+      const list = Array.isArray(data) ? data : (data?.units || [])
+      for (const dim of Object.keys(PREFERRED_UNIT_CODE)) {
+        const preferred = list.find(
+          (u) => u.dimension === dim && u.unit_code === PREFERRED_UNIT_CODE[dim] && u.is_active,
+        )
+        // 温度特殊处理：MDM symbol 为 "C"，显示为 "°C"
+        result[dim] = preferred?.symbol
+          ? (dim === 'temperature' ? '°C' : preferred.symbol)
+          : FALLBACK_SYMBOL[dim]
+      }
+    } catch {
+      // 拉取失败则整体回退到默认符号
+      for (const dim of Object.keys(FALLBACK_SYMBOL)) {
+        result[dim] = FALLBACK_SYMBOL[dim]
+      }
+    }
     _unitSymbolMap.value = result
     _unitSymbolsLoaded = true
     _unitSymbolsLoading = null

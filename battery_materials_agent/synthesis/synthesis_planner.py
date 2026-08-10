@@ -61,6 +61,8 @@ class SynthesisRoute(BaseModel):
     is_feasible: bool = False
     confidence: float = 0.0
     provenance: list[dict] = Field(default_factory=list)
+    # 路线来源（AI 透明性）：askcos / internlm / local_template / scp
+    source: str = ""
 
 
 class SynthesisPlanner:
@@ -91,10 +93,16 @@ class SynthesisPlanner:
             config = None
 
         if config is None:
-            config = AgentConfig(
-                askcos=ASKCOSConfig(base_url=askcos_url, timeout=timeout),
-                engine_mode=EngineMode.LEGACY,
-            )
+            # 默认复用应用级全局配置（含 InternLM/ASKCOS/EngineMode 等），
+            # 避免无参构造时空 AgentConfig 导致 InternLM 凭据缺失。
+            try:
+                from ..config import get_config
+                config = get_config()
+            except Exception:
+                config = AgentConfig(
+                    askcos=ASKCOSConfig(base_url=askcos_url, timeout=timeout),
+                    engine_mode=EngineMode.LEGACY,
+                )
 
         self.config = config
         self.askcos_url = config.askcos.base_url.rstrip("/")
@@ -186,6 +194,10 @@ class SynthesisPlanner:
             steps = self._parse_tree(tree)
             # ASKCOS 树中 plausibility 在子反应节点上，取最大值作为路径评分
             score = self._extract_tree_score(tree)
+            # 空树（仅有目标根节点、无任何反应）视为未找到合成路线，
+            # 跳过以触发调用方本地树兜底，避免生成"0 步"空路线误导用户
+            if not steps:
+                continue
             routes.append(SynthesisRoute(
                 target_smiles=smiles,
                 steps=steps,
@@ -194,6 +206,7 @@ class SynthesisPlanner:
                 feasibility_score=score,
                 is_feasible=score > 0.3,
                 confidence=score,
+                source="askcos",
             ))
         return routes
 
@@ -357,6 +370,7 @@ class SynthesisPlanner:
                 feasibility_score=score,
                 is_feasible=score > 0.3,
                 confidence=score,
+                source="internlm",
             ))
 
         if not routes:
@@ -508,6 +522,7 @@ class SynthesisPlanner:
                 feasibility_score=score,
                 is_feasible=score > 0.3,
                 confidence=score * 0.85,
+                source="internlm",
                 provenance=[
                     {"method": method, "key_notes": key_notes, "precursors": precursors},
                     *([{
@@ -707,6 +722,7 @@ class SynthesisPlanner:
                 feasibility_score=score,
                 is_feasible=score > 0.3,
                 confidence=score * 0.8,
+                source="local_template",
             ))
 
         return routes
@@ -855,6 +871,8 @@ class SynthesisPlanner:
                 "routes": route_dicts,
                 "count": len(route_dicts),
                 "best_route": route_dicts[0] if route_dicts else None,
+                "engine": "internlm",
+                "used_local_fallback": False,
                 **meta,
             }
 
@@ -871,16 +889,18 @@ class SynthesisPlanner:
 
         all_routes: list[SynthesisRoute] = []
         last_error: Exception | None = None
+        used_local_fallback = False
         for r in results:
             if isinstance(r, Exception):
                 last_error = r
                 continue
             all_routes.extend(r)
 
-        # 全部失败时回退到本地合成树（保证功能可用性）
+        # 全部失败时回退到本地合成树（保证功能可用性）——必须显式标记来源
         if not all_routes:
             for d in depths:
                 all_routes.extend(self._build_local_tree(smiles, max_depth=d, num_routes=num_routes))
+            used_local_fallback = True
 
         # 去重：以反应物集合为指纹，相似路径只保留评分最高的一条
         seen: dict[frozenset, SynthesisRoute] = {}
@@ -892,10 +912,15 @@ class SynthesisPlanner:
 
         deduped = sorted(seen.values(), key=lambda r: r.feasibility_score, reverse=True)[:num_routes]
         route_dicts = [self._route_to_dict(r, idx) for idx, r in enumerate(deduped)]
+        # AI 透明性：标记实际使用的引擎与是否发生本地模板回退
+        engines = sorted({r.source for r in deduped if r.source})
         return {
             "routes": route_dicts,
             "count": len(route_dicts),
             "best_route": route_dicts[0] if route_dicts else None,
+            "engine": ",".join(engines) if engines else (engine_type or "askcos"),
+            "used_local_fallback": used_local_fallback,
+            "last_error": str(last_error)[:200] if last_error else "",
         }
 
     def _route_to_dict(self, route: SynthesisRoute, idx: int) -> dict:
@@ -914,6 +939,7 @@ class SynthesisPlanner:
             "is_feasible": route.is_feasible,
             "overall_score": route.overall_score,
             "estimated_cost": self._estimate_cost(route),
+            "source": route.source,
         }
 
     def _estimate_cost(self, route: SynthesisRoute) -> float:

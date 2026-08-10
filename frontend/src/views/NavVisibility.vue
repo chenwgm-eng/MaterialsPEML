@@ -1,5 +1,9 @@
 <template>
   <div class="nav-visibility-page page-shell">
+    <div class="page-header">
+      <h1 class="page-title">导航可见性</h1>
+      <p class="page-subtitle">按角色配置左侧导航入口的显示与隐藏</p>
+    </div>
     <!-- 顶部固定提示条（设计文档 4.E） -->
     <a-alert
       type="info"

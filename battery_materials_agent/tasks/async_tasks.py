@@ -36,6 +36,23 @@ def register(name: str, type: str = "computation", detail: str = "") -> str:
     return task_id
 
 
+def register_with_id(task_id: str, name: str, type: str = "computation", detail: str = "") -> str:
+    """以指定 id 登记后台任务（供既有业务 task_id 复用，如 Agent 生成任务）。"""
+    with _lock:
+        if task_id not in _tasks:
+            _tasks[task_id] = {
+                "id": task_id,
+                "name": name,
+                "type": type,
+                "status": "running",
+                "progress": 0,
+                "detail": detail,
+                "started_at": round(time.time(), 3),
+                "completed_at": None,
+            }
+    return task_id
+
+
 def update(task_id: str, **fields) -> None:
     """更新任务字段；置为 completed/failed 时自动记录完成时间。"""
     with _lock:

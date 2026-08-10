@@ -601,6 +601,7 @@ class AgenticExecutor:
             (["合成", "synthesis", "可行性"], "check_synthesis_feasibility"),
             (["实验", "experiment", "查询结果", "测试结果"], "get_experiment_results"),
             (["配方", "工业化", "量产", "BOM", "BOP", "合规", "成本", "formula", "industrial"], "design_formula"),
+            (["文献", "调研", "综述", "literature", "检索", "知识图谱", "research", "search", "论文"], "search_literature"),
             (["预测", "predict"], None),  # 需要进一步区分晶体/聚合物
             (["路由", "route", "分发", "调度"], "route_material"),
         ]
@@ -638,39 +639,43 @@ class AgenticExecutor:
 
         # ── CapabilityRouter (生效模式) — 契约门禁 ──
         # 解析 alias 到候选 binding；若契约不可调用且无 fallback，直接拒绝。
+        # 注意：Router 按语义别名解析，而本方法持有 MCP 工具名，
+        # 先做工具名 → 别名反向映射；无对应别名的工具视为无契约约束，跳过门禁。
         _resolved_binding = None  # 优先使用 Router 解析出的 binding
         _degraded_info = ""
         if self._capability_router is not None and hasattr(self._capability_router, 'resolve'):
             import logging
             _cr_logger = logging.getLogger(__name__)
             try:
-                candidates = _run_async_safe(
-                    self._capability_router.resolve(
-                        tool_name, self._execution_profile or "standard"
+                _alias = getattr(self._capability_router, 'tool_to_alias', lambda _t: '')(tool_name)
+                if _alias:
+                    candidates = _run_async_safe(
+                        self._capability_router.resolve(
+                            _alias, self._execution_profile or "standard"
+                        )
                     )
-                )
-                if not candidates:
-                    # 契约门禁拒绝：主能力不可调用且 fallback 链全部不可用
-                    _cr_logger.warning(
-                        "CapabilityRouter blocked tool %s: no callable candidates "
-                        "(contract deprecated/pending and no fallback available)",
-                        tool_name,
+                    if not candidates:
+                        # 契约门禁拒绝：主能力不可调用且 fallback 链全部不可用
+                        _cr_logger.warning(
+                            "CapabilityRouter blocked tool %s: no callable candidates "
+                            "(contract deprecated/pending and no fallback available)",
+                            tool_name,
+                        )
+                        return {
+                            "error": f"工具 {tool_name} 被契约门禁拒绝：契约不可调用且无可用 fallback",
+                            "blocked_by": "capability_contract",
+                            "tool": tool_name,
+                        }
+                    best = candidates[0]
+                    _resolved_binding = best.binding_id
+                    if best.degraded:
+                        _degraded_info = f" (degraded from {best.fallback_from})"
+                    _cr_logger.info(
+                        "CapabilityRouter resolved %s -> %s (source=%s, score=%.3f, status=%s%s)",
+                        tool_name, best.binding_id, best.source,
+                        getattr(best, 'relevance_score', 0.0),
+                        best.contract_status or "unknown", _degraded_info,
                     )
-                    return {
-                        "error": f"工具 {tool_name} 被契约门禁拒绝：契约不可调用且无可用 fallback",
-                        "blocked_by": "capability_contract",
-                        "tool": tool_name,
-                    }
-                best = candidates[0]
-                _resolved_binding = best.binding_id
-                if best.degraded:
-                    _degraded_info = f" (degraded from {best.fallback_from})"
-                _cr_logger.info(
-                    "CapabilityRouter resolved %s -> %s (source=%s, score=%.3f, status=%s%s)",
-                    tool_name, best.binding_id, best.source,
-                    getattr(best, 'relevance_score', 0.0),
-                    best.contract_status or "unknown", _degraded_info,
-                )
             except Exception as e:
                 _cr_logger.warning(
                     "CapabilityRouter resolve failed for %s: %s (falling back to direct)",
@@ -771,6 +776,11 @@ class AgenticExecutor:
             return {"material_input": {"name": target, "formula": material_id or "LiCoO2"}}
         if tool_name == "design_formula":
             return {"target_material": {"target_property": "ionic_conductivity", "candidate": material_id or target}}
+        if tool_name == "search_literature":
+            # 以任务描述为检索词（文献调研），退回 target 文本
+            return {"query": task or target, "limit": 10}
+        if tool_name == "build_knowledge_graph":
+            return {"papers": prev_outputs or []}
         return {}
 
     def _default_material_from_keywords(self, target: str) -> str:

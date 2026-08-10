@@ -152,7 +152,7 @@
           description="该任务单暂无分析简报，将在 QC 通过后自动生成"
         />
         <div v-else class="analysis-brief-section">
-          <div class="analysis-section-title">📊 分析简报</div>
+          <div class="analysis-section-title">分析简报</div>
           <a-alert :message="analysisBrief.analysis?.summary" type="info" show-icon style="margin-bottom: 12px" />
           <div v-if="analysisBrief.analysis?.statistics" class="analysis-stat-grid">
             <a-card size="small" class="stat-card">
@@ -662,7 +662,7 @@ const materialColumns = computed(() => [
 
 // ---- 辅助函数 ----
 function qcSeverityColor(severity) {
-  const map = { info: '#3b82f6', warning: 'gold', error: '#ef4444', critical: '#8b5cf6' }
+  const map = { info: '#3b82f6', warning: 'gold', error: '#ef4444', critical: '#dc2626' }
   return map[severity] || '#64748b'
 }
 
@@ -692,12 +692,12 @@ function committeeTypeLabel(type) {
 }
 
 function causeCategoryColor(category) {
-  const map = { '数据质量': '#ef4444', '模型适用域': '#f59e0b', '工艺偏差': '#3b82f6', '新机理信号': '#8b5cf6' }
+  const map = { '数据质量': '#ef4444', '模型适用域': '#f59e0b', '工艺偏差': '#3b82f6', '新机理信号': '#06b6d4' }
   return map[category] || '#64748b'
 }
 
 function actionColor(action) {
-  const map = { '补测': '#3b82f6', '复验': '#f59e0b', '模型更新': '#8b5cf6', '策略调整': 'geekblue' }
+  const map = { '补测': '#3b82f6', '复验': '#f59e0b', '模型更新': '#06b6d4', '策略调整': 'geekblue' }
   return map[action] || '#64748b'
 }
 </script>

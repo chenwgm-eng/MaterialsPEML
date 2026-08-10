@@ -2,7 +2,7 @@
  * 统一的颜色常量（供 echarts/inline 样式等无法使用 CSS 变量的场景）。
  *
  * 与 global.css 的语义色保持一致：
- *   - primary: 主色橙 #f97316
+ *   - primary: 主色橙 #1d4ed8
  *   - success: 成功绿 #00b42a
  *   - warning: 警告橙 #ff7d00
  *   - error:   错误红 #f53f3f
@@ -13,9 +13,9 @@
  */
 
 // 主色板（与 global.css 同步）
-export const PRIMARY = '#f97316'
-export const PRIMARY_HOVER = '#ea670c'
-export const PRIMARY_LIGHT = '#fb923c'
+export const PRIMARY = '#1d4ed8'
+export const PRIMARY_HOVER = '#1e40af'
+export const PRIMARY_LIGHT = '#3b82f6'
 export const PRIMARY_BG_RGBA = 'rgba(249, 115, 22, 0.08)'
 export const PRIMARY_BORDER_RGBA = 'rgba(249, 115, 22, 0.3)'
 

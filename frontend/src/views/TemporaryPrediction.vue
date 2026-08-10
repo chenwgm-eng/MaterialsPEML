@@ -224,7 +224,9 @@
 
             <!-- 头像 + 名称 + 角色标签 -->
             <div class="predict-head">
-              <div class="predict-avatar">{{ selectedAgent.avatar || '🤖' }}</div>
+              <div class="predict-avatar">
+                <component :is="selectedAgentIcon" aria-hidden="true" />
+              </div>
               <div class="predict-info">
                 <div class="predict-name">{{ selectedAgent.name || '材料发现' }}</div>
                 <div class="predict-tags-row">
@@ -511,7 +513,7 @@
                     <template #title>
                       <a-tag color="blue">{{ item.from_scale }}</a-tag>
                       →
-                      <a-tag color="purple">{{ item.to_scale }}</a-tag>
+                      <a-tag color="blue">{{ item.to_scale }}</a-tag>
                       <span style="margin-left: 8px">{{ item.property }}</span>
                     </template>
                     <template #description>{{ item.description }}</template>
@@ -645,6 +647,7 @@ import { listProjects, listProjectTasks } from '@/api/projects'
 import client from '@/api/client'
 import { formatSci } from '@/utils/format'
 import { useMdmDict, useUnitSymbols } from '@/utils/mdmDict'
+import { resolveAgentIcon } from '@/utils/agentAvatar'
 import { industrialCategoryLabel } from '@/constants/materialTypes'
 import { DEFAULT_MULTI_OBJECTIVE_CONFIG, MULTI_OBJECTIVE_OPTIONS } from '@/constants/objectiveConfig'
 import DisabledButton from '@/components/DisabledButton.vue'
@@ -685,6 +688,8 @@ const agentLoading = ref(false)
 const selectedAgent = computed(() =>
   capableAgents.value.find((a) => a.id === selectedAgentId.value) || capableAgents.value[0] || null
 )
+
+const selectedAgentIcon = computed(() => resolveAgentIcon(selectedAgent.value?.avatar))
 
 async function loadCapableAgents() {
   agentLoading.value = true
@@ -1942,7 +1947,7 @@ async function doPromote() {
 }
 
 .shortage {
-  color: #fa8c16;
+  color: #1d4ed8;
   font-weight: 500;
 }
 

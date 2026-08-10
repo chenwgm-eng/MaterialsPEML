@@ -84,6 +84,51 @@ export const useDiscoveryStore = defineStore('discovery', () => {
     }
   }
 
+  /**
+   * 非阻塞后台生成：提交异步任务后立即返回 task_id，由后台轮询更新进度；
+   * 完成后自动回填候选并触发批量预测。页面可离开，通过右下角任务组件查看/跳转。
+   */
+  async function agentGenerateBackground(params) {
+    loading.value = true
+    currentOperation.value = 'agent-generate'
+    agentProgress.value = 0
+    agentStepLabel.value = '正在提交后台任务…'
+    let taskId = ''
+    try {
+      const startRes = await agentGenerateAsync(params)
+      taskId = startRes?.task_id || ''
+      if (!taskId) {
+        throw new Error('后台任务创建失败，请稍后重试')
+      }
+      agentTaskId.value = taskId
+    } catch (e) {
+      loading.value = false
+      currentOperation.value = ''
+      throw e
+    }
+    // 后台轮询（不阻塞调用方）
+    _pollInBackground(taskId, params)
+    return { task_id: taskId }
+  }
+
+  async function _pollInBackground(taskId, params) {
+    try {
+      const res = await _pollAgentProgress(taskId)
+      crystalCandidates.value = res.candidates || []
+      agentReasoning.value = res.reasoning || ''
+      agentInfo.value = res.agent || null
+      agentProgress.value = 100
+      agentStepLabel.value = '生成完成'
+      _autoBatchPredict(res.candidates || [], params)
+    } catch (e) {
+      agentProgress.value = 0
+      agentStepLabel.value = e?.message || 'Agent 生成失败'
+    } finally {
+      loading.value = false
+      currentOperation.value = ''
+    }
+  }
+
   // 需求7：自动批量预测——生成候选后自动执行，更新三点状态
   async function _autoBatchPredict(candidates, params) {
     if (!candidates?.length) return
@@ -248,6 +293,7 @@ export const useDiscoveryStore = defineStore('discovery', () => {
     generate,
     route,
     agentGenerate,
+    agentGenerateBackground,
     batchPredict,
     clearCandidates,
   }

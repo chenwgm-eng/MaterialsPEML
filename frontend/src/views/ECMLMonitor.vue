@@ -35,36 +35,34 @@
       </template>
     </a-alert>
 
-    <!-- Control Panel -->
-    <ECMLControlPanel
-      :form="form"
-      :property-options="propertyOptions"
-      :running="ecmlStore.running"
-      :cancelled="cancelled"
-      :prerequisites-met="prerequisitesMet"
-      :multi-objective-options="multiObjectiveOptions"
-      :multi-objective-config="multiObjectiveConfig"
-      :hide-objective-weights="hideObjectiveWeights"
-      @run="onRun"
-      @cancel="onCancel"
-      @run-again="onRunAgain"
-    />
+    <!-- 分区一：运行配置与策略（配置 → 启动） -->
+    <div class="ecml-zone">
+      <div class="ecml-zone-title"><SettingOutlined /> 运行配置与策略</div>
+      <!-- Control Panel -->
+      <ECMLControlPanel
+        :form="form"
+        :property-options="propertyOptions"
+        :running="ecmlStore.running"
+        :cancelled="cancelled"
+        :prerequisites-met="prerequisitesMet"
+        :multi-objective-options="multiObjectiveOptions"
+        :multi-objective-config="multiObjectiveConfig"
+        :hide-objective-weights="hideObjectiveWeights"
+        @run="onRun"
+        @cancel="onCancel"
+        @run-again="onRunAgain"
+      />
 
-    <!-- 贝叶斯优化决策引擎：策略配置 + 训练池统计 + 运行态可视化 + 复核下发 -->
-    <ECMLStrategyPanel
-      :run-id="currentRunId"
-      :target="form.target"
-      :target-property="form.target_property"
-      :pool-stats="boRound?.pool"
-      @start="onStrategyStart"
-      @acquisition-change="(v) => (currentAcquisition = v)"
-    />
-
-    <ECMLRoundResult
-      :round="boRound"
-      :current-scenario-id="currentScenarioId"
-      @confirmed="onRoundConfirmed"
-    />
+      <!-- 贝叶斯优化决策引擎：策略配置 + 训练池统计 + 运行态可视化 + 复核下发 -->
+      <ECMLStrategyPanel
+        :run-id="currentRunId"
+        :target="form.target"
+        :target-property="form.target_property"
+        :pool-stats="boRound?.pool"
+        @start="onStrategyStart"
+        @acquisition-change="(v) => (currentAcquisition = v)"
+      />
+    </div>
 
     <!-- 失败状态提示 -->
     <a-alert
@@ -80,26 +78,29 @@
       </template>
     </a-alert>
 
-    <!-- Step Flow -->
-    <a-card class="flow-card" :bordered="false" v-if="ecmlStore.state">
-      <template #title>
-        <div class="flow-title">
-          <span>执行状态</span>
-          <a-space>
-            <a-tag v-if="cancelled" color="orange">已取消</a-tag>
-            <template v-else-if="ecmlStore.state?.is_complete">
-              <a-tag color="green">已完成</a-tag>
-              <a-button size="small" type="primary" @click="onRunAgain">再次运行</a-button>
-            </template>
-            <a-tag v-else-if="runStatus === 'timeout'" color="red">运行超时</a-tag>
-            <a-tag v-else-if="runStatus === 'failed'" color="red">运行失败</a-tag>
-            <a-tag v-else color="processing">运行中</a-tag>
-            <a-button v-if="ecmlStore.running" size="small" @click="showIntermediate = true">
-              查看中间结果
-            </a-button>
-          </a-space>
-        </div>
-      </template>
+    <!-- 分区二：执行状态（运行进度） -->
+    <div class="ecml-zone">
+      <div class="ecml-zone-title"><SyncOutlined /> 执行状态</div>
+      <!-- Step Flow -->
+      <a-card class="flow-card" :bordered="false" v-if="ecmlStore.state">
+        <template #title>
+          <div class="flow-title">
+            <span>执行状态</span>
+            <a-space>
+              <a-tag v-if="cancelled" color="orange">已取消</a-tag>
+              <template v-else-if="ecmlStore.state?.is_complete">
+                <a-tag color="green">已完成</a-tag>
+                <a-button size="small" type="primary" @click="onRunAgain">再次运行</a-button>
+              </template>
+              <a-tag v-else-if="runStatus === 'timeout'" color="red">运行超时</a-tag>
+              <a-tag v-else-if="runStatus === 'failed'" color="red">运行失败</a-tag>
+              <a-tag v-else color="processing">运行中</a-tag>
+              <a-button v-if="ecmlStore.running" size="small" @click="showIntermediate = true">
+                查看中间结果
+              </a-button>
+            </a-space>
+          </div>
+        </template>
       <!-- 进度信息 -->
       <div v-if="ecmlStore.running || runStatus === 'running'" class="progress-info">
         <a-spin size="small" />
@@ -134,6 +135,17 @@
         @step-click="onStepClick"
       />
     </a-card>
+    </div>
+
+    <!-- 分区三：结果与反馈（本轮回合结果 → 委员会门禁 → 结果概览 → 候选详情 → 分析简报） -->
+    <div class="ecml-zone">
+      <div class="ecml-zone-title"><ExperimentOutlined /> 结果与反馈</div>
+
+    <ECMLRoundResult
+      :round="boRound"
+      :current-scenario-id="currentScenarioId"
+      @confirmed="onRoundConfirmed"
+    />
 
     <!-- Committee Gate + DFT Queue（由子组件内部 watch 拉取） -->
     <ECMLCommitteePanel
@@ -226,7 +238,7 @@
     </a-card>
 
     <!-- 实验分析简报（QC 通过后由 ExperimentAnalystAgent 生成） -->
-    <a-card class="detail-card" :bordered="false" v-if="ecmlAnalysisBrief?.analysis" title="📊 分析简报">
+    <a-card class="detail-card" :bordered="false" v-if="ecmlAnalysisBrief?.analysis" title="分析简报">
       <a-alert :message="ecmlAnalysisBrief.analysis?.summary" type="info" show-icon style="margin-bottom: 12px" />
       <a-row v-if="ecmlAnalysisBrief.analysis?.statistics" :gutter="16">
         <a-col :xs="12" :sm="6">
@@ -778,6 +790,7 @@
       </div>
       <EmptyState v-else type="data" description="请点击上方流程节点查看详情" />
     </a-drawer>
+    </div>
 
   </div>
 </template>
@@ -789,6 +802,9 @@ import { message, Empty } from 'ant-design-vue'
 import {
   HistoryOutlined,
   EyeOutlined,
+  SettingOutlined,
+  SyncOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons-vue'
 import { useECMLStore } from '@/stores/ecml'
 import { getOptions } from '@/api/properties'
@@ -1817,6 +1833,23 @@ onUnmounted(() => {
 .ecml-monitor {
   width: 100%;
   max-width: 100%;
+}
+
+/* 分区布局（#8）：配置→执行→结果 三段式，视觉分层清晰 */
+.ecml-zone {
+  margin-bottom: var(--space-xl, 20px);
+}
+
+.ecml-zone-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 4px 0 10px;
+  border-bottom: 2px solid var(--primary-border);
+  margin-bottom: 12px;
 }
 
 .ecml-header {

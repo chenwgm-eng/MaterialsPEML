@@ -18,27 +18,38 @@
       v-model:value="selectedId"
       show-search
       option-filter-prop="label"
-      placeholder="选择项目"
+      placeholder="选择项目（全部项目）"
       class="locator-select"
       :loading="loading"
       @change="onSelect"
     >
+      <a-select-option value="" label="全部项目">
+        <span class="locator-all-opt">全部项目</span>
+      </a-select-option>
       <a-select-option v-for="p in projectOptions" :key="p.value" :value="p.value" :label="p.label">
         {{ p.label }}
       </a-select-option>
     </a-select>
 
-    <!-- 常用项目（最近访问 MRU，≤5） -->
-    <div v-if="mruProjects.length" class="mru-list">
-      <div
-        v-for="p in mruProjects"
-        :key="p.project_id"
-        :class="['mru-item', { active: p.project_id === selectedId }]"
-        @click="selectProject(p)"
-      >
-        <span class="mru-name" :title="p.name">{{ p.name }}</span>
-      </div>
-    </div>
+    <!-- 任务选择器（项目空间 #1：联动当前项目，可全部任务） -->
+    <a-select
+      v-if="selectedId"
+      v-model:value="selectedTaskId"
+      show-search
+      option-filter-prop="label"
+      placeholder="选择任务（全部任务）"
+      class="locator-select locator-task-select"
+      :loading="tasksLoading"
+      :not-found-content="tasksLoading ? '加载中…' : '暂无任务'"
+      @change="onTaskSelect"
+    >
+      <a-select-option value="" label="全部任务">
+        <span class="locator-all-opt">全部任务</span>
+      </a-select-option>
+      <a-select-option v-for="t in taskOptions" :key="t.value" :value="t.value" :label="t.label">
+        {{ t.label }}
+      </a-select-option>
+    </a-select>
 
     <!-- 新建下拉（权限过滤） -->
     <div class="locator-actions">
@@ -48,7 +59,7 @@
         </a-button>
         <template #overlay>
           <a-menu @click="onCreateClick">
-            <a-menu-item v-for="item in createItems" :key="item.key">{{ item.label }}</a-menu-item>
+            <a-menu-item v-for="item in createItems" :key="item.path">{{ item.label }}</a-menu-item>
           </a-menu>
         </template>
       </a-dropdown>
@@ -73,55 +84,49 @@ const router = useRouter()
 const projectCtx = useProjectContextStore()
 
 const selectedId = ref(props.projectId || '')
+const selectedTaskId = ref('')
 const loading = ref(false)
-const mruProjects = ref([])
-
-const MRU_KEY = 'recentProjectIds'
 
 const projectOptions = computed(() =>
   projectCtx.projectList.map((p) => ({ value: p.project_id, label: p.name || p.project_id })),
 )
 
-function readMru() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(MRU_KEY) || '[]')
-    const pool = projectCtx.projectList
-    mruProjects.value = raw
-      .map((id) => pool.find((p) => p.project_id === id))
-      .filter(Boolean)
-      .slice(0, 5)
-  } catch {
-    mruProjects.value = []
-  }
-}
+const taskOptions = computed(() =>
+  projectCtx.taskList.map((t) => ({
+    value: t.task_id,
+    label: t.title || t.task_id,
+  })),
+)
 
-function touchMru(p) {
-  if (!p?.project_id) return
-  try {
-    const raw = JSON.parse(localStorage.getItem(MRU_KEY) || '[]')
-    const next = [p.project_id, ...raw.filter((id) => id !== p.project_id)]
-    localStorage.setItem(MRU_KEY, JSON.stringify(next.slice(0, 5)))
-  } catch {
-    /* ignore */
-  }
-}
+const tasksLoading = computed(() => projectCtx.tasksLoading)
 
 function selectProject(p) {
-  if (!p) return
-  selectedId.value = p.project_id
+  // p=null 表示「全部项目」：清空上下文，任务选择器隐藏
+  selectedId.value = p?.project_id || ''
   projectCtx.setCurrentProject(p)
-  touchMru(p)
-  readMru()
+  selectedTaskId.value = ''
+  projectCtx.setCurrentTask(null)
+  if (p) {
+    // 联动加载当前项目任务（供任务选择器）
+    projectCtx.fetchTasks(p.project_id)
+  }
   emit('refresh')
 }
 
 function onSelect(value) {
-  const p = projectCtx.projectList.find((x) => x.project_id === value)
+  const p = value ? projectCtx.projectList.find((x) => x.project_id === value) : null
   selectProject(p)
 }
 
+function onTaskSelect(value) {
+  const t = value ? projectCtx.taskList.find((x) => x.task_id === value) : null
+  projectCtx.setCurrentTask(t)
+  emit('refresh')
+}
+
 function onCreateClick({ key }) {
-  const item = props.createItems.find((i) => i.key === key)
+  // createItems 以 path 为键（旧实现误用 item.key 导致点击无效，#2）
+  const item = props.createItems.find((i) => i.path === key)
   if (item?.path) router.push(item.path)
 }
 
@@ -136,7 +141,11 @@ async function boot() {
       projectCtx.setCurrentProject(projectCtx.projectList[0])
     }
     selectedId.value = projectCtx.currentProjectId || props.projectId || ''
-    readMru()
+    // 恢复任务上下文（若有）
+    if (selectedId.value) {
+      await projectCtx.fetchTasks(selectedId.value)
+      selectedTaskId.value = projectCtx.currentTaskId || ''
+    }
   } finally {
     loading.value = false
   }
@@ -158,11 +167,12 @@ onMounted(boot)
   justify-content: space-between;
 }
 .locator-title {
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--sidebar-text);
 }
 .mru-reload {
   color: var(--text-muted);
@@ -170,31 +180,12 @@ onMounted(boot)
 .locator-select {
   width: 100%;
 }
-.mru-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.locator-task-select {
+  margin-top: -2px;
 }
-.mru-item {
-  padding: 6px 10px;
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-.mru-item:hover {
-  background: var(--surface-hover);
-}
-.mru-item.active {
-  background: var(--sidebar-active);
-  color: var(--sidebar-text-active);
-}
-.mru-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
+.locator-all-opt {
+  color: var(--text-muted);
+  font-weight: 600;
 }
 .locator-actions {
   margin-top: 2px;

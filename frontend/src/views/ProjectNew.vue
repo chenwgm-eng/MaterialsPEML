@@ -229,8 +229,10 @@
             <div class="pm-panel-title">项目经理 Agent</div>
 
             <!-- 头像 + 名称 + 角色标签 -->
-            <div class="pm-head">
-              <div class="pm-avatar">{{ pmAgent.avatar || '🤖' }}</div>
+              <div class="pm-head">
+                <div class="pm-avatar">
+                  <component :is="pmAgentIcon" aria-hidden="true" />
+                </div>
               <div class="pm-info">
                 <div class="pm-name">{{ pmAgent.name || '项目经理' }}</div>
                 <div class="pm-tags-row">
@@ -326,7 +328,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -343,6 +345,8 @@ import { listAgents } from '@/api/agents'
 import { listUsers } from '@/api/auth'
 import { required, lengthRange } from '@/utils/formRules'
 import EmptyState from '@/components/EmptyState.vue'
+import { resolveAgentIcon } from '@/utils/agentAvatar'
+import { useLeaveGuard } from '@/composables/useLeaveGuard'
 
 // props.embedded: 嵌入到 Projects.vue 右侧面板使用时为 true，
 // 此时隐藏顶部 SectionHeader 并通过 emit 与父组件通信，避免整页跳转
@@ -378,6 +382,7 @@ const formRules = {
 // ── 项目经理 Agent 信息（右侧面板展示） ──
 const pmAgent = ref(null)
 const agentLoading = ref(false)
+const pmAgentIcon = computed(() => resolveAgentIcon(pmAgent.value?.avatar))
 
 const AUTONOMY_LABELS = {
   L0: 'L0 · 仅建议（人工执行）',
@@ -440,6 +445,16 @@ const form = ref({
   owner: '',
   end_date: '',
 })
+
+// T15 离开保护：表单有输入即视为 dirty，离开/刷新需确认
+const { markDirty, markClean } = useLeaveGuard()
+watch(
+  form,
+  (v) => {
+    if (v.name || v.goal || v.target_application || v.owner || v.end_date) markDirty()
+  },
+  { deep: true },
+)
 
 // 表单必填项整体校验（后端同样校验，防止空值/占位符脏数据）
 const isFormValid = computed(
@@ -606,6 +621,7 @@ async function onConfirmSave() {
     }
     const project = await client.post('/projects', projectPayload)
     savedProjectName.value = project.name || form.value.name
+    markClean()
     transitionName.value = 'slide-next'
     phase.value = 'done'
     message.success('项目创建成功')

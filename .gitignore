@@ -103,6 +103,17 @@ trajectory.dump
 lot_jobs_*.txt
 *.xyz
 data/models/polymer_gnn/model.pt
+
+# ===== ASKCOS 模板构建产物 / 临时诊断 / 大数据包 =====
+askcos-deploy/template_build/_*
+askcos-deploy/template_build/extract_restart.err
+askcos-deploy/template_build/_uspto_repo/
+askcos-deploy/template_build/data_from_USPTO_utf8
+askcos-deploy/template_build/retro_templates_full.json.gz
+askcos-deploy/template_build/retro_templates_full.json.ts-reaxys.json.gz
+askcos-deploy/template_build/uspto_raw.tar.gz
+askcos-deploy/template_build/uspto_reactions.tsv.gz
+askcos-deploy/custom/buyables.json.gz
 check_libs.py
 diag_tmp.py
 test_scientific_results*.json

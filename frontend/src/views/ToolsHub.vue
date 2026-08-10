@@ -119,7 +119,7 @@
         <div class="layer-title">
           <span class="layer-number">2</span>
           <span class="layer-name">能力绑定</span>
-          <a-tag color="purple" class="layer-count">{{ capabilityBindings.length }} 个能力</a-tag>
+          <a-tag color="blue" class="layer-count">{{ capabilityBindings.length }} 个能力</a-tag>
         </div>
         <div class="layer-desc">将外部能力封装为 Agent 可调用工具，标注 ECML 研发闭环的接入步骤</div>
       </div>

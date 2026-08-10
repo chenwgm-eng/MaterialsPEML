@@ -62,6 +62,7 @@ function loadAgentsOnce() {
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { isEmojiAvatar } from '@/utils/agentAvatar'
 
 const props = defineProps({
   // 后端 Agent id，如 builtin_industrialization；提供后会从 /agents 拉取真实信息
@@ -80,7 +81,12 @@ onMounted(async () => {
 })
 
 const displayName = computed(() => agent.value?.name || props.fallbackName || '智能体')
-const avatarText = computed(() => agent.value?.avatar || displayName.value.charAt(0) || '🤖')
+// 头像取非 emoji 的自定义文本；emoji 或空时回退为名称首字母
+const avatarText = computed(() => {
+  const av = agent.value?.avatar
+  if (av && !isEmojiAvatar(av)) return av
+  return displayName.value.charAt(0) || 'A'
+})
 
 const ROLE_LABEL = {
   project_manager: '项目经理',

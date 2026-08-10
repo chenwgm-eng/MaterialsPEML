@@ -25,36 +25,21 @@
       style="margin-bottom: 12px"
       @close="recommendedTarget = ''"
     />
-    <!-- 顶部输入区（紧凑单行） -->
+    <!-- 顶部输入区（紧凑单行）：
+         项目/任务选择已上移至左侧「项目定位」面板（三栏方案 #1），此处仅展示当前上下文 -->
     <div class="workbench-header">
       <div class="header-row">
         <span class="header-label">当前项目，</span>
-        <a-select
-          v-model:value="selectedProjectId"
-          :options="projectOptions"
-          placeholder="请选择项目"
-          size="small"
-          class="project-select"
-          show-search
-          option-filter-prop="label"
-          allow-clear
-          :get-popup-container="getPopupContainer"
-          @change="onProjectChange"
-        />
+        <span class="context-value" :class="{ 'context-empty': !projectCtx.currentProject }">
+          {{ projectCtx.currentProject?.name || '全部项目' }}
+        </span>
         <span class="header-label">任务，</span>
-        <a-select
-          v-model:value="selectedTaskId"
-          :options="taskOptions"
-          :placeholder="selectedProjectId ? '请选择任务' : '请先选择项目'"
-          :disabled="!selectedProjectId"
-          size="small"
-          class="task-select"
-          show-search
-          option-filter-prop="label"
-          allow-clear
-          :get-popup-container="getPopupContainer"
-          @change="onTaskChange"
-        />
+        <span class="context-value" :class="{ 'context-empty': !projectCtx.currentTask }">
+          {{ projectCtx.currentTask?.title || '全部任务' }}
+        </span>
+        <a-tooltip title="在左侧「项目定位」中选择项目与任务">
+          <a-tag class="context-tip" color="blue">切换请在左栏</a-tag>
+        </a-tooltip>
         <a-input-number
           v-model:value="numCandidates"
           :min="5"
@@ -225,6 +210,9 @@
             </a-button>
             <a-button :icon="h(SyncOutlined)" @click="goEcmlIteration">送入闭环迭代</a-button>
             <a-button :icon="h(SaveOutlined)" ghost :loading="saveLoading" @click="saveToLibrary">收藏到物料库</a-button>
+            <a-button danger :icon="h(DeleteOutlined)" :loading="deletingCandidate" @click="onDeleteCandidate">
+              删除候选
+            </a-button>
           </div>
         </template>
       </div>
@@ -298,7 +286,7 @@
 
 <script setup>
 import { ref, computed, h, onBeforeUnmount, onMounted, watch } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { ECML_RECOMMENDED_TARGET_KEY } from '@/utils/researchContext'
 import {
   ReloadOutlined,
@@ -316,6 +304,7 @@ import {
   FolderOpenOutlined,
   LoadingOutlined,
   LineChartOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
 import CandidateList from '@/components/CandidateList.vue'
@@ -325,12 +314,16 @@ import TemporaryPrediction from '@/views/TemporaryPrediction.vue'
 import RadarChart from '@/components/RadarChart.vue'
 import { useUnitSymbols } from '@/utils/mdmDict'
 import { useDiscoveryStore } from '@/stores/discovery'
+import { useTaskStore } from '@/stores/tasks'
+import { useProjectContextStore } from '@/stores/projectContext'
 import client from '@/api/client'
 import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
 const route = useRoute()
 const discoveryStore = useDiscoveryStore()
+const taskStore = useTaskStore()
+const projectCtx = useProjectContextStore()
 const { symbols: unitSymbols, load: loadUnitSymbols } = useUnitSymbols()
 
 // ── 主视图模式：workbench（候选材料工作台）/ temp（临时材料性能预测）──
@@ -576,6 +569,12 @@ function onProjectChange() {
   discoveryStore.clearCandidates()
   taskCandidates.value = []
   loadProjectTasks()
+  // 双向联动：本页选择也更新全局上下文（顶部选择器）
+  const pid = selectedProjectId.value
+  if (pid && pid !== projectCtx.currentProjectId) {
+    const p = projects.value.find((x) => x.project_id === pid)
+    if (p) projectCtx.setCurrentProject(p)
+  }
 }
 
 function onTaskChange() {
@@ -583,11 +582,41 @@ function onTaskChange() {
   selectedCandidate.value = null
   discoveryStore.clearCandidates()
   loadTaskCandidates()
+  // 双向联动：本页任务选择更新全局任务上下文
+  const tid = selectedTaskId.value
+  if (tid && tid !== projectCtx.currentTaskId) {
+    const t = projectTasks.value.find((x) => x.task_id === tid)
+    if (t) projectCtx.setCurrentTask(t)
+  }
 }
 
 // 任务下已有候选列表（来自 GET /tasks/{task_id}/candidates）
 const taskCandidates = ref([])
 const taskCandidatesLoading = ref(false)
+
+// 全局上下文 → 本页选择（顶部选择器变化时联动，防循环）
+// 注意：必须放在 taskCandidates/loadTaskCandidates 声明之后（immediate 首次执行会访问它们）
+let syncingFromGlobal = false
+watch(
+  () => [projectCtx.currentProjectId, projectCtx.currentTaskId],
+  ([pid, tid]) => {
+    if (syncingFromGlobal) return
+    syncingFromGlobal = true
+    try {
+      if (pid && pid !== selectedProjectId.value) {
+        selectedProjectId.value = pid
+        onProjectChange()
+      }
+      if (tid && tid !== selectedTaskId.value) {
+        selectedTaskId.value = tid
+        onTaskChange()
+      }
+    } finally {
+      syncingFromGlobal = false
+    }
+  },
+  { immediate: true },
+)
 
 async function loadTaskCandidates() {
   const tid = selectedTaskId.value
@@ -671,27 +700,39 @@ async function onRun() {
 
   _startElapsedTimer()
   try {
-    const res = await discoveryStore.agentGenerate(payload)
-    message.success(`Agent 已生成 ${res.candidates?.length || 0} 个候选材料`)
-    // 生成完成后展开思考过程，让用户了解 Agent 推理逻辑
-    reasoningCollapsed.value = false
-    const list = candidates.value
-    if (list.length > 0) {
-      selectedCandidate.value = { ...list[0] }
-    }
-    // 刷新任务候选列表，确保刷新页面后仍可看到最新候选（D8 修复）
+    // 非阻塞后台任务：提交后立即返回，进度经右下角任务组件/页内步骤条展示
+    const res = await discoveryStore.agentGenerateBackground(payload)
+    taskStore.addTask({
+      id: res.task_id,
+      name: `Agent 生成候选材料（${task.title || '未命名任务'}）`,
+      type: 'agent',
+      link: '/workbench',
+      detail: '正在后台生成候选材料…',
+    })
+    message.success('Agent 生成任务已提交后台执行，可在右下角查看进度')
+    // 生成期间先加载已有候选占位，避免列表空白
     await loadTaskCandidates()
   } catch (err) {
-    // 超时或失败时回退查 DB——后端可能已持久化候选但前端轮询窗口已过
-    message.warning('Agent 生成耗时较长，正在为您加载已有候选…')
-    await loadTaskCandidates()
-    if (taskCandidates.value.length > 0) {
-      message.success(`已加载 ${taskCandidates.value.length} 个候选材料`)
-    }
+    message.error(err?.response?.data?.detail || err?.message || '任务提交失败，请稍后重试', 6)
   } finally {
     _stopElapsedTimer()
   }
 }
+
+// 后台任务完成（agentProgress===100）时刷新任务候选列表并选中首个
+watch(
+  () => discoveryStore.agentProgress,
+  (progress) => {
+    if (progress === 100) {
+      loadTaskCandidates().then(() => {
+        if (taskCandidates.value.length > 0) {
+          selectedCandidate.value = { ...taskCandidates.value[0] }
+        }
+        message.success('Agent 生成完成')
+      })
+    }
+  },
+)
 
 // 默认候选数量，重置时恢复（D6 修复）
 const DEFAULT_NUM_CANDIDATES = 15
@@ -705,6 +746,38 @@ function onReset() {
   taskCandidates.value = []
   numCandidates.value = DEFAULT_NUM_CANDIDATES
   discoveryStore.clearCandidates()
+  // 同步清空全局上下文（否则左侧联动 watch 会立即回填）
+  projectCtx.clearCurrentProject()
+}
+
+// 删除候选材料（#7：被实验/方案/配方引用的候选后端会拒绝，提示改用「淘汰」归档）
+const deletingCandidate = ref(false)
+async function onDeleteCandidate() {
+  const c = selectedCandidate.value
+  if (!c) return
+  const cid = c.candidate_id || c.id || ''
+  if (!cid) return
+  Modal.confirm({
+    title: '删除候选材料',
+    content: `确定删除候选材料「${c.name || c.formula || cid}」吗？删除后不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      deletingCandidate.value = true
+      try {
+        await client.delete(`/candidates/${encodeURIComponent(cid)}`)
+        message.success('候选材料已删除')
+        selectedCandidate.value = null
+        // 刷新任务候选列表
+        if (selectedTaskId.value) await loadTaskCandidates()
+      } catch {
+        // 错误（含引用 409）由拦截器统一提示
+      } finally {
+        deletingCandidate.value = false
+      }
+    },
+  })
 }
 
 // 选中候选材料
@@ -982,6 +1055,27 @@ onMounted(async () => {
   min-width: 220px;
   flex: 1;
   max-width: 320px;
+}
+
+/* 当前上下文展示（#3：选择器已上移至左侧项目定位面板） */
+.context-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-empty {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.context-tip {
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .num-input {

@@ -8,25 +8,26 @@
    ============================================================ */
 
 :root {
-  /* —— Realsee 核心色板（仅供历史组件引用，不覆盖语义色）—— */
-  --realsee-bg: #f7f7f8;
+  /* —— Realsee 核心色板（仅供历史组件引用，不覆盖语义色）——
+     v4.0 深蓝 2B 配色，与 global.css 主色保持一致 */
+  --realsee-bg: #f6f7f9;
   --realsee-on-bg: #1d2129;
   --realsee-surface: #ffffff;
-  --realsee-surface-soft: #fff7ed;
-  --realsee-surface-muted: #f0fdf4;
-  --realsee-outline: #e5e7eb;
-  --realsee-primary: #f97316;
-  --realsee-primary-strong: #ea670c;
-  --realsee-primary-soft: #fff7ed;
+  --realsee-surface-soft: #eef4ff;
+  --realsee-surface-muted: #f0f7ff;
+  --realsee-outline: #e3e7ef;
+  --realsee-primary: #1d4ed8;
+  --realsee-primary-strong: #1e40af;
+  --realsee-primary-soft: #eef4ff;
   --realsee-success: #16a34a;
   --realsee-success-soft: #f0fdf4;
-  --realsee-dark-surface: #0a0a0a;
-  --realsee-dark-panel: #141414;
+  --realsee-dark-surface: #0f172a;
+  --realsee-dark-panel: #16213a;
   --realsee-dark-on-surface: #ffffff;
   --realsee-dark-on-surface-muted: #cbd5e1;
 
   /* —— 扩展阴影（global.css 未定义）—— */
-  --shadow-support: 0 22px 52px rgba(249, 115, 22, 0.2);
+  --shadow-support: 0 22px 52px rgba(29, 78, 216, 0.14);
 
   /* —— 扩展圆角（global.css 未定义）—— */
   --radius-2xl: 24px;

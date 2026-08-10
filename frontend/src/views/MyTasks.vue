@@ -47,7 +47,7 @@
       <a-tab-pane key="qc_approval">
         <template #tab>
           <SafetyCertificateOutlined /> QC审批
-          <a-badge :count="qcApprovalCount" :number-style="{ backgroundColor: '#8b5cf6' }" :offset="[6, -2]" />
+          <a-badge :count="qcApprovalCount" :number-style="{ backgroundColor: '#165dff' }" :offset="[6, -2]" />
         </template>
         <ApprovalCenter :embedded="true" fixed-type="qc_review" @count-change="onQcApprovalCount" />
       </a-tab-pane>
@@ -55,7 +55,7 @@
       <a-tab-pane key="material_approval">
         <template #tab>
           <ShopOutlined /> 物料审批
-          <a-badge :count="materialApprovalCount" :number-style="{ backgroundColor: '#f97316' }" :offset="[6, -2]" />
+          <a-badge :count="materialApprovalCount" :number-style="{ backgroundColor: '#1d4ed8' }" :offset="[6, -2]" />
         </template>
         <ApprovalCenter :embedded="true" fixed-type="material_request" @count-change="onMaterialApprovalCount" />
       </a-tab-pane>
@@ -125,20 +125,21 @@ async function loadMdmOptions() {
 }
 
 // 页面加载时预取所有tab数量，无需点击tab即可显示
+// 注意：三个接口均返回 {items, count}，读取 .count（.total 不存在会导致恒为 0）
 async function preloadAllCounts() {
   try {
     const [releaseRes, committeeRes, expApprovalRes, qcApprovalRes, materialRes] = await Promise.all([
-      getReleaseCards({ status: 'pending', limit: 1 }).catch(() => ({ total: 0 })),
-      client.get('/committees/cases', { params: { status: 'pending', limit: 1 } }).catch(() => ({ total: 0 })),
-      listPendingApprovals({ type: 'experiment_order', limit: 1 }).catch(() => ({ total: 0 })),
-      listPendingApprovals({ type: 'qc_review', limit: 1 }).catch(() => ({ total: 0 })),
-      listPendingApprovals({ type: 'material_request', limit: 1 }).catch(() => ({ total: 0 })),
+      getReleaseCards({ status: 'pending', limit: 1 }).catch(() => ({ count: 0 })),
+      client.get('/committees/cases', { params: { status: 'pending', limit: 1 } }).catch(() => ({ count: 0 })),
+      listPendingApprovals({ type: 'experiment_order', limit: 1 }).catch(() => ({ count: 0 })),
+      listPendingApprovals({ type: 'qc_review', limit: 1 }).catch(() => ({ count: 0 })),
+      listPendingApprovals({ type: 'material_request', limit: 1 }).catch(() => ({ count: 0 })),
     ])
-    releaseCount.value = releaseRes?.total || 0
-    committeeCount.value = committeeRes?.total || 0
-    expApprovalCount.value = expApprovalRes?.total || 0
-    qcApprovalCount.value = qcApprovalRes?.total || 0
-    materialApprovalCount.value = materialRes?.total || 0
+    releaseCount.value = releaseRes?.count || 0
+    committeeCount.value = committeeRes?.count || 0
+    expApprovalCount.value = expApprovalRes?.count || 0
+    qcApprovalCount.value = qcApprovalRes?.count || 0
+    materialApprovalCount.value = materialRes?.count || 0
   } catch {
     // 静默失败，数量保持为0，点击tab后子组件会加载
   }
@@ -179,8 +180,8 @@ const unifiedStats = computed(() => [
     label: '待QC审批',
     value: qcApprovalCount.value,
     icon: SafetyCertificateOutlined,
-    bg: 'rgba(139, 92, 246, 0.1)',
-    color: '#8b5cf6',
+    bg: 'rgba(22, 93, 255, 0.1)',
+    color: '#165dff',
   },
   {
     key: 'material_approval',
@@ -188,7 +189,7 @@ const unifiedStats = computed(() => [
     value: materialApprovalCount.value,
     icon: ShopOutlined,
     bg: 'rgba(249, 115, 22, 0.1)',
-    color: '#f97316',
+    color: '#1d4ed8',
   },
 ])
 </script>

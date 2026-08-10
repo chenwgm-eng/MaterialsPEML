@@ -59,7 +59,6 @@
       :columns="columns"
       :data-source="filteredActivities"
       :pagination="{ pageSize: 15, size: 'small' }"
-      :expandable="{ expandedRowRender }"
       row-key="activity_id"
       size="small"
       :loading="loading"

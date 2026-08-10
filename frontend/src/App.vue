@@ -14,11 +14,10 @@ import zhCN from 'ant-design-vue/es/locale/zh_CN'
 const systemStore = useSystemStore()
 const themeStore = useThemeStore()
 
-// 评测修复 P1-4：全局将下拉/浮层挂载到触发元素父级，
-// 避免 body 级 teleport overlay 与触发元素不在同一 DOM 子树导致指针事件被拦截
-const getPopupContainer = (triggerNode) => {
-  return triggerNode?.parentNode || document.body
-}
+// 浮层统一挂载到 body：避免 overflow:hidden/auto 容器（侧栏、卡片、表格）裁切 tooltip/下拉。
+// 原“挂载到触发元素父级”方案会导致浮层被祖先 overflow 容器裁切/遮挡（悬停提示看不见）。
+// 早期指针事件拦截问题由 global.css 的 .ant-*-hidden { pointer-events: none } 兜底解决。
+const getPopupContainer = () => document.body
 
 onMounted(() => {
   systemStore.init().catch(() => {
@@ -28,11 +27,11 @@ onMounted(() => {
 
 // 基础 token：两种模式共用（主色 / 圆角 / 字体 / 控件高度等）
 const baseToken = {
-  colorPrimary: '#f97316',
+  colorPrimary: '#1d4ed8',
   colorSuccess: '#16a34a',
   colorWarning: '#f59e0b',
   colorError: '#ef4444',
-  colorInfo: '#f97316',
+  colorInfo: '#1d4ed8',
   borderRadius: 10,
   borderRadiusLG: 16,
   borderRadiusSM: 6,
@@ -84,8 +83,8 @@ const lightComponents = {
   Button: {
     primaryShadow: 'none',
     defaultBorderColor: '#dbe4f0',
-    borderRadiusLG: 999,
-    borderRadius: 999,
+    borderRadiusLG: 10,
+    borderRadius: 10,
   },
   Tag: {
     defaultBg: '#f1f5f9',
@@ -98,10 +97,10 @@ const lightComponents = {
     borderRadiusLG: 10,
   },
   Steps: {
-    colorPrimary: '#f97316',
+    colorPrimary: '#1d4ed8',
   },
   Timeline: {
-    colorPrimary: '#f97316',
+    colorPrimary: '#1d4ed8',
   },
 }
 
@@ -136,8 +135,8 @@ const darkComponents = {
   Button: {
     primaryShadow: 'none',
     defaultBorderColor: '#2a2a2a',
-    borderRadiusLG: 999,
-    borderRadius: 999,
+    borderRadiusLG: 10,
+    borderRadius: 10,
   },
   Tag: {
     defaultBg: '#1a1a1a',
@@ -150,10 +149,10 @@ const darkComponents = {
     borderRadiusLG: 10,
   },
   Steps: {
-    colorPrimary: '#f97316',
+    colorPrimary: '#1d4ed8',
   },
   Timeline: {
-    colorPrimary: '#f97316',
+    colorPrimary: '#1d4ed8',
   },
 }
 

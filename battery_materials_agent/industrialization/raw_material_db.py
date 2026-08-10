@@ -262,6 +262,15 @@ class RawMaterialDB:
                 },
             )
 
+    def delete(self, material_id: str) -> bool:
+        """硬删除物料记录（调用方须先做引用检查）。返回是否删除成功。"""
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                text("DELETE FROM industrialization.raw_materials WHERE material_id = :material_id"),
+                {"material_id": material_id},
+            )
+        return result.rowcount > 0
+
     # ---- 候选材料 ↔ 物料库联动 ----
 
     @staticmethod

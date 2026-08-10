@@ -39,11 +39,11 @@ export const GLOSSARY = {
 
   // ── 状态类（status）──
   loading: '正在加载',
-  empty: '还没有',
+  empty: '暂无数据',
   error: '操作失败',
   success: '操作成功',
   internal_error: '操作失败', // 内部错误统一对外展示为「操作失败」
-  no_data: '还没有相关数据',
+  no_data: '暂无相关数据',
 
   // ── 数据类（entities）──
   result: '实测/预测/模拟结果',

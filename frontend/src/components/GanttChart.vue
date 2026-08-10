@@ -123,8 +123,8 @@ const stageConfig = [
   {
     key: 'exploration',
     label: '探索',
-    color: '#f97316',
-    bg: '#fff7ed',
+    color: '#1d4ed8',
+    bg: '#eef4ff',
     actions: ['route_material', 'generate_crystal_candidates', 'generate_polymer_candidates'],
     route: '/workbench',
   },
@@ -139,7 +139,7 @@ const stageConfig = [
   {
     key: 'experiment',
     label: '实验测试',
-    color: '#fa8c16',
+    color: '#1d4ed8',
     bg: '#fff7e6',
     actions: ['design_formula', 'check_synthesis_feasibility'],
     route: '/synthesis',

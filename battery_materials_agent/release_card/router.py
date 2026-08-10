@@ -1,4 +1,4 @@
-"""实验放行卡 API 路由。"""
+﻿"""实验放行卡 API 路由。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from ..auth import UserRole, require_role
 from pydantic import BaseModel
 
 from ..committee.repository import CommitteeRepository
@@ -67,7 +69,7 @@ class ReleaseCardReviewRequest(BaseModel):
 
 # ── POST /release-cards ──
 
-@router.post("/release-cards")
+@router.post("/release-cards", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def create_release_card(req: ReleaseCardCreateRequest):
     """创建放行卡（可传 case_id 从委员会生成，或手工字段创建）。"""
     store = _get_store()
@@ -149,7 +151,7 @@ async def get_release_card(card_id: str):
 
 # ── POST /release-cards/{card_id}/review ──
 
-@router.post("/release-cards/{card_id}/review")
+@router.post("/release-cards/{card_id}/review", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def review_release_card(card_id: str, req: ReleaseCardReviewRequest):
     """人工复核：写入复核人/意见/最终裁决，并将状态置为 decided。"""
     store = _get_store()
@@ -175,7 +177,9 @@ async def review_release_card(card_id: str, req: ReleaseCardReviewRequest):
     # 解除实验任务创建阻断；reject/modify 不解除
     if req.final_decision == "agree" and card.candidate_id:
         try:
-            # 通过 candidate_store 回写审批状态
+            # 通过 candidate_store 回写审批状态。
+            # 注意：save 默认按 content_hash 去重，可能短路丢弃 data 更新（返回已存在候选），
+            # 必须 dedup=False 走完整 upsert 才能把 release_card_approved 落库。
             from .. import api as _api_module
             candidate_store = _api_module.app.state.candidate_store
             record = candidate_store.get(card.candidate_id)
@@ -185,7 +189,7 @@ async def review_release_card(card_id: str, req: ReleaseCardReviewRequest):
                 cand_data["release_card_decision"] = "agree"
                 cand_data["release_card_decided_at"] = now.isoformat()
                 record.data = cand_data
-                candidate_store.save(record)
+                candidate_store.save(record, dedup=False)
         except Exception:
             # 回写失败不影响审批结果，仅记录日志
             import logging

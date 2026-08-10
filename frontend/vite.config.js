@@ -16,7 +16,9 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:8200',
         changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/api/, ''),
+        // 不 rewrite：保留 /api 前缀，后端 rewrite_api_prefix_middleware 统一
+        // 标记 is_api_request 并重写路径（与生产模式后端直接 serve dist 行为一致），
+        // 否则 /ecml/runs 等与 SPA 路由同名的 API 会因缺少标记返回 index.html
         timeout: 120000,
       },
     },

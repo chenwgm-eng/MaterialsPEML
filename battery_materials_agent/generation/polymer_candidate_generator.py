@@ -31,6 +31,7 @@ class PolymerCandidate(BaseModel):
     molecular_weight: float = 0.0
     multi_objective_score: float = 0.0  # 多目标加权综合评分（0-1）
     provenance: list[dict] = Field(default_factory=list)
+    data: dict = Field(default_factory=dict)  # 扩展领域数据（工程塑料配方/增强方案等）
 
 
 # 聚合物属性提取器与方向（与晶体保持一致语义，仅支持可计算字段）
@@ -139,6 +140,48 @@ class PolymerDesignRules:
         ("Al2O3", "O=[Al]O[Al]=O", "Alumina nanoparticle"),
     ]
 
+    # ── 工程塑料骨架库（kingfa 领域：改性塑料/工程塑料/生物降解塑料） ──
+    ENGINEERING_PLASTICS = [
+        ("Polypropylene", "PP", "[*]CC(C)[*]", "C=CC", "通用热塑性树脂，可增强/阻燃/耐候改性，典型拉伸强度 25-40 MPa"),
+        ("Polyamide 6", "PA6", "[*]CCCCC(=O)N[*]", "C1CCCCC(=O)N1", "尼龙 6，玻纤增强后拉伸强度 120-180 MPa，耐磨耐油"),
+        ("Polyamide 66", "PA66", "[*]CCCCC(=O)NCCCCCCN[*]", "NCCCCCCN.C(=O)CCCCC", "尼龙 66，尺寸稳定、耐热，HDT 180°C（GF 增强）"),
+        ("Polycarbonate", "PC", "[*]OC(=O)OC1=CC=C(C(C)(C)C2=CC=C(OC(=O)O[*])C=C2)C=C1[*]", "O=C(OC1=CC=C(C(C)(C)C2=CC=C(O)C=C2)C=C1)O", "聚碳酸酯，透明高冲击，HDT 130°C"),
+        ("Acrylonitrile-Butadiene-Styrene", "ABS", "[*]CC(C#N)[*]", "C=CC#N", "ABS 树脂，韧性好，PC/ABS 合金用于汽车内饰"),
+        ("Polybutylene terephthalate", "PBT", "[*]O=C(OCCO)C1=CC=C(C(=O)O[*])C=C1[*]", "O=C(OCCO)C1=CC=C(C(=O)O)C=C1", "PBT 工程塑料，耐化学、尺寸稳定，GF 增强用于连接器"),
+        ("Polyethylene terephthalate", "PET", "[*]O=C(OCC)C1=CC=C(C(=O)O[*])C=C1[*]", "O=C(OCCO)C1=CC=C(C(=O)O)C=C1", "PET 树脂，瓶级/膜级/纤维级"),
+        ("Polylactic acid", "PLA", "[*]OC(=O)C(C)[*]", "CC(=O)O", "生物降解塑料，脆性高，常与 PBAT 共混增韧"),
+        ("Poly(butylene adipate-co-terephthalate)", "PBAT", "[*]O=C(OCCO)C1=CC=C(C(=O)O[*])C=C1[*]", "O=C(OCCO)C1=CC=C(C(=O)O)C=C1", "生物降解共聚酯，柔韧性好，与 PLA 共混"),
+        ("Liquid Crystal Polymer", "LCP", "[*]OC(=O)C1=CC=C(OC(=O)C2=CC=C(C(=O)O[*])C=C2)C=C1[*]", "O=C(OC1=CC=C(C(=O)O)C=C1)C1=CC=C(C(=O)O)C=C1", "液晶聚合物，耐高温高流动，用于 AI 服务器/高频连接器"),
+        ("Polyphenylene sulfide", "PPS", "[*]C1=CC=C(S[*])C=C1[*]", "C1=CC=C(S)C=C1", "聚苯硫醚，耐高温耐化学，HDT >260°C"),
+        ("Polyphenylsulfone", "PPSU", "[*]OC1=CC=C(S(=O)(=O)C2=CC=C(OC3=CC=C(S(=O)(=O)C4=CC=C(O[*])C=C4)C=C3)C=C2)C=C1[*]", "OC1=CC=C(S(=O)(=O)C2=CC=C(OC3=CC=C(S(=O)(=O)C4=CC=C(O)C=C4)C=C3)C=C2)C=C1", "聚苯砜，耐高温透明，医疗级"),
+        ("Polyoxymethylene", "POM", "[*]CO[*]", "C=O", "聚甲醛，高刚性耐磨，齿轮/精密件"),
+        ("High-density polyethylene", "HDPE", "[*]CCCC[*]", "C=C", "高密度聚乙烯，耐化学品"),
+        ("Polystyrene", "PS", "[*]CC(C1=CC=CC=C1)[*]", "C=CC1=CC=CC=C1", "通用聚苯乙烯，透明脆性，HIPS 增韧改性"),
+        ("High-impact polystyrene", "HIPS", "[*]CC(C1=CC=CC=C1)[*]", "C=CC1=CC=CC=C1", "高抗冲聚苯乙烯，家电/电子外壳"),
+        ("Styrene-acrylonitrile", "SAN", "[*]CC(C#N)[*]", "C=CC#N", "苯乙烯-丙烯腈共聚，透明耐化学"),
+        ("Recycled PET", "rPET", "[*]O=C(OCC)C1=CC=C(C(=O)O[*])C=C1[*]", "O=C(OCCO)C1=CC=C(C(=O)O)C=C1", "再生 PET（瓶片回收），rHDPE/rPET 梯级再生"),
+        ("Epoxy resin", "EP", "[*]OCC1CO1[*]", "C1(CO1)CO", "环氧树脂基体，碳纤维/玻纤复合材料树脂基"),
+        ("Polyether ether ketone", "PEEK", "[*]OC1=CC=C(C2=CC=C(OC3=CC=C(C(=O)C4=CC=C(O[*])C=C4)C=C3)C=C2)C=C1[*]", "OC1=CC=C(C2=CC=C(OC3=CC=C(C(=O)C4=CC=C(O)C=C4)C=C3)C=C2)C=C1", "聚醚醚酮，高性能热塑性，CF 增强用于低空经济/机器人"),
+        ("Nafion", "Nafion", "[*]OC(F)(F)C(F)(F)OC(F)(F)C(F)(F)S(=O)(=O)O[*]", "O=S(=O)(O)C(F)(F)C(F)(F)OC(F)(F)C(F)(F)F", "全氟磺酸膜，PEM 燃料电池质子交换膜"),
+        ("Polybenzimidazole", "PBI", "[*]C1=CC2=NC3=CC=CC=C3N=C2C=C1[*]", "C1=CC2=NC3=CC=CC=C3N=C2C=C1", "聚苯并咪唑，高温 PEM 膜（PBI/H3PO4 体系）"),
+        ("Medical-grade PP", "Med-PP", "[*]CC(C)[*]", "C=CC", "医用级聚丙烯，熔喷级（MFR 800-1500）用于口罩/防护过滤层"),
+    ]
+
+    ENGINEERING_FILLERS = [
+        ("GF30", "玻璃纤维增强 30%", "拉伸强度 ×2-3，HDT +80-100°C"),
+        ("GF20", "玻璃纤维增强 20%", "强度与流动性平衡"),
+        ("CF20", "碳纤维增强 20%", "高模量低密度，轻量化"),
+        ("CF30", "碳纤维增强 30%", "高端结构件，航空航天/低空经济"),
+        ("Talc20", "滑石粉填充 20%", "低成本刚性改善"),
+        ("FR-APP", "聚磷酸铵阻燃剂", "磷系无卤阻燃，UL94 V-0"),
+        ("FR-MCA", "三聚氰胺氰尿酸盐", "PA 用无卤阻燃"),
+        ("POE-g-MAH", "马来酸酐接枝弹性体", "增韧改性"),
+        ("Nano-CaCO3", "纳米碳酸钙", "增刚增韧"),
+        ("Aramid-Fiber", "芳纶纤维", "高强高模，防刺/防护"),
+        ("Graphene", "石墨烯填料", "导热导电增强"),
+        ("H3PO4", "磷酸掺杂", "PBI 高温膜质子传导"),
+    ]
+
 
 class PolymerCandidateGenerator:
     """Generate polymer electrolyte candidates using LLM + rule-based design."""
@@ -211,7 +254,8 @@ class PolymerCandidateGenerator:
         self._rules = PolymerDesignRules()
 
     def generate(self, target_properties: dict | list | None = None,
-                 num_candidates: int = 10) -> list[PolymerCandidate]:
+                 num_candidates: int = 10,
+                 material_system: str = "") -> list[PolymerCandidate]:
         # 多目标列表形式：先生成候选，再应用加权评分
         multi_obj_list: list[dict] | None = None
         dict_props: dict | None = None
@@ -221,6 +265,14 @@ class PolymerCandidateGenerator:
             dict_props = {"properties": target_properties} if target_properties else None
         else:
             dict_props = target_properties
+
+        # kingfa/高分子研发领域：工程塑料骨架模式（改性塑料/工程塑料/生物降解等）
+        if material_system:
+            engineering = self._generate_engineering_plastics(num_candidates, material_system)
+            if engineering:
+                if multi_obj_list:
+                    engineering = self._apply_multi_objective(engineering, multi_obj_list)
+                return engineering
 
         if self.config.engine_mode == EngineMode.INTERNLM:
             try:
@@ -316,6 +368,103 @@ class PolymerCandidateGenerator:
                 predicted_ionic_conductivity=conductivity,
             ))
 
+        return candidates
+
+    # ── 工程塑料候选生成（kingfa 领域：改性塑料/工程塑料/生物降解） ──
+    def _generate_engineering_plastics(self, num_candidates: int,
+                                       material_system: str = "") -> list[PolymerCandidate]:
+        """基于工程塑料骨架库 + 增强/阻燃填料组合生成候选配方。
+
+        支撑金发科技类高分子研发场景（PP/PA/PC/ABS 增强阻燃、PBAT/PLA 生物降解、
+        LCP/PPS/PPSU 特种工程塑料）。按 material_system 关键词过滤骨架。
+        """
+        import hashlib as _h
+        system = (material_system or "").lower()
+        candidates: list[PolymerCandidate] = []
+        h = int(_h.sha256(("eng_" + system).encode()).hexdigest()[:8], 16)
+
+        def _match(item: tuple) -> bool:
+            name, abbr, _psmiles, _smiles, desc = item
+            if not system:
+                return True
+            hay = (name + " " + abbr + " " + desc).lower()
+            if "聚丙烯" in system or "pp" in system:
+                # 医用级 PP 仅归属医疗/熔喷体系，避免混入通用聚丙烯改性
+                if "medical-grade" in hay:
+                    return "医疗" in system or "熔喷" in system or "防护" in system
+                return "polypropylene" in hay or "poly(propylene" in hay or "pp" == abbr.lower()
+            if "尼龙" in system or "pa" in system:
+                return "polyamide" in hay
+            if "苯乙烯" in system or "苯乙烯类" in system:
+                return any(k in hay for k in ("polystyrene", "hips", "styrene-acrylonitrile", "abs"))
+            if "汽车" in system or "工程塑料" in system or "pc" in system:
+                return any(k in hay for k in ("polycarbonate", "abs", "pbt", "pet", "pom", "polyphenylene sulfide", "peek"))
+            if "阻燃" in system:
+                return any(k in hay for k in ("polypropylene", "polyamide", "polycarbonate", "abs", "pbt"))
+            if "生物降解" in system:
+                return any(k in hay for k in ("polylactic", "pbat", "poly(butylene"))
+            if "特种" in system or "lcp" in system or "pps" in system:
+                return any(k in hay for k in ("liquid crystal", "polyphenylene sulfide", "polyphenylsulfone", "peek"))
+            if "碳纤维" in system or "复材" in system or "复合材料" in system:
+                return any(k in hay for k in ("epoxy", "peek", "polyphenylene sulfide"))
+            if "氢" in system or "pem" in system or "膜" in system or "燃料电池" in system:
+                return any(k in hay for k in ("nafion", "polybenzimidazole"))
+            if "医疗" in system or "熔喷" in system or "防护" in system:
+                return "medical-grade" in hay or "polypropylene" in hay
+            if "再生" in system or "回收" in system or "recycl" in system:
+                return "recycled" in hay or "high-density polyethylene" in hay
+            return True
+
+        pool = [p for p in self._rules.ENGINEERING_PLASTICS if _match(p)]
+        if not pool:
+            pool = list(self._rules.ENGINEERING_PLASTICS)
+
+        filler_pool = list(self._rules.ENGINEERING_FILLERS)
+        for i, (name, abbr, psmiles, smiles, desc) in enumerate(pool):
+            if len(candidates) >= num_candidates:
+                break
+            filler = filler_pool[(h >> (i * 3)) % len(filler_pool)]
+            fname, fdesc, feffect = filler
+            # 体系适配：生物降解避开玻纤/碳纤（破坏可降解性）
+            if "生物降解" in system and "GF" in fname:
+                filler = ("POE-g-MAH", "马来酸酐接枝弹性体", "增韧改性")
+                fname, fdesc, feffect = filler
+            # 医疗/熔喷体系：无增强填料，保持熔喷级纯度
+            if ("医疗" in system or "熔喷" in system) and ("GF" in fname or "CF" in fname or "Talc" in fname):
+                filler = ("Graphene", "石墨烯填料", "导热导电增强")
+                fname, fdesc, feffect = filler
+            # 氢能源膜体系：质子传导掺杂（磷酸）
+            if ("氢" in system or "pem" in system) and "Nafion" not in fname:
+                filler = ("H3PO4", "磷酸掺杂", "PBI 高温膜质子传导")
+                fname, fdesc, feffect = filler
+            # 碳纤维复材体系：以碳纤维增强为默认
+            if ("碳纤维" in system or "复材" in system or "复合材料" in system) and not fname.startswith("CF"):
+                filler = ("CF30", "碳纤维增强 30%", "高端结构件，航空航天/低空经济")
+                fname, fdesc, feffect = filler
+            # 典型拉伸强度参考（MPa）：按骨架与增强组合估算
+            base_strength = {"PP": 32, "PA6": 60, "PA66": 80, "PC": 65, "ABS": 45,
+                             "PBT": 55, "PET": 50, "PLA": 55, "PBAT": 32, "LCP": 130,
+                             "PPS": 75, "PPSU": 70, "POM": 65, "HDPE": 28,
+                             "PS": 40, "HIPS": 25, "SAN": 70, "rPET": 55, "EP": 60,
+                             "PEEK": 95, "Nafion": 25, "PBI": 110, "Med-PP": 32}.get(abbr, 50)
+            gf_bonus = 90 if fname.startswith("GF") else 60 if fname.startswith("CF") else 5
+            est_tensile = base_strength + gf_bonus
+            candidates.append(PolymerCandidate(
+                name=f"{abbr}/{fname}",
+                psmiles=f"Polymer({psmiles})",
+                smiles=smiles,
+                monomer_smiles=[smiles],
+                source="engineering_plastics",
+                description=f"{desc}。改性方案：{fname}（{fdesc}，{feffect}）。",
+                predicted_ionic_conductivity=0.0,
+                data={
+                    "formula": f"{abbr}/{fname}",
+                    "material_system": material_system or "改性塑料",
+                    "estimated_tensile_strength_mpa": est_tensile,
+                    "reinforcement": fname,
+                    "process": "双螺杆挤出共混 → 注塑/挤出成型",
+                },
+            ))
         return candidates
 
     async def _generate_with_llm_async(self, target_properties: dict | None, num_candidates: int) -> list[PolymerCandidate]:

@@ -174,10 +174,15 @@
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'health'">
               <a-tag v-if="record.configured === false" color="default">未配置</a-tag>
-              <a-tag v-else :color="healthColor(record.health)">{{ healthLabel(record.health) }}</a-tag>
+              <a-tag v-else-if="!record.health && !record.health_status" color="default">
+                <a-tooltip title="尚未执行健康探测。在「系统设置」配置对应服务后，点击上方「刷新」触发探测">
+                  未探测
+                </a-tooltip>
+              </a-tag>
+              <a-tag v-else :color="healthColor(record.health || record.health_status)">{{ healthLabel(record.health || record.health_status) }}</a-tag>
             </template>
             <template v-if="column.key === 'last_check'">
-              <span class="tabular-nums">{{ formatTime(record.last_check) }}</span>
+              <span class="tabular-nums">{{ formatTime(record.last_check || record.last_health_check) }}</span>
             </template>
           </template>
         </a-table>
@@ -200,6 +205,9 @@
         </div>
       </template>
       <a-spin :spinning="budgetLoading">
+        <div v-if="budgets.length" class="budget-hint">
+          用量 = 已消耗 / 限额；类别含义：令牌（Token 数）、外部调用（SCP 服务调用次数）、DFT CPU 时长（小时）、成本（¥）、并发（同时运行任务数）
+        </div>
         <EmptyState v-if="!budgets.length" type="data" description="暂无预算数据" />
         <a-table
           v-else
@@ -292,9 +300,9 @@ const metrics = reactive({
 // --- Table columns ---
 const runColumns = [
   { title: '运行 ID', dataIndex: 'run_id', key: 'run_id', width: 140, ellipsis: true },
-  { title: '类型', dataIndex: 'type', key: 'type', width: 100 },
+  { title: '类型', dataIndex: 'type', key: 'type', width: 100, customRender: ({ text }) => text || '-' },
   { title: '状态', key: 'status', width: 100 },
-  { title: '项目', dataIndex: 'project_id', key: 'project_id', width: 100, ellipsis: true },
+  { title: '项目', dataIndex: 'project_id', key: 'project_id', width: 100, ellipsis: true, customRender: ({ text }) => text || '—' },
   { title: '创建时间', key: 'created_at', width: 160 },
   { title: '操作', key: 'actions', width: 130, fixed: 'right' },
 ]
@@ -303,7 +311,7 @@ const providerColumns = [
   { title: '模型/服务', dataIndex: 'name', key: 'name', width: 140 },
   { title: '服务类型', dataIndex: 'type', key: 'type', width: 120 },
   { title: '健康状态', key: 'health', width: 110 },
-  { title: '版本', dataIndex: 'version', key: 'version', width: 100 },
+  { title: '版本', dataIndex: 'version', key: 'version', width: 100, customRender: ({ text }) => text || '—' },
   { title: '最后检查', key: 'last_check', width: 160 },
 ]
 
@@ -407,9 +415,9 @@ function usagePercent(b) {
 }
 
 function usageColor(pct) {
-  if (pct >= 90) return '#f97316'
-  if (pct >= 70) return '#fb923c'
-  return '#fdba74'
+  if (pct >= 90) return '#1d4ed8'
+  if (pct >= 70) return '#3b82f6'
+  return '#93c5fd'
 }
 
 function usageText(b) {
@@ -588,8 +596,8 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 }
 
 .metric-icon-warning {
-  background: var(--primary-bg, #fff7ed);
-  color: var(--primary, #f97316);
+  background: var(--primary-bg, #eef4ff);
+  color: var(--primary, #1d4ed8);
 }
 
 .metric-body {
@@ -633,6 +641,12 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.budget-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 0 8px;
 }
 
 .usage-cell :deep(.ant-progress) {

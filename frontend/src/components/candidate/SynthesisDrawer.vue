@@ -54,7 +54,9 @@
             <template #content>
               <div class="agent-detail-card">
                 <div class="agent-head">
-                  <div class="agent-avatar-lg">{{ selectedEngineInfo.avatar }}</div>
+                  <div class="agent-avatar-lg">
+                    <component :is="selectedEngineInfo.avatar" aria-hidden="true" />
+                  </div>
                   <div class="agent-meta">
                     <div class="agent-name-lg">{{ selectedEngineInfo.name }}</div>
                     <div class="agent-tags">
@@ -84,10 +86,12 @@
               </div>
             </template>
             <span class="agent-chip">
-              <span class="agent-avatar">{{ selectedEngineInfo.avatar }}</span>
+              <span class="agent-avatar">
+                <component :is="selectedEngineInfo.avatar" aria-hidden="true" />
+              </span>
               <span class="agent-name">{{ selectedEngineInfo.name }}</span>
               <a-tag
-                :color="selectedSynthEngine === 'scp' ? 'purple' : 'orange'"
+                :color="selectedSynthEngine === 'scp' ? 'blue' : 'orange'"
                 size="small"
                 class="ai-tag"
               >
@@ -151,7 +155,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { BranchesOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
+import { BranchesOutlined, InfoCircleOutlined, ExperimentOutlined, BulbOutlined } from '@ant-design/icons-vue'
 import client from '@/api/client'
 
 const props = defineProps({
@@ -227,7 +231,7 @@ const selectedEngineInfo = computed(() => {
   return {
     value: meta.value,
     name: meta.label,
-    avatar: meta.value === 'askcos' ? '🔬' : '🧠',
+    avatar: meta.value === 'askcos' ? ExperimentOutlined : BulbOutlined,
     provider: meta.value === 'askcos' ? 'MIT' : '上海人工智能实验室',
     tool_count: meta.value === 'askcos' ? undefined : 1,
     summary: meta.desc,

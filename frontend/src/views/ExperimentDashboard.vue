@@ -122,6 +122,10 @@
           <template v-if="column.key === 'status'">
             <a-tag :color="orderStatusColor(record.status)">{{ orderStatusLabel(record.status) }}</a-tag>
           </template>
+          <template v-else-if="column.key === 'title'">
+            <!-- 任务无独立名称字段：优先实验说明，回退任务编号 -->
+            <span :title="record.notes || ''">{{ record.notes || record.order_id || '-' }}</span>
+          </template>
         </template>
       </a-table>
       <div v-if="!loading && orders.length === 0" class="empty-state">暂无实验任务</div>

@@ -72,6 +72,15 @@
       </div>
       <a-spin :spinning="formulaListLoading">
         <EmptyState v-if="!formulaListLoading && formulaList.length === 0" type="create" description="暂无配方版本，点击右上角生成新配方" action-text="生成新配方" @action="openDesignDrawer" />
+        <template v-else-if="!formulaListLoading && filteredFormulaList.length === 0 && formulaList.length > 0">
+          <!-- 当前项目/来源过滤后无结果：给出明确引导，避免误以为系统无配方 -->
+          <EmptyState
+            type="search"
+            :description="`当前筛选条件下暂无配方（共 ${formulaList.length} 条，被项目/来源过滤）。可切换左栏项目或重置筛选查看全部。`"
+            action-text="重置筛选"
+            @action="resetFilter"
+          />
+        </template>
         <a-table
           v-else
           :columns="formulaListColumns"
@@ -143,6 +152,15 @@
                 @click="onActivateVersion(currentFormula)"
               >设为活跃</a-button>
               <a-button v-if="currentFormula.source !== 'candidate_bom'" size="small" @click="onPrepareSample">制备样品</a-button>
+              <!-- 闭环：配方/工艺 → 下达实验任务单 -->
+              <a-button
+                v-if="currentFormula.candidate_id && !isEditing"
+                size="small"
+                type="primary"
+                ghost
+                :loading="dispatchingExperiment"
+                @click="onDispatchExperiment"
+              >下达实验任务</a-button>
               <!-- 候选 BOM 编辑状态机：默认只读，点击编辑后可修改 -->
               <a-button
                 v-if="isCandidateBom && !isEditing"
@@ -866,6 +884,34 @@ const filterSource = ref('')
 const filterTarget = ref('')
 const filterProjectId = ref('')
 
+// 项目空间 #1：全局项目上下文 → 本页项目筛选联动（顶部选择器变化时同步）
+let syncingFormulaProject = false
+watch(
+  () => projectCtx.currentProjectId,
+  (pid) => {
+    if (syncingFormulaProject) return
+    syncingFormulaProject = true
+    try {
+      if (pid && filterProjectId.value !== pid) filterProjectId.value = pid
+    } finally {
+      syncingFormulaProject = false
+    }
+  },
+  { immediate: true },
+)
+watch(filterProjectId, (pid) => {
+  if (syncingFormulaProject) return
+  syncingFormulaProject = true
+  try {
+    if (pid && pid !== projectCtx.currentProjectId) {
+      const p = (projectCtx.projectList || []).find((x) => x.project_id === pid)
+      if (p) projectCtx.setCurrentProject(p)
+    }
+  } finally {
+    syncingFormulaProject = false
+  }
+})
+
 // 项目选项（来自全局项目上下文）
 const projectOptions = computed(() =>
   (projectCtx.projectList || []).map((p) => ({
@@ -987,6 +1033,35 @@ async function openDetail(formula) {
     currentFormula.value = null
   } finally {
     detailLoading.value = false
+  }
+}
+
+// ── 配方/工艺 → 实验任务单闭环（一键下达实验） ──
+const dispatchingExperiment = ref(false)
+
+async function onDispatchExperiment() {
+  const f = currentFormula.value
+  if (!f?.candidate_id) {
+    message.warning('该配方未关联候选材料，无法下达实验任务')
+    return
+  }
+  dispatchingExperiment.value = true
+  try {
+    const res = await client.post(
+      `/candidates/${encodeURIComponent(f.candidate_id)}/one-click-experiment`,
+      {
+        project_id: f.project_id || '',
+        process_id: f.process_id || '',
+        notes: `配方 ${f.formula_id} 下达实验（BOM 工艺路径）`,
+      },
+    )
+    message.success(`实验任务单已创建：${res.order_id}，已跳转实验工作台`)
+    router.push({ path: '/experiment-workbench', query: { order_id: res.order_id } })
+  } catch (e) {
+    const detail = e?.response?.data?.detail
+    message.error(typeof detail === 'string' ? detail : '下达实验任务失败，请检查候选状态与工艺方案', 6)
+  } finally {
+    dispatchingExperiment.value = false
   }
 }
 

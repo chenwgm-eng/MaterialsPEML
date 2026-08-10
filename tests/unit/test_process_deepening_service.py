@@ -59,6 +59,24 @@ class FakeSynthesisPlanner:
             raise RuntimeError("fake plan failure")
         return self._routes
 
+    async def plan_multiple_routes(self, smiles="", num_routes=5, engine_type=None,
+                                   material_type="molecule", formula="", space_group=""):
+        """晶体/分子双入口：晶体返回带固相合成语义的路线，分子复用 plan_synthesis_async。"""
+        if self._raise_on_plan:
+            raise RuntimeError("fake plan failure")
+        if material_type == "crystal":
+            route = SynthesisRoute(
+                target_smiles=formula or "LiCoO2",
+                steps=[RouteStep(reaction_smiles=f"{formula or 'LiCoO2'}>>target",
+                                 score=0.8, reaction_type="solid_state")],
+                overall_score=0.8, num_steps=1,
+                feasibility_score=0.8, is_feasible=True, confidence=0.7,
+            )
+            return {"routes": [route.model_dump()], "count": 1, "best_route": route.model_dump()}
+        return {"routes": [r.model_dump() for r in self._routes],
+                "count": len(self._routes),
+                "best_route": self._routes[0].model_dump() if self._routes else None}
+
     async def verify_with_dft(self, route: dict) -> dict:
         return {
             "route_id": route.get("route_id", ""),
@@ -206,9 +224,10 @@ class TestProcessDeepening:
 
     async def test_deepen_without_smiles_rejected(self, candidate_store,
                                                   process_store):
+        """分子/聚合物候选缺少 SMILES 时拒绝深化（晶体走化学式固相合成分支）。"""
         cid = _unique_id("PDS-NOS")
         candidate_store.save(CandidateRecord(
-            candidate_id=cid, candidate_type="crystal", name=f"no-smiles-{cid}",
+            candidate_id=cid, candidate_type="polymer", name=f"no-smiles-{cid}",
             smiles="", source="test",
         ))
         try:
@@ -222,6 +241,40 @@ class TestProcessDeepening:
         finally:
             from sqlalchemy import text
             with candidate_store.engine.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM experiment.candidates WHERE candidate_id = :cid"),
+                    {"cid": cid},
+                )
+
+    async def test_deepen_crystal_without_smiles_uses_formula(self, candidate_store,
+                                                              process_store):
+        """回归：晶体候选无 SMILES 时走化学式固相合成分支（不拒绝、成功产出方案）。"""
+        cid = _unique_id("PDS-CRY")
+        candidate_store.save(CandidateRecord(
+            candidate_id=cid, candidate_type="crystal", name="LiCoO2",
+            smiles="", source="test",
+            data={"formula": "LiCoO2", "space_group": "R-3m"},
+        ), dedup=False)
+        try:
+            svc = ProcessDeepeningService(
+                process_scheme_store=process_store,
+                candidate_store=candidate_store,
+                synthesis_planner=FakeSynthesisPlanner(),
+            )
+            scheme = await svc.deepen(cid, owner="proc_engineer")
+            assert scheme.candidate_id == cid
+            assert len(scheme.routes) >= 1
+            plan_ev = [e for e in scheme.evidence_refs
+                       if e.get("capability") == "synthesis_planning"
+                       and e.get("status") == "success"]
+            assert plan_ev
+        finally:
+            from sqlalchemy import text
+            with candidate_store.engine.begin() as conn:
+                conn.execute(
+                    text("DELETE FROM experiment.process_schemes WHERE candidate_id = :cid"),
+                    {"cid": cid},
+                )
                 conn.execute(
                     text("DELETE FROM experiment.candidates WHERE candidate_id = :cid"),
                     {"cid": cid},

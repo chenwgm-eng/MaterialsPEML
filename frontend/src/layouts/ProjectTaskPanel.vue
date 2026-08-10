@@ -162,11 +162,12 @@ onMounted(loadTasks)
   justify-content: space-between;
 }
 .panel-title {
-  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--sidebar-text);
 }
 .panel-ops {
   display: flex;

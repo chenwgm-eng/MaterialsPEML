@@ -1,19 +1,83 @@
-<template>
+﻿<template>
   <div class="settings-page">
     <SectionHeader
       title="系统设置"
-      subtitle="配置 API 密钥、模型参数与 AI4S 引擎选项"
+      subtitle="配置研发领域、模型引擎与个人偏好"
     />
 
-    <!-- 左侧主区 + 右侧侧栏 -->
-    <a-row :gutter="24" class="settings-row">
-      <a-col :xs="24" :xl="isAdmin ? 16 : 24" class="settings-main">
-    <!-- 1. LLM 配置 -->
+    <!-- ═══ 组 1：研发领域 ═══ -->
+    <div class="settings-group">
+      <div class="group-label">
+        <span class="group-label-icon"><ExperimentOutlined /></span>
+        <span>研发领域</span>
+        <span class="group-label-desc">决定材料体系、目标属性与配方工艺链</span>
+      </div>
+
+      <a-card :bordered="false" class="settings-card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">默认研发领域</div>
+            <div class="card-subtitle">全局生效：研发工作台、候选生成、配方工艺均按该领域执行；保存在数据库中，系统重启后自动加载</div>
+          </div>
+          <a-tag v-if="activeDomain" color="blue" class="active-domain-tag">
+            当前生效：{{ activeDomain.name }}
+          </a-tag>
+        </div>
+
+        <div v-if="domainLoading" class="domain-loading"><a-spin size="small" /> 正在加载领域包…</div>
+        <div v-else-if="domainPacks.length" class="domain-options">
+          <div
+            v-for="p in domainPacks"
+            :key="p.domain_key"
+            :class="['domain-option', { 'is-selected': selectedDomain === p.domain_key }]"
+            role="radio"
+            :aria-checked="selectedDomain === p.domain_key"
+            tabindex="0"
+            @click="selectedDomain = p.domain_key"
+            @keydown.enter.prevent="selectedDomain = p.domain_key"
+          >
+            <div class="domain-option-head">
+              <span class="domain-option-name">{{ p.name }}</span>
+              <span v-if="p.is_active" class="domain-option-badge">当前默认</span>
+            </div>
+            <div class="domain-option-desc">{{ p.description }}</div>
+            <div class="domain-option-tags">
+              <a-tag v-for="sys in systemPreview[p.domain_key] || []" :key="sys" size="small" class="domain-tag">{{ sys }}</a-tag>
+            </div>
+          </div>
+        </div>
+
+        <div class="domain-actions">
+          <a-button
+            id="settings-save-domain"
+            type="primary"
+            :loading="saving.domain"
+            :disabled="!selectedDomain || selectedDomain === activeDomain?.domain_key"
+            @click="saveDomain"
+          >
+            {{ selectedDomain === activeDomain?.domain_key ? '当前领域已生效' : '应用该领域' }}
+          </a-button>
+          <span v-if="domainSavedTip" class="domain-saved-tip">{{ domainSavedTip }}</span>
+        </div>
+      </a-card>
+    </div>
+
+    <!-- ═══ 组 2：模型与引擎 ═══ -->
+    <div class="settings-group">
+      <div class="group-label">
+        <span class="group-label-icon"><ApiOutlined /></span>
+        <span>模型与引擎</span>
+        <span class="group-label-desc">LLM / AI4S / 专家模型配置</span>
+      </div>
+
+      <a-row :gutter="24" class="settings-row">
+        <a-col :xs="24" :xl="isAdmin ? 16 : 24" class="settings-main">
+    <!-- LLM 配置 -->
     <a-card :bordered="false" class="settings-card">
       <div class="card-head">
         <div>
           <div class="card-title">LLM 配置</div>
-          <div class="card-subtitle">配置 LLM 服务连接与密钥</div>
+          <div class="card-subtitle">Agent 推理与自然语言生成的通用大模型</div>
         </div>
       </div>
 
@@ -96,7 +160,7 @@
       </a-form>
     </a-card>
 
-    <!-- 2. AI4S 引擎：AI4S + SCP -->
+    <!-- AI4S 引擎 -->
     <a-card :bordered="false" class="settings-card">
       <div class="card-head">
         <div>
@@ -219,7 +283,7 @@
       </a-form>
     </a-card>
 
-    <!-- 3. 传统专家模型 -->
+    <!-- 传统专家模型 -->
     <a-card :bordered="false" class="settings-card">
       <div class="card-head">
         <div>
@@ -287,8 +351,53 @@
         </a-form-item>
       </a-form>
     </a-card>
+        </a-col>
+        <a-col v-if="isAdmin" :xs="24" :xl="8" class="settings-aside">
+    <!-- 运行模式（仅管理员可见） -->
+    <a-card :bordered="false" class="settings-card">
+      <div class="card-head">
+        <div>
+          <div class="card-title">运行模式</div>
+          <div class="card-subtitle">控制系统运行环境，影响数据隔离与功能范围</div>
+        </div>
+      </div>
 
-    <!-- 4. 我的画像 -->
+      <a-form ref="runModeFormRef" :model="config" :rules="runModeRules" layout="vertical">
+        <a-form-item label="运行模式">
+          <a-select
+            v-model:value="config.runMode"
+            placeholder="选择运行模式…"
+            style="width: 100%"
+            :options="runModeOptions"
+          />
+          <div class="form-help">
+            <strong>Demo</strong>：演示模式，使用模拟数据，适合体验功能；<br>
+            <strong>Production</strong>：生产模式，连接真实外部服务，适合实际研发。
+          </div>
+        </a-form-item>
+
+        <a-form-item>
+          <a-button id="settings-save-runmode" type="primary" :loading="saving.runMode" @click="saveRunMode">
+            保存运行模式
+          </a-button>
+        </a-form-item>
+      </a-form>
+    </a-card>
+        </a-col>
+      </a-row>
+    </div>
+
+    <!-- ═══ 组 3：个人与运行 ═══ -->
+    <div class="settings-group">
+      <div class="group-label">
+        <span class="group-label-icon"><UserOutlined /></span>
+        <span>个人与运行</span>
+        <span class="group-label-desc">专业画像与运行环境</span>
+      </div>
+
+    <a-row :gutter="24" class="settings-row">
+      <a-col :xs="24" :xl="16" class="settings-main">
+    <!-- 我的画像 -->
     <a-card :bordered="false" class="settings-card">
       <div class="card-head">
         <div>
@@ -329,39 +438,10 @@
       </a-form>
     </a-card>
       </a-col>
-      <a-col v-if="isAdmin" :xs="24" :xl="8" class="settings-aside">
-    <!-- 运行模式（仅管理员可见） -->
-    <a-card :bordered="false" class="settings-card">
-      <div class="card-head">
-        <div>
-          <div class="card-title">运行模式</div>
-          <div class="card-subtitle">控制系统运行环境，影响数据隔离与功能范围</div>
-        </div>
-      </div>
-
-      <a-form ref="runModeFormRef" :model="config" :rules="runModeRules" layout="vertical">
-        <a-form-item label="运行模式">
-          <a-select
-            v-model:value="config.runMode"
-            placeholder="选择运行模式…"
-            style="width: 100%"
-            :options="runModeOptions"
-          />
-          <div class="form-help">
-            <strong>Demo</strong>：演示模式，使用模拟数据，适合体验功能；<br>
-            <strong>Production</strong>：生产模式，连接真实外部服务，适合实际研发。
-          </div>
-        </a-form-item>
-
-        <a-form-item>
-          <a-button id="settings-save-runmode" type="primary" :loading="saving.runMode" @click="saveRunMode">
-            保存运行模式
-          </a-button>
-        </a-form-item>
-      </a-form>
-    </a-card>
+      <a-col v-if="!isAdmin" :xs="24" :xl="8" class="settings-aside">
       </a-col>
     </a-row>
+    </div>
 
     <!-- 关于 -->
     <div class="about-footer">
@@ -371,23 +451,19 @@
       <span class="about-sep">·</span>
       <span class="about-tagline">面向新材料、化工研发的 AI 驱动实验闭环平台</span>
     </div>
-
-    <OnboardingTooltip
-      :open="tourOpen"
-      :steps="tourSteps"
-      storage-key="settings_onboarding_seen"
-      @close="onTourClose"
-      @finish="onTourFinish"
-    />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
+import {
+  ExperimentOutlined,
+  ApiOutlined,
+  UserOutlined,
+} from '@ant-design/icons-vue'
 import SectionHeader from '@/components/SectionHeader.vue'
-import OnboardingTooltip from '@/components/OnboardingTooltip.vue'
-import { updateConfig, getModelCatalog } from '@/api/system'
+import { updateConfig, getModelCatalog, getActiveDomain, setActiveDomain, getConfig } from '@/api/system'
 import { updateMyDisciplines, getCurrentUser } from '@/api/auth'
 import { DISCIPLINE_OPTIONS } from '@/constants/roles'
 import { useSystemStore } from '@/stores/system'
@@ -398,7 +474,56 @@ import { MESSAGES } from '@/constants/glossary'
 
 const systemStore = useSystemStore()
 
-const saving = reactive({ api: false, models: false, engine: false, runMode: false, disciplines: false })
+const saving = reactive({ api: false, models: false, engine: false, runMode: false, disciplines: false, domain: false })
+
+// ── 研发领域（DB 持久化，系统启动读取并按该领域执行） ──
+const domainPacks = ref([])
+const domainLoading = ref(false)
+const activeDomain = ref(null)
+const selectedDomain = ref('')
+const domainSavedTip = ref('')
+const systemPreview = ref({})
+
+async function loadDomain() {
+  domainLoading.value = true
+  try {
+    const res = await getActiveDomain()
+    domainPacks.value = res?.packs || []
+    activeDomain.value = domainPacks.value.find((p) => p.is_active) || null
+    selectedDomain.value = activeDomain.value?.domain_key || ''
+    // 材料体系预览：按领域加载 /config?domain_key= 的体系名
+    systemPreview.value = {}
+    for (const p of domainPacks.value) {
+      try {
+        const cfg = await getConfig({ domain_key: p.domain_key })
+        const systems = cfg?.material_domain?.material_systems || []
+        systemPreview.value[p.domain_key] = systems.slice(0, 4).map((s) => s.name)
+      } catch { /* 单领域预览失败不阻塞 */ }
+    }
+  } catch {
+    domainPacks.value = []
+  } finally {
+    domainLoading.value = false
+  }
+}
+
+async function saveDomain() {
+  if (!selectedDomain.value) return
+  saving.domain = true
+  domainSavedTip.value = ''
+  try {
+    const res = await setActiveDomain({ domain_key: selectedDomain.value })
+    activeDomain.value = domainPacks.value.find((p) => p.domain_key === selectedDomain.value) || null
+    domainPacks.value = domainPacks.value.map((p) => ({ ...p, is_active: p.domain_key === selectedDomain.value }))
+    message.success(res?.message || '研发领域已切换')
+    domainSavedTip.value = '已持久保存：系统启动后自动按该领域执行'
+    setTimeout(() => { domainSavedTip.value = '' }, 6000)
+  } catch {
+    message.error('研发领域切换失败，请检查权限或稍后重试')
+  } finally {
+    saving.domain = false
+  }
+}
 
 // ── 我的画像 ──
 const disciplines = ref([])
@@ -614,21 +739,12 @@ onMounted(async () => {
     // 后端不可达时保留空目录，模板 v-for 渲染为空（用户无法选择）
   }
 
-  // 从 MDM 加载运行模式下拉选项
-  const { statusOptions } = useMdmDict()
-  try {
-    const options = await statusOptions('run')
-    if (options && options.length > 0) {
-      runModeOptions.value = options
-    } else {
-      throw new Error('empty')
-    }
-  } catch {
-    message.warning('部分下拉选项未能从主数据加载，已使用本地兜底')
-  }
+  // 运行模式：不使用 MDM domain 'run'（那是 ECML 运行状态 9 项，与系统运行模式语义不符），
+  // 固定使用本地 Demo/Production 选项（与后端 RunMode 枚举一致）
+  runModeOptions.value = [...RUN_MODE_OPTIONS_FALLBACK]
 
-  maybeStartTour()
   loadMyDisciplines()
+  loadDomain()
 })
 
 async function saveApi() {
@@ -744,57 +860,7 @@ async function saveRunMode() {
 }
 
 // ── 引导 ──
-const tourOpen = ref(false)
-const STORAGE_KEY = 'settings_onboarding_seen'
 
-function maybeStartTour() {
-  try {
-    if (!localStorage.getItem(STORAGE_KEY)) {
-      tourOpen.value = true
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
-function markOnboardingSeen() {
-  try {
-    localStorage.setItem(STORAGE_KEY, 'true')
-  } catch {
-    /* ignore */
-  }
-}
-
-function onTourFinish() {
-  tourOpen.value = false
-  markOnboardingSeen()
-}
-
-function onTourClose() {
-  tourOpen.value = false
-  markOnboardingSeen()
-}
-
-const tourSteps = [
-  {
-    target: '#settings-save-api',
-    title: '保存 API 配置',
-    description: '填写密钥和服务地址后，点击保存即可生效。',
-    placement: 'top',
-  },
-  {
-    target: '#settings-scp-switch',
-    title: '启用 SCP 外部工具',
-    description: '开启后可调用文献、毒理等外部工具扩展研发能力。',
-    placement: 'bottom',
-  },
-  {
-    target: '#settings-save-engine',
-    title: '保存 AI4S 引擎配置',
-    description: '确认 AI4S 和 SCP 配置后保存，系统将自动检测连接状态。',
-    placement: 'top',
-  },
-]
 </script>
 
 <style scoped>
@@ -803,6 +869,136 @@ const tourSteps = [
   max-width: 100%;
   margin: 0;
   padding: 0 var(--space-sm);
+}
+
+/* 逻辑分组：组标签 + 组间距 */
+.settings-group {
+  margin-bottom: 28px;
+}
+
+.group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.group-label-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--primary-bg, rgba(29, 78, 216, 0.08));
+  color: var(--primary, #1d4ed8);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.group-label-desc {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+/* 研发领域卡片式选项 */
+.domain-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+  color: var(--text-muted);
+}
+
+.domain-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.domain-option {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px);
+  padding: 14px 16px;
+  cursor: pointer;
+  background: var(--light-bg-card, #fff);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.domain-option:hover {
+  border-color: var(--primary-border, #bfdbfe);
+}
+
+.domain-option.is-selected {
+  border-color: var(--primary, #1d4ed8);
+  background: var(--primary-bg, rgba(29, 78, 216, 0.08));
+  box-shadow: 0 0 0 1px var(--primary, #1d4ed8);
+}
+
+.domain-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.domain-option-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.domain-option-badge {
+  font-size: 11px;
+  color: var(--primary, #1d4ed8);
+  background: var(--primary-bg, rgba(29, 78, 216, 0.08));
+  border: 1px solid var(--primary-border, #bfdbfe);
+  border-radius: 999px;
+  padding: 1px 8px;
+  flex-shrink: 0;
+}
+
+.domain-option-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 8px;
+  min-height: 38px;
+}
+
+.domain-option-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.domain-tag {
+  margin: 0;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 6px;
+}
+
+.active-domain-tag {
+  flex-shrink: 0;
+}
+
+.domain-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.domain-saved-tip {
+  font-size: 12px;
+  color: var(--success-color, #52c41a);
 }
 
 .settings-card {
@@ -926,7 +1122,8 @@ const tourSteps = [
   padding: 0 4px;
   font-size: 10px;
   line-height: 16px;
-  color: var(--text-muted, #999);
+  /* 对比度修复：10px 小字在浅灰底需 ≥4.5:1，用 #4b5563 */
+  color: #4b5563;
   background: var(--realsee-outline, #e8e8e8);
   border-radius: 2px;
 }

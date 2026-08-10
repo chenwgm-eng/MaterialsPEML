@@ -51,12 +51,12 @@
               <template v-if="column.key === 'status'">
                 <a-space>
                   <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
-                  <a-tag v-if="record.ai_draft" color="#f59e0b" class="draft-badge">草案</a-tag>
-                  <a-tag v-if="record.validation_failed" color="#ef4444" class="draft-badge">安全信息缺失</a-tag>
+                  <a-tag v-if="record.ai_draft" color="#b45309" class="draft-badge">草案</a-tag>
+                  <a-tag v-if="record.validation_failed" color="#dc2626" class="draft-badge">安全信息缺失</a-tag>
                 </a-space>
               </template>
               <template v-if="column.key === 'source'">
-                <a-tag v-if="record.protocol_provenance === 'ai' || record.ai_draft" color="purple">AI</a-tag>
+                <a-tag v-if="record.protocol_provenance === 'ai' || record.ai_draft" color="orange">AI</a-tag>
                 <a-tag v-else color="blue">人工</a-tag>
               </template>
               <template v-if="column.key === 'risk'">
@@ -64,7 +64,7 @@
                 <span v-else class="text-muted">-</span>
               </template>
               <template v-if="column.key === 'priority'">
-                <a-tag :color="record.priority === 'P0' ? '#ef4444' : record.priority === 'P1' ? '#f59e0b' : '#64748b'">
+                <a-tag :color="record.priority === 'P0' ? '#dc2626' : record.priority === 'P1' ? '#b45309' : '#4b5563'">
                   {{ record.priority }}
                 </a-tag>
               </template>
@@ -93,8 +93,30 @@
                   <a-button
                     type="link"
                     size="small"
+                    :disabled="!record.result_count"
                     @click="onViewOrderResults(record)"
                   >查看结果</a-button>
+                  <a-tooltip title="仅草稿/待审批状态可编辑">
+                    <a-button
+                      type="link"
+                      size="small"
+                      :disabled="!['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(record.status)"
+                      @click="onEditOrder(record)"
+                    >编辑</a-button>
+                  </a-tooltip>
+                  <a-popconfirm
+                    title="确认删除该实验任务？仅草稿/待审批状态可删除。"
+                    ok-text="删除"
+                    cancel-text="取消"
+                    @confirm="onDeleteOrder(record)"
+                  >
+                    <a-button
+                      type="link"
+                      danger
+                      size="small"
+                      :disabled="!['DRAFT', 'PENDING_APPROVAL'].includes(record.status)"
+                    >删除</a-button>
+                  </a-popconfirm>
                   <a-button
                     v-if="record.project_id"
                     type="link"
@@ -180,6 +202,40 @@
       </template>
     </a-drawer>
 
+    <!-- 编辑任务抽屉 -->
+    <a-drawer
+      :open="showEditModal"
+      title="编辑实验任务"
+      placement="right"
+      width="480px"
+      :destroy-on-close="false"
+      @update:open="(v) => (showEditModal = v)"
+    >
+      <a-form layout="vertical" size="small">
+        <a-form-item label="任务 ID">
+          <a-input :value="editingOrder?.order_id" disabled />
+        </a-form-item>
+        <a-form-item label="状态">
+          <a-tag :color="statusColor(editingOrder?.status)">{{ statusLabel(editingOrder?.status) }}</a-tag>
+        </a-form-item>
+        <a-form-item label="优先级">
+          <a-select v-model:value="editForm.priority" :options="priorityOptions" />
+        </a-form-item>
+        <a-form-item label="负责人">
+          <a-input v-model:value="editForm.assignee" placeholder="负责人" />
+        </a-form-item>
+        <a-form-item label="备注">
+          <a-textarea v-model:value="editForm.notes" :rows="3" placeholder="实验说明" />
+        </a-form-item>
+      </a-form>
+      <template #footer>
+        <a-space style="display: flex; justify-content: flex-end">
+          <a-button :disabled="savingEdit" @click="showEditModal = false">取消</a-button>
+          <a-button type="primary" :loading="savingEdit" @click="onSaveEditOrder">保存</a-button>
+        </a-space>
+      </template>
+    </a-drawer>
+
     <!-- 数据录入抽屉 -->
     <a-drawer
       :open="showDataModal"
@@ -225,7 +281,7 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'action'">
-            <a-tag :color="record.action === 'AUTO_APPROVE' ? '#10b981' : record.action === 'BLOCK' ? '#ef4444' : '#f59e0b'">
+            <a-tag :color="record.action === 'AUTO_APPROVE' ? '#047857' : record.action === 'BLOCK' ? '#dc2626' : '#b45309'">
               {{ record.action === 'AUTO_APPROVE' ? '自动放行' : record.action === 'BLOCK' ? '阻断' : '需人工审批' }}
             </a-tag>
           </template>
@@ -319,10 +375,14 @@ import {
   createExperimentResultsBatch,
   uploadExperimentFile,
   listApprovalRules,
+  updateExperimentOrder,
+  deleteExperimentOrder,
+  approveExperimentOrder,
 } from '@/api/experiments'
 import { resumeECMLFromData } from '@/api/ecml'
 import { listProjects } from '@/api/projects'
 import { listCandidates } from '@/api/candidates'
+import { getUserId } from '@/api/client'
 import ExperimentDataForm from '@/components/ExperimentDataForm.vue'
 import ExperimentResultsDrawer from '@/components/experiment/ExperimentResultsDrawer.vue'
 import * as XLSX from 'xlsx'
@@ -373,6 +433,10 @@ const router = useRouter()
 const route = useRoute()
 const showRulesModal = ref(false)
 const approvalRules = ref([])
+const showEditModal = ref(false)
+const editingOrder = ref(null)
+const editForm = ref({ assignee: '', priority: '', notes: '' })
+const savingEdit = ref(false)
 
 const projectList = ref([])
 const candidateList = ref([])
@@ -453,9 +517,9 @@ function statusColor(status) {
   const statusColorMap = {
     purple: '#8b5cf6',
     blue: '#3b82f6',
-    green: '#10b981',
-    orange: '#f59e0b',
-    red: '#ef4444',
+    green: '#047857',
+    orange: '#b45309',
+    red: '#dc2626',
     default: '#64748b',
   }
   return statusColorMap[raw] || raw
@@ -554,8 +618,65 @@ async function onCreateOrder() {
 }
 
 function onApprove(record) {
-  // 审批队列已统一迁移至「我的待办」
-  router.push({ path: '/my-tasks', query: { tab: 'approval' } })
+  // 直接执行审批（审批队列同时迁移至「我的待办」汇总）
+  Modal.confirm({
+    title: '审批实验任务',
+    content: `确认通过实验任务 ${record.order_id} 的审批？通过后状态变为「已审批」，可录入实验数据。`,
+    okText: '审批通过',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await approveExperimentOrder(record.order_id, { approved_by: getUserId() || '', notes: '实验工作台审批通过' })
+        message.success(`任务 ${record.order_id} 已审批通过`)
+        await fetchOrders()
+      } catch (e) {
+        const detail = e?.response?.data?.detail
+        message.error(typeof detail === 'string' ? detail : '审批失败，请检查权限或任务状态', 6)
+      }
+    },
+  })
+}
+
+// ── 编辑/删除实验任务 ──
+function onEditOrder(record) {
+  editingOrder.value = record
+  editForm.value = {
+    assignee: record.assignee || '',
+    priority: record.priority || 'P2',
+    notes: record.notes || '',
+  }
+  showEditModal.value = true
+}
+
+async function onSaveEditOrder() {
+  if (!editingOrder.value) return
+  savingEdit.value = true
+  try {
+    await updateExperimentOrder(editingOrder.value.order_id, {
+      assignee: editForm.value.assignee,
+      priority: editForm.value.priority,
+      notes: editForm.value.notes,
+    })
+    message.success('任务已更新')
+    showEditModal.value = false
+    await fetchOrders()
+  } catch (e) {
+    const detail = e?.response?.data?.detail
+    message.error(typeof detail === 'string' ? detail : '更新失败，请稍后重试', 6)
+  } finally {
+    savingEdit.value = false
+  }
+}
+
+async function onDeleteOrder(record) {
+  try {
+    await deleteExperimentOrder(record.order_id)
+    message.success(`任务 ${record.order_id} 已删除`)
+    await fetchOrders()
+  } catch (e) {
+    const detail = e?.response?.data?.detail
+    message.error(typeof detail === 'string' ? detail : '删除失败，仅草稿/待审批任务可删除', 6)
+  }
 }
 
 function onEnterData(record) {
@@ -812,7 +933,7 @@ function onViewOrderResults(record) {
 }
 
 function riskColor(risk) {
-  const map = { '低': '#10b981', '中': '#f59e0b', '高': '#ef4444' }
+  const map = { '低': '#047857', '中': '#b45309', '高': '#dc2626' }
   return map[risk] || '#64748b'
 }
 
@@ -837,6 +958,18 @@ onMounted(async () => {
   }
   if (route.query.create === '1') {
     showCreateModal.value = true
+  }
+  // 配方/工艺 → 下达实验跳转：定位并自动打开该任务的结果抽屉
+  if (route.query.order_id) {
+    const targetId = String(route.query.order_id)
+    await fetchOrders()
+    const target = orders.value.find((o) => o.order_id === targetId)
+    if (target) {
+      selectedOrder.value = target
+      showResultsModal.value = true
+    } else {
+      message.info(`任务 ${targetId} 可能尚未同步，请刷新后查看`)
+    }
   }
   // 读取来自 ECML 闭环迭代推荐候选的上下文，自动填入备注
   const ecmlCandidate = sessionStorage.getItem('ecml_recommended_candidate')

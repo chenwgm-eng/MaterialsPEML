@@ -52,6 +52,19 @@ export const listExperimentOrders = (params = {}) =>
 export const createExperimentOrder = (data) =>
   client.post('/experiments/orders', data)
 
+// 订单元数据编辑 / 删除 / 审批
+export const updateExperimentOrder = (orderId, data) =>
+  client.patch(`/experiments/orders/${encodeURIComponent(orderId)}`, data)
+
+export const deleteExperimentOrder = (orderId) =>
+  client.delete(`/experiments/orders/${encodeURIComponent(orderId)}`)
+
+export const approveExperimentOrder = (orderId, data) =>
+  client.post(`/experiments/orders/${encodeURIComponent(orderId)}/approve`, data)
+
+export const rejectExperimentOrder = (orderId, data) =>
+  client.post(`/experiments/orders/${encodeURIComponent(orderId)}/reject`, data)
+
 // --- 实验结果 ---
 
 export const listExperimentResults = (params = {}) =>

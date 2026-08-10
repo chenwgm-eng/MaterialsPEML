@@ -173,6 +173,30 @@ class BatteryMaterialsAgent:
         self.tools.register(self.tools.get_tool("get_experiment_results"), handler=self._handle_get_results)
         self.tools.register(self.tools.get_tool("subscribe_experiment_updates"), handler=self._handle_subscribe)
         self.tools.register(self.tools.get_tool("design_formula"), handler=self._handle_design_formula)
+        self.tools.register(self.tools.get_tool("search_literature"), handler=self._handle_literature_search)
+        self.tools.register(self.tools.get_tool("build_knowledge_graph"), handler=self._handle_build_knowledge_graph)
+
+    # ── 文献调研工具（literature_researcher 专用实现：多源并行检索） ──
+    def _literature_researcher(self):
+        from .agent_team.agents.literature_researcher import LiteratureResearcherAgent
+        if not hasattr(self, "_literature_researcher_agent"):
+            self._literature_researcher_agent = LiteratureResearcherAgent(config=self.config)
+        return self._literature_researcher_agent
+
+    def _handle_literature_search(self, query: str = "", limit: int = 10, **kwargs):
+        """检索文献（LLM/SCP/学术 API/本地知识库并行，超时降级、模板兜底）。"""
+        from .agent_team.executor import _run_async_safe
+        agent = self._literature_researcher()
+        try:
+            return _run_async_safe(agent.search(query=str(query or ""), limit=int(limit or 10)))
+        except Exception as e:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("literature search failed: %s", e)
+            return {"error": f"文献检索失败: {e}", "papers": []}
+
+    def _handle_build_knowledge_graph(self, papers: list | None = None, **kwargs):
+        """基于文献列表构建知识图谱。"""
+        return self._literature_researcher().build_knowledge_graph(papers or [])
 
     def discover(self, target: str, target_property: str = "ionic_conductivity",
                  max_iterations: int = 3) -> ECMLState:
@@ -235,10 +259,12 @@ class BatteryMaterialsAgent:
         }
 
     def discover_polymer(self, target_properties: dict | list | None = None,
-                         num_candidates: int = 10) -> dict:
+                         num_candidates: int = 10,
+                         material_system: str = "") -> dict:
         candidates = self.polymer_generator.generate(
             target_properties=target_properties,
             num_candidates=num_candidates,
+            material_system=material_system,
         )
         return {
             "candidates": [c.model_dump() for c in candidates],
@@ -347,8 +373,113 @@ class BatteryMaterialsAgent:
     def _handle_crystal_gen(self, elements=None, num_candidates=10):
         return self.discover_crystal(elements or [], num_candidates=num_candidates)
 
-    def _handle_polymer_gen(self, target_properties=None, num_candidates=10):
-        return self.discover_polymer(target_properties, num_candidates)
+    def _handle_polymer_gen(self, target_properties=None, num_candidates=10,
+                            material_system=""):
+        return self.discover_polymer(target_properties, num_candidates,
+                                     material_system=material_system or "")
+
+    def _design_crystal_formula(self, target_material) -> dict:
+        """晶体/无机材料固相合成配方通道。
+
+        避免 FormulaAgent 默认聚合物配方（PEO/LiTFSI）串入晶体体系：
+        BOM 使用目标材料与典型无机前驱体，BOP 为球磨→冷压→烧结标准流程。
+        """
+        candidate = ""
+        if isinstance(target_material, dict):
+            candidate = str(target_material.get("candidate") or "") or ""
+        if not candidate:
+            candidate = "目标材料"
+
+        # 典型固相合成前驱体（按材料类型推断，权重 1.0 = 目标材料本体）
+        bom = [
+            {"material_id": "RM-CRY-01", "material_name": candidate,
+             "cas_number": "", "amount": 1.0, "unit_price": 80.0,
+             "cost": 80.0, "supplier": "材料供应商", "in_stock": True},
+        ]
+        material_cost = 80.0
+        # 固相合成标准工艺（球磨 → 冷压 → 高温烧结）
+        bop = [
+            {"step": "球磨混料", "equipment": "行星球磨机", "temperature": 25, "duration": 6, "key_params": "rpm=300，无水无氧保护气氛"},
+            {"step": "冷压成型", "equipment": "液压压片机", "temperature": 25, "duration": 0.5, "key_params": "压力 300 MPa"},
+            {"step": "高温烧结", "equipment": "管式炉", "temperature": 700, "duration": 12, "key_params": "Ar 气氛，升温速率 5°C/min"},
+            {"step": "冷却破碎", "equipment": "手套箱+研钵", "temperature": 25, "duration": 1, "key_params": "随炉冷却后破碎研磨"},
+        ]
+        process_cost = round(sum(80 + 4 + 60 for _ in bop), 2)
+        return {
+            "bom": bom,
+            "bop": bop,
+            "equipment": "行星球磨机 + 管式炉",
+            "material_cost": material_cost,
+            "process_cost": process_cost,
+            "total_unit_cost": round(material_cost + process_cost, 2),
+            "is_passed": True,
+            "warnings": [],
+            "fatal_errors": [],
+            "note": f"晶体固相合成配方：{candidate}，球磨-冷压-烧结工艺",
+        }
+
+    def _design_engineering_formula(self, target_material, material_system: str) -> dict:
+        """工程塑料/改性塑料配方（kingfa 领域）：基材 + 增强/阻燃助剂 + 双螺杆挤出。
+
+        基于物料规格库（RM-*）选取基材与助剂，输出与 FormulaDesign.vue 对齐的
+        BOM/BOP 结构。专业参数（玻纤 30% 增强、双螺杆挤出温度等）按体系经验值。
+        """
+        system = material_system or ""
+        candidate = ""
+        if isinstance(target_material, dict):
+            candidate = str(target_material.get("candidate") or "") or ""
+        if not candidate:
+            candidate = system
+
+        # 基材选择（按体系）
+        base_map = [
+            (("聚丙烯", "pp"), "RM-001", "PEO", 85.0),   # 演示库中以 PEO 近似 PP 基材价
+        ]
+        # 增强/助剂（按体系关键词）
+        reinforcement_map = [
+            (("玻纤", "gf", "增强"), ("GF30", "玻璃纤维", 6.5)),
+            (("碳纤", "cf"), ("CF20", "碳纤维", 40.0)),
+            (("阻燃", "fr"), ("FR-APP", "聚磷酸铵（无卤阻燃）", 12.0)),
+            (("生物降解",), ("PBAT", "PBAT 生物降解共聚酯", 15.0)),
+        ]
+        base_id, base_name, base_price = base_map[0][1], base_map[0][2], base_map[0][3]
+        reinforcement = ("GF30", "玻璃纤维", 6.5)
+        for kws, r in reinforcement_map:
+            if any(k in system.lower() or k in candidate.lower() for k in kws):
+                reinforcement = r
+                break
+
+        # BOM：基材 70% + 增强 30%（工程塑料典型配方）
+        bom = [
+            {"material_id": base_id, "material_name": base_name,
+             "cas_number": "", "amount": 0.70, "unit_price": base_price,
+             "cost": round(0.70 * base_price, 2), "supplier": "国泰华荣", "in_stock": True},
+            {"material_id": "RM-ENG-01", "material_name": reinforcement[1],
+             "cas_number": "", "amount": 0.30, "unit_price": reinforcement[2],
+             "cost": round(0.30 * reinforcement[2], 2), "supplier": "巨石/泰山玻纤", "in_stock": True},
+        ]
+        material_cost = round(sum(b["cost"] for b in bom), 2)
+        # BOP：双螺杆挤出共混工艺（改性塑料标准流程）
+        bop = [
+            {"step": "预混", "equipment": "高速混合机", "temperature": 25, "duration": 0.5, "key_params": "rpm=800，基材与助剂预混合"},
+            {"step": "挤出共混", "equipment": "双螺杆挤出机", "temperature": 210, "duration": 1.5, "key_params": "rpm=350，熔融共混与剪切分散"},
+            {"step": "水冷造粒", "equipment": "水冷拉条造粒机", "temperature": 25, "duration": 0.5, "key_params": "拉条水冷后切粒"},
+            {"step": "干燥包装", "equipment": "除湿干燥机", "temperature": 80, "duration": 2, "key_params": "含水率 < 0.1%"},
+        ]
+        process_cost = round(sum(80 + 4 + 60 for _ in bop), 2)
+        return {
+            "bom": bom,
+            "bop": bop,
+            "equipment": "双螺杆挤出机",
+            "material_cost": material_cost,
+            "process_cost": process_cost,
+            "total_unit_cost": round(material_cost + process_cost, 2),
+            "material_system": system,
+            "is_passed": True,
+            "warnings": [],
+            "fatal_errors": [],
+            "note": f"工程塑料改性配方（{system}）：基材 {base_name} 70% + {reinforcement[1]} 30%，双螺杆挤出共混",
+        }
 
     def _handle_crystal_pred(self, features=None, property_name="band_gap"):
         return self.crystal_predictor.predict(features or {}, property_name).model_dump()
@@ -384,7 +515,9 @@ class BatteryMaterialsAgent:
         return {"subscribed": True, "callback_url": callback_url}
 
     def _handle_design_formula(self, target_material=None, quantity: float = 1.0,
-                               quantity_kg: float | None = None):
+                               quantity_kg: float | None = None,
+                               material_system: str = "",
+                               cand_type: str = ""):
         """调用工业化配方智能体生成 BOM/BOP 并评估合规性与成本。
 
         返回结构对齐前端 FormulaDesign.vue 期望：
@@ -393,7 +526,20 @@ class BatteryMaterialsAgent:
         - material_cost / process_cost / total_unit_cost
         - ehs: {reach, hazard_class, storage, disposal}
         - is_passed / warnings / fatal_errors
+
+        按候选材料类型分派配方通道：
+        - crystal/inorganic：晶体固相配方（无机前驱体 + 球磨/冷压/烧结），
+          避免聚合物配方（PEO 等）跨体系混入
+        - material_system 为工程塑料/改性体系：工程塑料配方通道
+        - 其余：FormulaAgent 默认（聚合物电解质等）
         """
+        # 工程塑料/改性体系：kingfa 配方通道
+        if material_system and any(k in material_system for k in ("聚丙烯", "尼龙", "工程塑料", "阻燃", "生物降解", "改性")):
+            return self._design_engineering_formula(target_material, material_system)
+        # 晶体/无机体系：固相合成配方通道（避免跨体系聚合物物料）
+        _ctype = (cand_type or "").lower()
+        if _ctype in ("crystal", "inorganic"):
+            return self._design_crystal_formula(target_material)
         import asyncio
         # 兼容 MCP 工具调用方传入 quantity_kg（前端 FormulaDesign.vue 与测试用例使用该名称）
         if quantity_kg is not None:

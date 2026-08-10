@@ -25,7 +25,12 @@
           v-for="task in taskStore.tasks"
           :key="task.id"
           class="task-item"
-          :class="`task-${task.status}`"
+          :class="[`task-${task.status}`, { clickable: !!task.link }]"
+          :role="task.link ? 'button' : undefined"
+          :tabindex="task.link ? 0 : undefined"
+          :title="task.link ? '点击跳转到任务页面' : undefined"
+          @click="onTaskClick(task)"
+          @keydown.enter.prevent="onTaskClick(task)"
         >
           <div class="task-row">
             <span class="task-name">{{ task.name }}</span>
@@ -47,12 +52,24 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { SyncOutlined, CheckCircleOutlined, CloseOutlined } from '@ant-design/icons-vue'
 import { useTaskStore } from '@/stores/tasks'
 import { getAsyncTasks } from '@/api/system'
 
 const taskStore = useTaskStore()
 const expanded = ref(false)
+const router = useRouter()
+
+// 后端任务类型 → 前端跳转路由（无映射时不可点击）
+const TYPE_LINK_MAP = {
+  agent: '/workbench',
+  synthesis: '/synthesis',
+  prediction: '/workbench?mode=temp',
+  ecml: '/ecml',
+  research: '/research',
+  computation: null,
+}
 
 // 轮询后端全局异步任务接口，把后台运行中的计算任务同步进全局任务列表
 let pollTimer = null
@@ -70,17 +87,28 @@ async function poll() {
 function syncTasks(backendTasks) {
   for (const t of backendTasks) {
     const exists = taskStore.tasks.find((x) => x.id === t.id)
-    if (t.status === 'running') {
-      if (exists) {
-        taskStore.updateTask(t.id, { name: t.name, type: t.type, detail: t.detail, status: 'running' })
-      } else {
-        taskStore.addTask({ id: t.id, name: t.name, type: t.type, detail: t.detail })
-      }
-    } else if (exists) {
-      taskStore.updateTask(t.id, { status: t.status, detail: t.detail })
+    const status = t.status === 'running' ? 'running' : t.status === 'completed' ? 'completed' : t.status === 'failed' ? 'failed' : t.status
+    if (exists) {
+      taskStore.updateTask(t.id, { name: t.name, type: t.type, detail: t.detail, status })
+    } else {
+      taskStore.addTask({
+        id: t.id,
+        name: t.name,
+        type: t.type,
+        detail: t.detail,
+        status,
+        progress: t.progress || 0,
+        link: TYPE_LINK_MAP[t.type] || '',
+      })
     }
   }
   taskStore.prune()
+}
+
+function onTaskClick(task) {
+  if (!task.link) return
+  expanded.value = false
+  router.push(task.link)
 }
 
 onMounted(() => {
@@ -180,6 +208,19 @@ function statusLabel(status) {
 .task-item {
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
+}
+
+.task-item.clickable {
+  cursor: pointer;
+}
+
+.task-item.clickable:hover {
+  background: var(--bg-hover);
+}
+
+.task-item.clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 .task-item:last-child {

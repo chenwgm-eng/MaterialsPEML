@@ -36,12 +36,14 @@ const props = defineProps({
 })
 
 // 规范态 → 主题色（对齐任务要求）
+// 对比度修复：原 #52C41A/#3b82f6/#FAAD14/#F5222D/#8C8C8C 作 12px 小字仅 2-3.7:1，
+// 统一加深至白底 ≥4.5:1（tag 浅底 + text 纯文字两种形态均达标）
 const STATUS_COLOR_MAP = {
-  success: '#52C41A',
-  running: '#3b82f6',
-  warning: '#FAAD14',
-  failed: '#F5222D',
-  default: '#8C8C8C',
+  success: '#15803d',
+  running: '#1d4ed8',
+  warning: '#b45309',
+  failed: '#b91c1c',
+  default: '#6b7280',
 }
 
 // 规范态 → 中文文案

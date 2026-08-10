@@ -307,7 +307,7 @@
                 <a-tag v-if="synthResult.agent_info.model" color="cyan">
                   {{ synthResult.agent_info.model }}
                 </a-tag>
-                <a-tag v-if="synthResult.agent_info.role" color="purple" size="small">
+                <a-tag v-if="synthResult.agent_info.role" color="blue" size="small">
                   {{ synthResult.agent_info.role }}
                 </a-tag>
                 <a-tag v-if="synthResult.engine" color="orange" size="small">
@@ -409,6 +409,34 @@
           </div>
           <a-spin :spinning="complianceLoading">
             <div v-if="complianceResult" class="compliance-result">
+              <!-- 执行过程透明化（#3）：显示评估主体、执行步骤与引擎说明，杜绝黑箱 -->
+              <div class="compliance-agent-bar">
+                <div class="compliance-agent">
+                  <span class="compliance-agent-avatar">
+                    <SafetyCertificateOutlined />
+                  </span>
+                  <span class="compliance-agent-name">配方工艺师 · 工业化验证</span>
+                  <a-tag size="small" class="compliance-engine-tag">本地规则引擎 + 企业物料库</a-tag>
+                </div>
+                <span class="compliance-run-at" v-if="complianceRunAt">
+                  {{ complianceRunAt }} 执行
+                </span>
+              </div>
+              <div v-if="complianceResult.process?.length" class="compliance-process">
+                <div
+                  v-for="(p, idx) in complianceResult.process"
+                  :key="idx"
+                  class="process-step"
+                >
+                  <span class="process-step-icon" :class="`is-${p.status}`">
+                    <CheckCircleFilled v-if="p.status === 'done'" />
+                    <CloseCircleFilled v-else-if="p.status === 'failed'" />
+                    <MinusCircleFilled v-else />
+                  </span>
+                  <span class="process-step-name">{{ p.step }}</span>
+                  <span class="process-step-detail">{{ p.detail }}</span>
+                </div>
+              </div>
               <a-row :gutter="12">
                 <a-col :span="8">
                   <a-card size="small" class="kpi-card">
@@ -518,6 +546,9 @@ import {
   SafetyCertificateOutlined,
   ApiOutlined,
   ExperimentOutlined,
+  CheckCircleFilled,
+  CloseCircleFilled,
+  MinusCircleFilled,
 } from '@ant-design/icons-vue'
 import StructureView from './StructureView.vue'
 import AIOutputMeta from './AIOutputMeta.vue'
@@ -564,6 +595,7 @@ const synthResult = ref(null)
 const synthFeasibility = ref(null)
 const complianceLoading = ref(false)
 const complianceResult = ref(null)
+const complianceRunAt = ref('')
 // 用户在合成路径 Tab 中选中的路线 ID（供父组件跳转配方设计时携带）
 const selectedRouteId = ref(null)
 // 跨尺度预测完整结果（molecular/reaction/continuum/coupled）
@@ -964,6 +996,7 @@ function onCreateExperiment() {
 async function runComplianceCheck() {
   complianceLoading.value = true
   complianceResult.value = null
+  complianceRunAt.value = ''
   try {
     // 调用工业化合规检查接口
     const res = await client.post('/industrialization/check', {
@@ -973,12 +1006,17 @@ async function runComplianceCheck() {
       candidate_id: candidateId.value,
     })
     complianceResult.value = res
+    complianceRunAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   } catch (e) {
     // 兜底：使用本地简单评估
     complianceResult.value = {
       overall_score: props.candidate.multi_objective_score ?? 0,
       estimated_cost: '—',
       supply_risk: '未知',
+      process: [
+        { step: '候选材料解析', status: 'done', detail: '已解析候选材料' },
+        { step: '物料库匹配', status: 'failed', detail: '服务暂不可用，未能完成匹配' },
+      ],
       checks: [
         {
           name: '合规检查接口',
@@ -987,6 +1025,7 @@ async function runComplianceCheck() {
         },
       ],
     }
+    complianceRunAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   } finally {
     complianceLoading.value = false
   }
@@ -1362,6 +1401,102 @@ function scoreColor(s) {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* 执行过程透明化（#3）：评估主体条 + 步骤链 */
+.compliance-agent-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--primary-bg);
+  border: 1px solid var(--primary-border);
+  border-radius: 8px;
+}
+
+.compliance-agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.compliance-agent-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.compliance-agent-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.compliance-engine-tag {
+  font-size: 11px;
+}
+
+.compliance-run-at {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.compliance-process {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--light-bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.process-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.process-step-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.process-step-icon.is-done {
+  color: var(--success);
+}
+
+.process-step-icon.is-failed {
+  color: var(--error);
+}
+
+.process-step-icon.is-skipped {
+  color: var(--text-muted);
+}
+
+.process-step-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.process-step-detail {
+  color: var(--text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kpi-card {

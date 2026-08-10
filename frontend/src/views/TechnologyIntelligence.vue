@@ -500,7 +500,7 @@ async function onSaveGraph() {
 }
 
 .hint-label {
-  color: #8a92a6;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -605,7 +605,7 @@ async function onSaveGraph() {
 
 .paper-meta {
   font-size: 12px;
-  color: #8a92a6;
+  color: var(--text-muted);
 }
 
 .paper-sep {
@@ -672,8 +672,8 @@ async function onSaveGraph() {
 }
 
 .indicator-mid {
-  background: #fff2e0;
-  color: #c76c00;
+  background: var(--warning-bg, rgba(255, 125, 0, 0.1));
+  color: var(--warning, #b45309);
 }
 
 .indicator-weak {
@@ -754,7 +754,7 @@ async function onSaveGraph() {
 
 .saved-meta {
   font-size: 11px;
-  color: #8a92a6;
+  color: var(--text-muted);
   margin-top: 3px;
   white-space: nowrap;
   overflow: hidden;
@@ -788,7 +788,7 @@ async function onSaveGraph() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #8a92a6;
+  color: var(--text-muted);
   font-size: 13px;
 }
 

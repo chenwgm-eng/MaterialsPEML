@@ -1,11 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { message } from 'ant-design-vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import { useSystemStore } from '@/stores/system'
 import { getUserId } from '@/api/client'
 import { ROLE_RANK } from '@/constants/roles'
 
 const routes = [
+  // 独立登录页：未登录/会话失效时由守卫与 401 拦截器重定向到此
+  { path: '/login', name: 'Login', component: () => import('@/views/Login.vue'), meta: { title: '登录' } },
   {
     path: '/',
     component: MainLayout,
@@ -13,24 +14,24 @@ const routes = [
       { path: '', name: 'Dashboard', component: () => import('@/views/Dashboard.vue'), meta: { title: '总览', icon: 'DashboardOutlined' } },
       { path: 'dashboard', name: 'ManagementDashboard', component: () => import('@/views/ManagementDashboard.vue'), meta: { title: '管理看板', icon: 'DashboardOutlined' } },
       { path: 'my-tasks', name: 'MyTasks', component: () => import('@/views/MyTasks.vue'), meta: { title: '我的待办', icon: 'BellOutlined' } },
-      { path: 'projects', name: 'Projects', component: () => import('@/views/Projects.vue'), meta: { title: '项目管理', icon: 'ProjectOutlined' } },
-      { path: 'projects/new', name: 'ProjectNew', component: () => import('@/views/ProjectNew.vue'), meta: { title: '项目新建', icon: 'ProjectOutlined' } },
+      { path: 'projects', name: 'Projects', component: () => import('@/views/Projects.vue'), meta: { title: '项目管理', icon: 'ProjectOutlined', context: 'project' } },
+      { path: 'projects/new', name: 'ProjectNew', component: () => import('@/views/ProjectNew.vue'), meta: { title: '项目新建', icon: 'ProjectOutlined', context: 'project' } },
       // 审查意见0726：材料发现已合并到候选工作台，路径 /discovery 由顶部 redirect 处理
-      { path: 'workbench', name: 'CandidateWorkbench', component: () => import('@/views/CandidateWorkbench.vue'), meta: { title: '候选材料设计', icon: 'ExperimentOutlined' } },
+      { path: 'workbench', name: 'CandidateWorkbench', component: () => import('@/views/CandidateWorkbench.vue'), meta: { title: '候选材料设计', icon: 'ExperimentOutlined', context: 'project' } },
       // 独立性质预测页已并入「材料设计」工作台的临时材料性能预测模式
       { path: 'prediction', redirect: '/workbench?mode=temp' },
       { path: 'prediction/temp', redirect: '/workbench?mode=temp' },
-      { path: 'ecml', name: 'ECMLMonitor', component: () => import('@/views/ECMLMonitor.vue'), meta: { title: '实验闭环迭代', icon: 'SyncOutlined' } },
-      { path: 'ecml/runs', name: 'ECMLRuns', component: () => import('@/views/ECMLRuns.vue'), meta: { title: '迭代历史', icon: 'HistoryOutlined' } },
-      { path: 'experiments', name: 'Experiments', component: () => import('@/views/Experiments.vue'), meta: { title: '实验数据', icon: 'DatabaseOutlined' } },
-      { path: 'experiment-dashboard', name: 'ExperimentDashboard', component: () => import('@/views/ExperimentDashboard.vue'), meta: { title: '实验数据看板', icon: 'DashboardOutlined' } },
-      { path: 'experiment-workbench', name: 'ExperimentWorkbench', component: () => import('@/views/ExperimentWorkbench.vue'), meta: { title: '实验工作台', icon: 'FormOutlined' } },
+      { path: 'ecml', name: 'ECMLMonitor', component: () => import('@/views/ECMLMonitor.vue'), meta: { title: '实验闭环迭代', icon: 'SyncOutlined', context: 'project' } },
+      { path: 'ecml/runs', name: 'ECMLRuns', component: () => import('@/views/ECMLRuns.vue'), meta: { title: '迭代历史', icon: 'HistoryOutlined', context: 'project' } },
+      { path: 'experiments', name: 'Experiments', component: () => import('@/views/Experiments.vue'), meta: { title: '实验数据', icon: 'DatabaseOutlined', context: 'project' } },
+      { path: 'experiment-dashboard', name: 'ExperimentDashboard', component: () => import('@/views/ExperimentDashboard.vue'), meta: { title: '实验数据看板', icon: 'DashboardOutlined', context: 'project' } },
+      { path: 'experiment-workbench', name: 'ExperimentWorkbench', component: () => import('@/views/ExperimentWorkbench.vue'), meta: { title: '实验工作台', icon: 'FormOutlined', context: 'project' } },
       // 审查意见0726：决策放行已整合进「我的待办」，旧路径重定向
       { path: 'approvals', redirect: '/my-tasks?tab=approval' },
       { path: 'committees', redirect: '/my-tasks?tab=committee' },
       { path: 'release-cards', redirect: '/my-tasks?tab=release' },
       { path: 'value-report', name: 'ValueReport', component: () => import('@/views/ValueReport.vue'), meta: { title: '收益账单', icon: 'AccountBookOutlined', requiredAnyPermission: ['user.manage', 'tenant.manage', 'audit.view'] } },
-      { path: 'data-ingest', name: 'DataIngest', component: () => import('@/views/DataIngest.vue'), meta: { title: '数据接入', icon: 'ImportOutlined' } },
+      { path: 'data-ingest', name: 'DataIngest', component: () => import('@/views/DataIngest.vue'), meta: { title: '数据接入', icon: 'ImportOutlined', context: 'project' } },
       { path: 'capability-center', name: 'CapabilityCenter', component: () => import('@/views/CapabilityCenter.vue'), meta: { title: '能力契约', icon: 'ApiOutlined', requiredAnyPermission: ['user.manage', 'tenant.manage', 'audit.view'] } },
       { path: 'control-plane', name: 'ControlPlaneDashboard', component: () => import('@/views/ControlPlaneDashboard.vue'), meta: { title: '控制平面', icon: 'ControlOutlined', requiredAnyPermission: ['user.manage', 'tenant.manage', 'audit.view'] } },
       { path: 'budgets', name: 'BudgetBoard', component: () => import('@/views/BudgetBoard.vue'), meta: { title: '预算看板', icon: 'WalletOutlined', requiredAnyPermission: ['user.manage', 'tenant.manage', 'audit.view'] } },
@@ -39,11 +40,11 @@ const routes = [
       { path: 'tool-catalog', redirect: '/tools' },
       { path: 'tool-catalog/:id', redirect: '/tools' },
       { path: 'eval-center', name: 'EvalCenter', component: () => import('@/views/EvalCenter.vue'), meta: { title: '评估中心', icon: 'ExperimentOutlined', requiredAnyPermission: ['prediction.run'] } },
-      { path: 'data-quality', name: 'DataQualityWorkbench', component: () => import('@/views/DataQualityWorkbench.vue'), meta: { title: '数据质量', icon: 'SafetyCertificateOutlined' } },
+      { path: 'data-quality', name: 'DataQualityWorkbench', component: () => import('@/views/DataQualityWorkbench.vue'), meta: { title: '数据质量', icon: 'SafetyCertificateOutlined', context: 'project' } },
       { path: 'materials', name: 'RawMaterials', component: () => import('@/views/RawMaterials.vue'), meta: { title: '物料规格库', icon: 'ShopOutlined' } },
-      { path: 'samples', name: 'SampleManager', component: () => import('@/views/SampleManager.vue'), meta: { title: '样品管理', icon: 'InboxOutlined' } },
-      { path: 'synthesis', name: 'Synthesis', component: () => import('@/views/Synthesis.vue'), meta: { title: '合成路径', icon: 'BranchesOutlined' } },
-      { path: 'formula-design', name: 'FormulaDesign', component: () => import('@/views/FormulaDesign.vue'), meta: { title: '配方与工艺', icon: 'ExperimentOutlined' } },
+      { path: 'samples', name: 'SampleManager', component: () => import('@/views/SampleManager.vue'), meta: { title: '样品管理', icon: 'InboxOutlined', context: 'project' } },
+      { path: 'synthesis', name: 'Synthesis', component: () => import('@/views/Synthesis.vue'), meta: { title: '合成路径', icon: 'BranchesOutlined', context: 'project' } },
+      { path: 'formula-design', name: 'FormulaDesign', component: () => import('@/views/FormulaDesign.vue'), meta: { title: '配方与工艺', icon: 'ExperimentOutlined', context: 'project' } },
       { path: 'tools', name: 'Tools', component: () => import('@/views/ToolsHub.vue'), meta: { title: '工具与连接器', icon: 'AppstoreOutlined' } },
       { path: 'topology', name: 'Topology', component: () => import('@/views/TopologyView.vue'), meta: { title: '调用关系', icon: 'ShareAltOutlined' } },
       // 审查意见0726：智能编排菜单已合并到研发工作台；路由保留以便直接访问
@@ -56,7 +57,7 @@ const routes = [
       { path: 'knowledge-graph', name: 'KnowledgeGraph', component: () => import('@/views/KnowledgeGraph.vue'), meta: { title: '知识图谱', icon: 'ShareAltOutlined' } },
       { path: 'properties', name: 'MaterialProperties', component: () => import('@/views/MaterialProperties.vue'), meta: { title: '属性字典', icon: 'ProfileOutlined' } },
       { path: 'mdm', name: 'MdmCenter', component: () => import('@/views/MdmCenter.vue'), meta: { title: '主数据治理', icon: 'DatabaseOutlined' } },
-      { path: 'equipment', name: 'EquipmentLedger', component: () => import('@/views/EquipmentLedger.vue'), meta: { title: '设备台账', icon: 'ToolOutlined' } },
+      { path: 'equipment', name: 'EquipmentLedger', component: () => import('@/views/EquipmentLedger.vue'), meta: { title: '设备台账', icon: 'ToolOutlined', context: 'project' } },
       { path: 'users', name: 'UserManagement', component: () => import('@/views/UserManagement.vue'), meta: { title: '用户管理', icon: 'UserOutlined', requiredAnyPermission: ['user.manage'] } },
       { path: 'audit', name: 'AuditLogs', component: () => import('@/views/AuditLogs.vue'), meta: { title: '审计日志', icon: 'FileSearchOutlined', requiredAnyPermission: ['audit.view'] } },
       { path: 'settings', name: 'Settings', component: () => import('@/views/Settings.vue'), meta: { title: '系统设置', icon: 'SettingOutlined', requiredAnyPermission: ['tenant.manage'] } },
@@ -118,12 +119,14 @@ function getPermissions() {
 router.beforeEach((to, from, next) => {
   // 统一使用 getUserId() 判断登录态（检查 authToken 是否存在）
   const userId = getUserId()
-  const publicPages = ['/'] // 总览允许未登录访问
-  const isPublic = publicPages.includes(to.path)
+  const isPublic = to.path === '/login'
 
-  // C1: 未登录访问非公开页面，重定向到首页并提示登录
+  // C1: 未登录一律重定向到登录页，并携带目标地址供登录后回跳
   if (!userId && !isPublic) {
-    message.warning('请先登录')
+    return next({ path: '/login', query: to.fullPath !== '/' ? { redirect: to.fullPath } : {} })
+  }
+  // 已登录访问登录页，直接回首页
+  if (userId && to.path === '/login') {
     return next('/')
   }
 

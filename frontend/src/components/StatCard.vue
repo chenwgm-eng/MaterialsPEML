@@ -49,7 +49,7 @@ const props = defineProps({
   value: { type: [Number, String], default: 0 },
   label: { type: String, default: '' },
   icon: { type: null, default: null },
-  iconColor: { type: String, default: '#f97316' },
+  iconColor: { type: String, default: '#1d4ed8' },
   trend: { type: Number, default: undefined },
   decimals: { type: Number, default: 0 },
   clickable: { type: Boolean, default: false },

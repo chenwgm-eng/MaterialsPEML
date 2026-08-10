@@ -125,6 +125,17 @@ class CapabilityRouter:
         }
         self._policy_version = "v1"
 
+    def tool_to_alias(self, tool_name: str) -> str:
+        """本地 MCP 工具名 → 语义别名（反向映射）。
+
+        编排执行器以 MCP 工具名调用路由门禁，而 Router 按语义别名解析；
+        未出现在任何别名 local_binding 中的工具视为无契约约束（放行）。
+        """
+        for alias in self._alias_registry.list_all():
+            if alias.local_binding == tool_name:
+                return alias.alias
+        return ""
+
     async def resolve(
         self,
         capability: str,

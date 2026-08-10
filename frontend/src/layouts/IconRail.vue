@@ -68,7 +68,7 @@ defineEmits(['select'])
 // 角色 → 色点颜色（与 antd Tag 角色色近似，用于底部状态点）
 const ROLE_DOT = {
   admin: '#f5222d',
-  pm: '#fa8c16',
+  pm: '#1d4ed8',
   researcher: '#1677ff',
   reviewer: '#722ed1',
   experimenter: '#13c2c2',

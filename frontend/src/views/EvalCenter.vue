@@ -1,5 +1,9 @@
 <template>
   <div class="eval-center">
+    <div class="page-header">
+      <h1 class="page-title">评估中心</h1>
+      <p class="page-subtitle">对 AI 生成结果进行自动化评估，跟踪评估运行与结论</p>
+    </div>
     <!-- Start New Eval -->
     <a-card size="small" :body-style="{ padding: '12px' }" class="section-card">
       <template #title>

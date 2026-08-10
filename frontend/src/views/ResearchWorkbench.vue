@@ -81,7 +81,7 @@
                   :value="opt.value"
                 >{{ opt.label }}</a-select-option>
               </a-select>
-              <div class="form-help">体系由当前领域包配置驱动，系统据此匹配元素空间与工具链。</div>
+              <div class="form-help">体系由系统设置中的默认研发领域驱动（系统设置 → 研发领域）。</div>
             </a-form-item>
           </a-col>
           <a-col :span="8">
@@ -405,13 +405,6 @@
 
     </div><!-- /标准研发流程模式 -->
 
-    <OnboardingTooltip
-      :open="tourOpen"
-      :steps="tourSteps"
-      storage-key="research_onboarding_seen"
-      @close="onTourClose"
-      @finish="onTourFinish"
-    />
   </div>
 </template>
 
@@ -438,7 +431,6 @@ import {
 import SectionHeader from '@/components/SectionHeader.vue'
 import EmptyAction from '@/components/EmptyAction.vue'
 import MetricCard from '@/components/MetricCard.vue'
-import OnboardingTooltip from '@/components/OnboardingTooltip.vue'
 import { researchApi } from '@/api/research'
 import { getFields } from '@/api/properties'
 import { useTaskStore } from '@/stores/tasks'
@@ -541,6 +533,8 @@ async function loadDomainPacks() {
     domainPacks.value = res?.packs || []
     // 同步材料类型，保证提交/派生路由使用领域类型
     form.value.material_scope = materialKind.value
+    // 按系统设置的默认研发领域加载材料体系
+    loadMaterialSystems()
   } catch {
     domainPacks.value = []
   }
@@ -558,10 +552,10 @@ const materialSystemOptions = computed(() => {
   return RESEARCH_MATERIAL_SCOPES.map((s) => ({ value: s.value, label: s.label }))
 })
 
-async function loadMaterialSystems() {
+async function loadMaterialSystems(domainKey = '') {
   materialSystemLoading.value = true
   try {
-    const res = await getConfig()
+    const res = await getConfig(domainKey ? { domain_key: domainKey } : {})
     const systems = res?.material_domain?.material_systems || []
     materialSystems.value = Array.isArray(systems) ? systems : []
     // 已加载体系：默认选中第一个，保证提交时有值
@@ -586,64 +580,15 @@ const explainData = ref(null)
 
 let pollTimer = null
 
-const tourOpen = ref(false)
-const STORAGE_KEY = 'research_onboarding_seen'
-
 onMounted(() => {
   loadPropDictionary()
   loadMaterialSystems()
   loadDomainPacks()
-  try {
-    if (!localStorage.getItem(STORAGE_KEY)) {
-      tourOpen.value = true
-    }
-  } catch {
-    /* ignore */
-  }
 })
 
 onUnmounted(() => {
   if (pollTimer) clearTimeout(pollTimer)
 })
-
-const tourSteps = [
-  {
-    target: '#rw-goal-input',
-    title: '输入研发目标',
-    description: '描述你想要的材料或性能，系统将据此生成完整计划。',
-    placement: 'bottom',
-  },
-  {
-    target: '#rw-generate-btn',
-    title: '生成研发计划',
-    description: '点击后系统会分析目标、匹配工具并生成可执行步骤。',
-    placement: 'top',
-  },
-  {
-    target: '#rw-confirm-btn',
-    title: '确认执行',
-    description: '检查计划步骤和预算后，点击确认开始执行。',
-    placement: 'top',
-  },
-]
-
-function markOnboardingSeen() {
-  try {
-    localStorage.setItem(STORAGE_KEY, 'true')
-  } catch {
-    /* ignore */
-  }
-}
-
-function onTourFinish() {
-  tourOpen.value = false
-  markOnboardingSeen()
-}
-
-function onTourClose() {
-  tourOpen.value = false
-  markOnboardingSeen()
-}
 
 // ── 目标属性编辑器 ──
 // P1-4：属性名统一从属性字典（材料属性分类）读取，单位随属性自动带出

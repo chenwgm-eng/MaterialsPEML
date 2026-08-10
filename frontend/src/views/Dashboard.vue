@@ -4,11 +4,10 @@
     <section class="hero-section">
       <div class="page-container hero-content">
         <div class="hero-text">
-          <div class="hero-badge">AI 驱动的新材料研发闭环</div>
           <h1 class="hero-title">AI 驱动的新材料研发闭环系统</h1>
           <p class="hero-desc">
-            覆盖材料发现、合成路径设计、实验数据管理和 AI 闭环迭代的新材料研发全流程平台。
-            从输入目标到生成计划、执行计算、记录实验，一站式完成。
+            覆盖材料发现、合成路径设计、实验数据管理与 AI 闭环迭代的研发全流程平台。
+            从输入目标到生成计划、执行计算、记录实验，统一在一个工作空间完成。
           </p>
           <div class="hero-actions">
             <a-dropdown placement="bottomLeft" trigger="click">
@@ -343,7 +342,7 @@
                       </template>
                     </a-list-item-meta>
                     <template #actions>
-                      <a-tag color="purple">QC 待审</a-tag>
+                      <a-tag color="blue">QC 待审</a-tag>
                     </template>
                   </a-list-item>
                 </template>
@@ -735,14 +734,6 @@
         </div>
       </template>
     </div>
-
-    <OnboardingTooltip
-      :open="tourOpen"
-      :steps="tourSteps"
-      storage-key="dashboard_onboarding_seen"
-      @close="onTourFinish"
-      @finish="onTourFinish"
-    />
   </div>
 </template>
 
@@ -776,7 +767,6 @@ import SectionHeader from '@/components/SectionHeader.vue'
 import ActionCard from '@/components/ActionCard.vue'
 import EmptyAction from '@/components/EmptyAction.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
-import OnboardingTooltip from '@/components/OnboardingTooltip.vue'
 import { useSystemStore } from '@/stores/system'
 import { useAuth } from '@/composables/useAuth'
 import { getStats } from '@/api/system'
@@ -943,28 +933,6 @@ const quickActions = [
   { path: '/experiments', name: '实验数据', desc: '查看湿实验数据', icon: markRaw(DatabaseOutlined) },
   { path: '/tools', name: 'AI 分析工具', desc: '浏览智能体工具', icon: markRaw(AppstoreOutlined) },
   { path: '/properties', name: '属性字典', desc: '管理材料性质选项', icon: markRaw(ProfileOutlined) },
-]
-
-const tourOpen = ref(false)
-const tourSteps = [
-  {
-    target: '#hero-start-btn',
-    title: '开始新材料研发',
-    description: '从这里进入研发工作台，输入目标后系统自动生成计划。',
-    placement: 'bottomLeft',
-  },
-  {
-    target: '#continue-section',
-    title: '继续工作',
-    description: '进行中的任务会显示在这里，随时可以继续推进。',
-    placement: 'top',
-  },
-  {
-    target: '#templates-section',
-    title: '从模板开始',
-    description: '选择常用材料模板，快速启动一次研发。',
-    placement: 'top',
-  },
 ]
 
 function tmplRoute(tmpl) {
@@ -1172,7 +1140,7 @@ function sampleStatusColor(status) {
   const map = {
     created: '#64748b',
     in_storage: '#3b82f6',
-    in_use: '#f97316',
+    in_use: '#1d4ed8',
     consumed: '#f59e0b',
     discarded: '#ef4444',
   }
@@ -1257,15 +1225,6 @@ function onStartMenuClick({ key }) {
   router.push({ path: '/workbench', query: { formula: key } })
 }
 
-function onTourFinish() {
-  tourOpen.value = false
-  try {
-    localStorage.setItem('dashboard_onboarding_seen', 'true')
-  } catch {
-    /* ignore */
-  }
-}
-
 // P1-008: 定时刷新统计卡片（30 秒间隔，仅管理员看板需要）
 let _refreshTimer = null
 const lastRefreshTime = ref(null)
@@ -1298,13 +1257,6 @@ onMounted(async () => {
     // 其他角色：加载对应面板数据（独立加载，避免不必要请求）
     await loadRolePanelData()
   }
-  try {
-    if (localStorage.getItem('dashboard_onboarding_seen') !== 'true') {
-      tourOpen.value = true
-    }
-  } catch {
-    /* ignore */
-  }
   startAutoRefresh()
 })
 
@@ -1328,9 +1280,7 @@ onUnmounted(() => {
 .hero-section {
   position: relative;
   padding: 48px 0 56px;
-  background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(37, 99, 235, 0.08) 0%, transparent 70%),
-    var(--realsee-surface);
+  background: var(--realsee-surface);
   border-bottom: 1px solid var(--border);
   overflow: hidden;
 }
@@ -1342,20 +1292,6 @@ onUnmounted(() => {
 
 .hero-text {
   max-width: 680px;
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 14px;
-  background: var(--realsee-primary-soft);
-  border: 1px solid var(--primary-border);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  color: var(--primary);
-  margin-bottom: 18px;
-  letter-spacing: 0.5px;
 }
 
 .hero-title {
@@ -1382,15 +1318,14 @@ onUnmounted(() => {
 }
 
 .hero-btn-primary {
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-lg);
   height: 48px;
   padding: 0 22px;
   font-weight: var(--font-weight-semibold);
-  box-shadow: var(--shadow-support);
 }
 
 .hero-btn-secondary {
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-lg);
   height: 48px;
   padding: 0 22px;
   color: var(--text-primary);

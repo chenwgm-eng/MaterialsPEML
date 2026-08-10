@@ -190,7 +190,7 @@ const chartOption = computed(() => {
           name: '问题数',
           type: 'bar',
           data: yData,
-          itemStyle: { color: '#f97316', borderRadius: [4, 4, 0, 0] },
+          itemStyle: { color: '#1d4ed8', borderRadius: [4, 4, 0, 0] },
           barMaxWidth: 36,
         },
         {
@@ -331,7 +331,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   height: 100%;
   min-height: 200px;
-  color: #8a92a6;
+  color: var(--text-muted);
   font-size: 14px;
 }
 

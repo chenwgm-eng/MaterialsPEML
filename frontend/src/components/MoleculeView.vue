@@ -342,7 +342,7 @@ onBeforeUnmount(() => {
   left: 50%;
   transform: translateX(-50%);
   font-size: 10px;
-  color: #999;
+  color: var(--text-muted);
   opacity: 0;
   transition: opacity 0.2s;
   pointer-events: none;

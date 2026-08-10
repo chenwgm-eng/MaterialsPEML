@@ -1,42 +1,42 @@
 /* ============================================================
-   MaterialsPEML Lab — Design System (v3.0 黑白橙配色)
-   视觉定位：严谨、可信、专业、现代
-   主色: #F97316 (橙，专业醒目)
-   基底: 黑白灰层级
+   MaterialsPEML Lab — Design System (v4.0 深蓝 2B 配色)
+   视觉定位：严谨、可信、专业、现代（面向企业级 B2B 研发协作）
+   主色: #1D4ED8 (宝蓝，专业可信)
+   基底: 深蓝灰侧边栏 + 中性灰阶内容区
    ============================================================ */
 
 :root {
-  /* —— 主色调（黑白橙规范）—— */
-  --primary: #f97316;
-  --primary-hover: #ea670c;
-  --primary-active: #c2410c;
-  --primary-light: #fb923c;
-  --primary-bg: rgba(249, 115, 22, 0.08);
-  --primary-bg-hover: rgba(249, 115, 22, 0.14);
-  --primary-border: rgba(249, 115, 22, 0.3);
+  /* —— 主色调（深蓝 2B 规范）—— */
+  --primary: #1d4ed8;
+  --primary-hover: #1e40af;
+  --primary-active: #1e3a8a;
+  --primary-light: #3b82f6;
+  --primary-bg: rgba(29, 78, 216, 0.08);
+  --primary-bg-hover: rgba(29, 78, 216, 0.14);
+  --primary-border: rgba(29, 78, 216, 0.3);
 
   /* —— 辅色 —— */
   --secondary: #475569;
   --secondary-bg: rgba(71, 85, 105, 0.1);
 
-  /* —— 深色主题 (仪表盘/Dashboard，统一深黑色调) —— */
-  --dark-bg-deepest: #0a0a0a;
-  --dark-bg-deep: #0f0f0f;
-  --dark-bg: #141414;
-  --dark-bg-light: #1a1a1a;
-  --dark-bg-lighter: #222222;
-  --dark-bg-card: #181818;
-  --dark-bg-card-hover: #1f1f1f;
-  --dark-border: #2a2a2a;
-  --dark-border-light: #333333;
+  /* —— 深色主题 (仪表盘/Dashboard，统一深蓝灰调) —— */
+  --dark-bg-deepest: #0f172a;
+  --dark-bg-deep: #111827;
+  --dark-bg: #0f172a;
+  --dark-bg-light: #1e293b;
+  --dark-bg-lighter: #263449;
+  --dark-bg-card: #16213a;
+  --dark-bg-card-hover: #1e2b45;
+  --dark-border: #2d3a52;
+  --dark-border-light: #36445f;
 
   /* —— 浅色主题 (内容页) —— */
-  --light-bg: #f7f7f8;
+  --light-bg: #f6f7f9;
   --light-bg-card: #ffffff;
-  --light-bg-hover: #f3f4f6;
-  --light-bg-active: #fff7ed;
-  --light-border: #e5e7eb;
-  --light-border-light: #f3f4f6;
+  --light-bg-hover: #eef1f6;
+  --light-bg-active: #eef4ff;
+  --light-border: #e3e7ef;
+  --light-border-light: #eef1f6;
 
   /* —— 语义化主题变量（light 默认；dark 由 [data-theme="dark"] 覆盖）——
      现有 --dark-bg-* / --light-bg-* 保留不变，新增 --bg / --bg-card / --bg-hover
@@ -45,12 +45,12 @@
   --bg-card: var(--light-bg-card);
   --bg-hover: var(--light-bg-hover);
 
-  /* —— 侧边栏 (深黑渐变，橙色高亮) —— */
-  --sidebar-bg-start: #0a0a0a;
-  --sidebar-bg-end: #141414;
-  --sidebar-bg: linear-gradient(180deg, #0a0a0a 0%, #0f0f0f 40%, #141414 100%);
-  --sidebar-hover: rgba(249, 115, 22, 0.12);
-  --sidebar-active: rgba(249, 115, 22, 0.22);
+  /* —— 侧边栏 (深蓝灰，蓝色高亮) —— */
+  --sidebar-bg-start: #0f172a;
+  --sidebar-bg-end: #1e293b;
+  --sidebar-bg: linear-gradient(180deg, #0f172a 0%, #16203a 40%, #1e293b 100%);
+  --sidebar-hover: rgba(59, 130, 246, 0.12);
+  --sidebar-active: rgba(59, 130, 246, 0.22);
   --sidebar-text: #94a3b8;
   --sidebar-text-active: #ffffff;
   --sidebar-border: rgba(148, 163, 184, 0.08);
@@ -61,10 +61,12 @@
   /* —— 文字颜色（Section 8 规范）—— */
   --text-primary: #1d2129;
   --text-secondary: #4e5969;
-  --text-muted: #86909c;
+  /* 对比度修复：原 #86909c 在白底仅 3.2:1（WCAG AA 需 ≥4.5:1），改为 #6b7280（4.8:1） */
+  --text-muted: #6b7280;
   --text-on-dark: #e2e8f4;
   --text-on-dark-secondary: #a8b4cc;
-  --text-on-dark-muted: #6a7a9a;
+  /* 对比度修复：原 #6a7a9a 在深色面板(#141414)仅 4.3:1，改为 #94a3b8（7.2:1） */
+  --text-on-dark-muted: #94a3b8;
 
   /* —— 语义色 / 状态色（Section 8 规范）—— */
   /* 全局状态色语义：绿=成功/通过 | 橙=警告/待处理 | 红=错误/失败/高风险 | 蓝=信息/处理中 | 灰=默认/取消/归档 */
@@ -138,15 +140,15 @@
   --breakpoint-2xl: 1440px;
 
   /* —— Agent 角色色 token（消除 ROLE_COLOR 重复 3 份）—— */
-  --role-pm: #f97316;
-  --role-discovery: #10b981;
-  --role-synthesis: #f59e0b;
-  --role-dft: #8b5cf6;
-  --role-experiment: #06b6d4;
-  --role-literature: #ec4899;
-  --role-quality: #ef4444;
-  --role-router: #6b7280;
-  --role-custom: #6b7280;
+  --role-pm: #2563eb;
+  --role-discovery: #0d9488;
+  --role-synthesis: #d97706;
+  --role-dft: #7c3aed;
+  --role-experiment: #0891b2;
+  --role-literature: #db2777;
+  --role-quality: #dc2626;
+  --role-router: #64748b;
+  --role-custom: #64748b;
 
   /* —— 旧变量兼容 (逐步淘汰) —— */
   --hero-bg: var(--dark-bg-deepest);
@@ -155,7 +157,7 @@
 
   /* === 状态色规范 (8.5) === */
   /* 业务状态 */
-  --status-draft-color: #8b5cf6;       /* 草稿/立项 - 紫色 */
+  --status-draft-color: #64748b;      /* 草稿/立项 - 灰色（规范：草稿=灰） */
   --status-running-color: #3b82f6;     /* 运行中/进行中 - 蓝色 */
   --status-success-color: #10b981;     /* 成功/完成/通过 - 绿色 */
   --status-warning-color: #f59e0b;     /* 警告/待审/超期 - 橙色 */
@@ -164,7 +166,7 @@
   --status-neutral-color: #64748b;     /* 中性/已归档 - 灰色 */
 
   /* 按钮层级 */
-  --btn-primary-bg: var(--primary, #f97316);
+  --btn-primary-bg: var(--primary, #1d4ed8);
   --btn-secondary-bg: #f1f5f9;
   --btn-danger-bg: #ef4444;
 }
@@ -407,12 +409,12 @@ body,
   border-color: var(--border) !important;
 }
 
-.ant-btn-primary {
+.ant-btn-primary:not(.ant-btn-background-ghost) {
   background: var(--primary) !important;
   border-color: var(--primary) !important;
 }
 
-.ant-btn-primary:hover {
+.ant-btn-primary:not(.ant-btn-background-ghost):hover {
   background: var(--primary-hover) !important;
   border-color: var(--primary-hover) !important;
 }
@@ -429,7 +431,8 @@ body,
 .ant-btn[disabled]:active {
   background: #f0f2f5 !important;
   border-color: #d9d9d9 !important;
-  color: #bfbfbf !important;
+  /* 对比度修复：原 #bfbfbf 白底仅 1.8:1 几乎不可读，改为 #8c8c8c（3.4:1）仍明显区别于可用态 */
+  color: #8c8c8c !important;
   text-shadow: none !important;
   box-shadow: none !important;
   cursor: not-allowed !important;
@@ -442,7 +445,7 @@ body,
 .ant-btn-primary[disabled]:active {
   background: #f0f2f5 !important;
   border-color: #d9d9d9 !important;
-  color: #bfbfbf !important;
+  color: #8c8c8c !important;
   text-shadow: none !important;
   box-shadow: none !important;
   cursor: not-allowed !important;
@@ -463,14 +466,14 @@ body,
 .ant-btn-link[disabled]:hover {
   background: transparent !important;
   border-color: transparent !important;
-  color: #bfbfbf !important;
+  color: #8c8c8c !important;
   cursor: not-allowed !important;
 }
 
 /* 图标按钮禁用态：图标颜色统一变灰 */
 .ant-btn[disabled] .anticon,
 .ant-btn[disabled] .anticon svg {
-  color: #bfbfbf !important;
+  color: #8c8c8c !important;
 }
 
 /* P2-6：禁用按钮 tooltip 包裹层
@@ -481,12 +484,69 @@ body,
 }
 
 .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: var(--primary) !important;
+  /* 对比度修复：主色橙 #1d4ed8 作文字仅 2.8:1，加深为 #1e40af（≥4.5:1） */
+  color: #1e40af !important;
 }
 
 .ant-tabs-ink-bar {
   background: var(--primary) !important;
 }
+
+/* ============================================================
+   对比度修复（全站）：
+   1) 链接/文字类主色加深：品牌橙 #1d4ed8 作小字仅 2.8:1，统一用 --link-color（4.5:1+）
+   2) antd 预设色 Tag：浅底深字方案 10px 小字仅 3.3:1，加深文字色至 ≥4.5:1
+   3) danger 链接按钮：原 #ef4444 仅 3.76:1，加深至 #dc2626
+   ============================================================ */
+:root {
+  --link-color: #1e40af; /* 主色加深：用于链接/文字，保证白底 4.5:1+ */
+}
+
+a {
+  color: var(--link-color);
+}
+
+a:hover {
+  color: var(--primary-hover);
+}
+
+.ant-btn-link {
+  color: var(--link-color) !important;
+}
+
+.ant-btn-link:hover {
+  color: var(--primary) !important;
+}
+
+.ant-btn-dangerous.ant-btn-link {
+  color: #dc2626 !important;
+}
+
+.ant-pagination-item-active a {
+  color: var(--link-color) !important;
+}
+
+.ant-anchor-link-title-active {
+  color: var(--link-color) !important;
+}
+
+/* antd 预设色 Tag 文字加深（浅底深字 10px 小字 ≥4.5:1） */
+.ant-tag-green { color: #15803d !important; }
+.ant-tag-orange { color: #1e40af !important; }
+.ant-tag-cyan { color: #0e7490 !important; }
+.ant-tag-blue { color: #1d4ed8 !important; }
+.ant-tag-red { color: #b91c1c !important; }
+.ant-tag-gold { color: #b45309 !important; }
+.ant-tag-geekblue { color: #3730a3 !important; }
+.ant-tag-purple { color: #6d28d9 !important; }
+.ant-tag-volcano { color: #1e40af !important; }
+.ant-tag-magenta { color: #be185d !important; }
+
+/* antd 语义预设 Tag（success/warning/error/processing，浅底深字）同样加深 */
+.ant-tag-success { color: #15803d !important; }
+.ant-tag-warning { color: #b45309 !important; }
+.ant-tag-error { color: #b91c1c !important; }
+.ant-tag-processing { color: #1d4ed8 !important; }
 
 .ant-input-affix-wrapper:focus,
 .ant-input-affix-wrapper-focused {
@@ -522,7 +582,7 @@ body,
   font-weight: 500;
   line-height: 20px;
 }
-.status-tag--draft { color: var(--status-draft-color); background: rgba(139, 92, 246, 0.1); }
+.status-tag--draft { color: var(--status-draft-color); background: rgba(100, 116, 139, 0.1); }
 .status-tag--running { color: var(--status-running-color); background: rgba(59, 130, 246, 0.1); }
 .status-tag--success { color: var(--status-success-color); background: rgba(16, 185, 129, 0.1); }
 .status-tag--warning { color: var(--status-warning-color); background: rgba(245, 158, 11, 0.1); }
@@ -609,7 +669,7 @@ body,
 
 /* 统一 Spin 圆点颜色（antd 默认蓝 → 系统主色） */
 .ant-spin .ant-spin-dot-item {
-  background-color: var(--primary, #f97316);
+  background-color: var(--primary, #1d4ed8);
 }
 
 /* 区域级 loading：居中 spin + 提示文本 */

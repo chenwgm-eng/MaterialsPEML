@@ -68,7 +68,7 @@ const TYPE_COLORS = {
   task: '#10b981',          // 绿
   candidate: '#8b5cf6',     // 紫
   ecml_run: '#06b6d4',     // 青
-  experiment_order: '#fa8c16', // 橙
+  experiment_order: '#1d4ed8', // 橙
   bom: '#ec4899',          // 粉
   process: '#f59e0b',      // 琥珀
   test_task: '#14b8a6',     // 蓝绿

@@ -8,7 +8,7 @@
     </template>
 
     <div class="strategy-subtitle">
-      系统根据同一材料体系下的历史实验数据，自动推荐下一轮最值得试的候选材料。多数情况下保持默认即可，细节参数可在下方「高级选项」中按需调整。
+      基于同一材料体系的历史实验数据，自动推荐下一轮最值得试的候选。保持默认即可，细节参数见「高级选项」。
     </div>
 
     <a-form layout="vertical" class="strategy-form">
@@ -16,7 +16,11 @@
       <div class="pool-block">
         <div class="pool-head">
           <span class="pool-title">训练数据池</span>
-          <a-button size="small" :loading="loadingStats" @click="loadStats">刷新</a-button>
+          <a-space>
+            <a-tag v-if="stats && stats.total > 0" color="green" class="pool-state-tag">可启动智能推荐</a-tag>
+            <a-tag v-else-if="stats" color="orange" class="pool-state-tag">暂不可启动</a-tag>
+            <a-button size="small" :loading="loadingStats" @click="loadStats">刷新</a-button>
+          </a-space>
         </div>
 
         <!-- 数据不足：前置告警，避免用户配完所有参数才被拦下 -->
@@ -37,34 +41,26 @@
         </a-alert>
 
         <div class="pool-body">
-          <a-row :gutter="12" align="middle">
-            <a-col :xs="24" :sm="8" :md="6">
-              <a-form-item label="材料体系" extra="已根据当前目标自动识别，如需调整可直接修改">
-                <a-input v-model:value="materialFamily" placeholder="如 argyrodite硫化物基 Li6PS5X" allow-clear @blur="loadStats" />
-              </a-form-item>
-            </a-col>
-            <a-col :xs="24" :sm="16" :md="18">
-              <div class="pool-stats">
-                <template v-if="stats">
-                  <div class="pool-stat">
-                    <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.total }}</span>
-                    <span class="pool-stat-label">条有效数据</span>
-                  </div>
-                  <div class="pool-stat">
-                    <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.project }}</span>
-                    <span class="pool-stat-label">条本项目</span>
-                  </div>
-                  <div class="pool-stat">
-                    <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.cross_project }}</span>
-                    <span class="pool-stat-label">条可跨项目复用</span>
-                  </div>
-                  <a-tag v-if="stats.total === 0" color="orange">暂不可启动</a-tag>
-                  <a-tag v-else color="green">可启动智能推荐</a-tag>
-                </template>
-                <span v-else class="pool-stats-empty">加载中…</span>
+          <a-form-item label="材料体系" extra="已根据当前目标自动识别，如需调整可直接修改">
+            <a-input v-model:value="materialFamily" placeholder="如 argyrodite硫化物基 Li6PS5X" allow-clear @blur="loadStats" />
+          </a-form-item>
+          <div class="pool-stats">
+            <template v-if="stats">
+              <div class="pool-stat">
+                <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.total }}</span>
+                <span class="pool-stat-label">条有效数据</span>
               </div>
-            </a-col>
-          </a-row>
+              <div class="pool-stat">
+                <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.project }}</span>
+                <span class="pool-stat-label">条本项目</span>
+              </div>
+              <div class="pool-stat">
+                <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.cross_project }}</span>
+                <span class="pool-stat-label">条可跨项目复用</span>
+              </div>
+            </template>
+            <span v-else class="pool-stats-empty">加载中…</span>
+          </div>
           <a-checkbox v-model:checked="includeCrossProject" class="pool-cross" @change="loadStats">
             纳入同一材料体系下的跨项目历史数据（相似化学空间的实验经验可复用，帮助更准地推荐）
           </a-checkbox>
@@ -370,17 +366,22 @@ onMounted(() => {
 }
 
 .pool-stats {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  height: 100%;
-  padding-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .pool-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 8px;
+  background: var(--light-bg, #fafafa);
+  border: 1px solid var(--border-light, #f0f0f0);
+  border-radius: var(--radius-md, 8px);
 }
 
 .pool-stat-num {
@@ -480,7 +481,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 4px 0 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  background: var(--light-bg, #fafafa);
+  border: 1px solid var(--border-light, #f0f0f0);
+  border-radius: var(--radius-md, 8px);
 }
 
 .strategy-actions-hint,

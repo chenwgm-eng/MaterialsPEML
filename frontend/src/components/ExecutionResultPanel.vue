@@ -29,7 +29,9 @@
         role="listitem"
       >
         <div class="card-top">
-          <a-avatar :size="28" class="agent-avatar">{{ item.avatar }}</a-avatar>
+          <a-avatar :size="28" class="agent-avatar">
+            <component :is="avatarIcon(item.avatar)" aria-hidden="true" />
+          </a-avatar>
           <div class="agent-meta">
             <div class="agent-name">{{ item.agent_name }}</div>
             <div class="step-task">{{ item.task }}</div>
@@ -151,6 +153,7 @@ import {
 } from '@ant-design/icons-vue'
 import MoleculeView from './MoleculeView.vue'
 import { useUnitSymbols } from '@/utils/mdmDict'
+import { resolveAgentIcon } from '@/utils/agentAvatar'
 
 // MDM 单位符号（mass 维度，用于成本单位）
 const { load: loadUnitSymbols, get: getUnitSymbol } = useUnitSymbols()
@@ -210,7 +213,7 @@ const toolResults = computed(() => {
         step_id: e.step_id,
         agent_id: e.agent_id,
         agent_name: e.agent_name || agent.name || e.agent_id,
-        avatar: agent.avatar || '🤖',
+        avatar: agent.avatar || '',
         task: e.task || agent.expertise?.[0] || e.data.tool,
         tool: e.data.tool,
         result: e.data.result || {},
@@ -219,6 +222,10 @@ const toolResults = computed(() => {
       }
     })
 })
+
+function avatarIcon(avatar) {
+  return resolveAgentIcon(avatar)
+}
 
 const RERUNNABLE_TOOLS = new Set([
   'generate_crystal_candidates', 'generate_polymer_candidates',
@@ -352,7 +359,7 @@ function viewDetail(item) {
 
 .step-task {
   font-size: 11px;
-  color: #8a92a6;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -385,7 +392,7 @@ function viewDetail(item) {
 }
 
 .result-empty {
-  color: #8a92a6;
+  color: var(--text-muted);
   text-align: center;
   padding: 30px 0;
   font-size: 14px;
@@ -393,12 +400,12 @@ function viewDetail(item) {
 
 .metric-label {
   font-size: 12px;
-  color: #8a92a6;
+  color: var(--text-muted);
 }
 
 .metric-extra {
   font-size: 12px;
-  color: #8a92a6;
+  color: var(--text-muted);
   margin-top: 4px;
 }
 
@@ -432,7 +439,7 @@ function viewDetail(item) {
   max-height: 300px;
   overflow: auto;
   background: var(--dark-bg);
-  color: #8a92a6;
+  color: var(--text-muted);
   padding: 10px;
   border-radius: var(--radius-md);
   font-size: 11px;

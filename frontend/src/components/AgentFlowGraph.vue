@@ -93,7 +93,6 @@ function buildNodes(pulse = false) {
     const roleColor = ROLE_COLOR[role] || ROLE_COLOR.custom
     const status = getStepStatus(step.step_id)
     const isRunning = status === 'running'
-    const avatar = agent?.avatar || '🤖'
     const name = agent?.name || step.agent_id
     const baseSize = status === 'pending' ? 50 : 56
     const size = isRunning ? 66 : baseSize
@@ -123,12 +122,11 @@ function buildNodes(pulse = false) {
         color: '#1a1a2e',
         fontSize: 12,
         fontWeight: 600,
-        formatter: () => `${avatar} ${name}`,
+        formatter: () => `${name}`,
       },
       _agentId: step.agent_id,
       _status: status,
       _task: step.task,
-      _avatar: avatar,
       _roleColor: roleColor,
     }
   })
@@ -162,7 +160,7 @@ function buildOption(pulse = false) {
             completed: '已完成',
             failed: '失败',
           }[d._status]
-          return `<b>${escapeHtml(d._avatar)} ${escapeHtml(d.name)}</b><br/>状态：${escapeHtml(statusText)}<br/>任务：${escapeHtml(d._task || '—')}`
+          return `<b>${escapeHtml(d.name)}</b><br/>状态：${escapeHtml(statusText)}<br/>任务：${escapeHtml(d._task || '—')}`
         }
         return ''
       },
@@ -391,7 +389,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #8a92a6;
+  color: var(--text-muted);
   font-size: 14px;
 }
 </style>

@@ -16,7 +16,7 @@ import os
 import time
 import uuid
 from .agent import BatteryMaterialsAgent
-from .config import load_config, get_config, ensure_project_root, EngineMode, save_config_to_env
+from .config import get_config, ensure_project_root, EngineMode, save_config_to_env
 
 # 启动守卫：无论从哪个目录启动 uvicorn，都强制把 CWD 切到项目根目录，
 # 保证 .env / data/ / cache 等相对路径落到正确位置。幂等。
@@ -24,15 +24,14 @@ ensure_project_root()
 from .agent_team.registry import AgentRegistry
 from .agent_team.orchestrator import TaskOrchestrator
 from .agent_team.executor import AgenticExecutor
-from .agent_team.models import AgentDefinition, OrchestrationPlan, ExecutionEvent, AgentRole, TaskStep
+from .agent_team.models import AgentDefinition, OrchestrationPlan, AgentRole, TaskStep
 from .experiment.experiment_controller import (
-    ExperimentOrder, ExperimentResultRecord, ExperimentType,
-    ExperimentController, IllegalStateTransitionError,
+    ExperimentOrder, ExperimentResultRecord, IllegalStateTransitionError,
 )
 from .experiment.approval import ApprovalEngine
-from .experiment.experiment_controller import ApprovalRule, ApprovalDecision
+
 from .experiment.equipment_store import Equipment, EquipmentStatus, EquipmentStore
-from .experiment.sample_store import Sample, SampleStatus, SampleStore, SampleTransfer
+from .experiment.sample_store import Sample, SampleStatus, SampleStore
 from .experiment.candidate_store import CandidateRecord, CandidateStore
 from .experiment.idea_store import Idea, IdeaStatus, IdeaStore
 from .agent_team.agents.experiment_analyst import ExperimentAnalystAgent
@@ -46,7 +45,7 @@ from .knowledge import (
 )
 from .workflow_schema import get_schema_loader
 from .projects import Project, ProjectStore, ProjectTask, _iso
-from .audit import get_audit_logger, AuditEntry, AuditLogger
+from .audit import get_audit_logger, AuditEntry
 from .auth.tenant_store import TenantStore
 from .auth import (
     UserRole, User, UserStore,
@@ -59,15 +58,15 @@ from .auth.tokens import issue_token, verify_token
 from .auth import sso as sso_module
 from .auth import ldap_auth
 from .version_store import (
-    Version, VersionType, VersionStore, get_version_store,
+    Version, VersionType, get_version_store,
 )
-from .industrialization.formula_store import FormulaVersion, FormulaStore, get_formula_store
-from .integrations.models import ExternalInvocation
-from .integrations.audit_store import AuditStore, ProvenanceDecorator, DB_PATH as AUDIT_DB_PATH
+from .industrialization.formula_store import FormulaVersion, get_formula_store
+
+from .integrations.audit_store import AuditStore
 from .integrations import init_audit_db
 from .db import get_tenant
 from .mcp_tools.scp_client import SCPClientPool
-from .mcp_tools.scp_catalog import SCPCatalog, ToolBinding, RiskLevel
+from .mcp_tools.scp_catalog import SCPCatalog, RiskLevel
 from .mcp_tools.scp_policy import SCPPolicy, PolicyDeniedError
 from .mcp_tools.scp_adapters import (
     SCPAdapter,
@@ -129,63 +128,65 @@ if _cors_origins:
     )
 
 # 战略工作包子路由（无 /api 前缀：Vite 代理已剥离 /api，前端 client baseURL=/api）
+# 安全审查（2026-08）：统一为所有子路由挂载 require_login 依赖，
+# 阻断匿名访问（此前放行卡/成本规则/数据导入/科学服务等路由完全无鉴权）。
 from .capability.router import router as _capability_router
 from .release_card.router import router as _release_card_router
 from .value_realization.router import router as _value_realization_router
 from .data_ingest.router import router as _data_ingest_router
 from .agent_team.mapping_router import router as _mapping_router
 
-app.include_router(_capability_router)
-app.include_router(_release_card_router)
-app.include_router(_value_realization_router)
-app.include_router(_data_ingest_router)
-app.include_router(_mapping_router)
+app.include_router(_capability_router, dependencies=[Depends(require_login)])
+app.include_router(_release_card_router, dependencies=[Depends(require_login)])
+app.include_router(_value_realization_router, dependencies=[Depends(require_login)])
+app.include_router(_data_ingest_router, dependencies=[Depends(require_login)])
+app.include_router(_mapping_router, dependencies=[Depends(require_login)])
 
 # ── 原生科学服务路由（Phase 0 — 新架构，无历史数据负担） ──
 from .scientific_routes.scientific_runs import router as _scientific_runs_router
 from .scientific_routes.evidence import router as _evidence_router
 from .scientific_routes.artifacts import router as _artifacts_router
 from .scientific_routes.approvals import router as _approvals_router
-app.include_router(_scientific_runs_router)
-app.include_router(_evidence_router)
-app.include_router(_artifacts_router)
-app.include_router(_approvals_router)
+app.include_router(_scientific_runs_router, dependencies=[Depends(require_login)])
+app.include_router(_evidence_router, dependencies=[Depends(require_login)])
+app.include_router(_artifacts_router, dependencies=[Depends(require_login)])
+app.include_router(_approvals_router, dependencies=[Depends(require_login)])
 
 # ── Phase 1 原生科学服务路由（MPA, Chemical, Structure, Formulation） ──
 from .scientific_routes.mpa_routes import router as _mpa_router
 from .scientific_routes.chemical_routes import router as _chemical_router
 from .scientific_routes.structure_routes import router as _structure_router
 from .scientific_routes.formulation_routes import router as _formulation_router
-app.include_router(_mpa_router)
-app.include_router(_chemical_router)
-app.include_router(_structure_router)
-app.include_router(_formulation_router)
+app.include_router(_mpa_router, dependencies=[Depends(require_login)])
+app.include_router(_chemical_router, dependencies=[Depends(require_login)])
+app.include_router(_structure_router, dependencies=[Depends(require_login)])
+app.include_router(_formulation_router, dependencies=[Depends(require_login)])
 
 # ── Phase 2 原生科学服务路由（MolecularSim, Synthesis, Process） ──
 from .scientific_routes.molecular_simulation_routes import router as _molecular_simulation_router
 from .scientific_routes.synthesis_planning_routes import router as _synthesis_planning_router
 from .scientific_routes.process_modeling_routes import router as _process_modeling_router
-app.include_router(_molecular_simulation_router)
-app.include_router(_synthesis_planning_router)
-app.include_router(_process_modeling_router)
+app.include_router(_molecular_simulation_router, dependencies=[Depends(require_login)])
+app.include_router(_synthesis_planning_router, dependencies=[Depends(require_login)])
+app.include_router(_process_modeling_router, dependencies=[Depends(require_login)])
 
 # ── Phase 3: 高级原生科学服务路由 ──
 from .scientific_routes.reaction_network_routes import router as _reaction_network_router
 from .scientific_routes.wavefunction_analysis_routes import router as _wavefunction_analysis_router
 from .scientific_routes.fluid_simulation_routes import router as _fluid_simulation_router
 from .scientific_routes.molecular_docking_routes import router as _molecular_docking_router
-app.include_router(_reaction_network_router)
-app.include_router(_wavefunction_analysis_router)
-app.include_router(_fluid_simulation_router)
-app.include_router(_molecular_docking_router)
+app.include_router(_reaction_network_router, dependencies=[Depends(require_login)])
+app.include_router(_wavefunction_analysis_router, dependencies=[Depends(require_login)])
+app.include_router(_fluid_simulation_router, dependencies=[Depends(require_login)])
+app.include_router(_molecular_docking_router, dependencies=[Depends(require_login)])
 
 # ── 全局后台异步任务查询 ──
 from .scientific_routes.async_task_routes import router as _async_task_router
-app.include_router(_async_task_router)
+app.include_router(_async_task_router, dependencies=[Depends(require_login)])
 
 # ── 工作流混编执行路由 ──
 from .scientific_routes.workflow_routes import router as _workflow_router
-app.include_router(_workflow_router)
+app.include_router(_workflow_router, dependencies=[Depends(require_login)])
 
 # ── 能力契约门禁装饰器（用于直接 API 端点） ──
 # 模块级单例，避免每次调用都新建 CapabilityRegistry
@@ -811,6 +812,42 @@ async def startup():
                     if (p.endpoint or "").startswith("local://"):
                         _provider_registry.update_health(p.provider_id, _PH.HEALTHY)
                         return
+                    ptype = getattr(p, "provider_type", None)
+                    ptype_val = getattr(ptype, "value", None) if ptype is not None else None
+
+                    # ── SCP（MCP JSON-RPC 端点，只接受 POST）：用 tools/list 探测 ──
+                    if ptype_val == "scp":
+                        h = _PH.UNHEALTHY
+                        try:
+                            tools = await _scp_client_pool.list_tools(
+                                p.provider_id, server_url=p.endpoint or None
+                            )
+                            if tools and tools[0].get("_error"):
+                                # 远端可达但 JSON-RPC 报错 → 降级
+                                h = _PH.DEGRADED
+                            else:
+                                h = _PH.HEALTHY
+                        except Exception:
+                            h = _PH.UNHEALTHY
+                        _provider_registry.update_health(p.provider_id, h)
+                        return
+
+                    # ── LLM（OpenAI 兼容 /chat/completions）：用 GET /models 探测 ──
+                    if ptype_val == "llm":
+                        base = (p.endpoint or "").rstrip("/")
+                        url = f"{base}/models"
+                        try:
+                            async with _httpx.AsyncClient(
+                                timeout=_httpx.Timeout(4.0), follow_redirects=True
+                            ) as client:
+                                resp = await client.get(url)
+                            h = _PH.HEALTHY if resp.status_code < 500 else _PH.UNHEALTHY
+                        except Exception:
+                            h = _PH.UNHEALTHY
+                        _provider_registry.update_health(p.provider_id, h)
+                        return
+
+                    # ── 其余 REST 服务（materials_project / askcos 等）：GET endpoint ──
                     url = p.health_check_url or p.endpoint or ""
                     if not url.startswith(("http://", "https://")):
                         return
@@ -2298,7 +2335,7 @@ async def get_ecml_pool_stats(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@app.post("/ecml/runs/{run_id}/rounds")
+@app.post("/ecml/runs/{run_id}/rounds", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def start_ecml_round(run_id: str, req: ECMLRunRoundRequest):
     """启动一轮 BO 推荐，产出推荐后停在"待复核门"，不自动下发实验。"""
     try:
@@ -2337,7 +2374,7 @@ async def get_ecml_round(round_id: str):
     return rnd
 
 
-@app.post("/ecml/rounds/{round_id}/confirm")
+@app.post("/ecml/rounds/{round_id}/confirm", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def confirm_ecml_round(round_id: str, req: ECMLConfirmRoundRequest):
     """课题负责人确认下发：为采纳候选创建实验任务，推进状态机。"""
     try:
@@ -2951,16 +2988,15 @@ async def discover_agent_generate(req: AgentGenerateRequest):
         persona_parts.append("具备能力：" + "、".join(agent_def.capabilities))
     agent_persona = "\n".join(persona_parts) + "\n\n"
 
-    # 必须使用 Agent 显式配置的 llm_model，禁止 None 或空字符串，避免静默走默认路径
+    # 模型解析：优先 Agent 显式 llm_model；空则按 provider 路由到 InternLM / LLM 配置默认。
+    # 兼容旧数据（llm_model 为空但 provider=internlm 或 internlm 已启用）。
+    cfg = get_config()
     agent_model = agent_def.llm_model
     if not agent_model:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"智能体「{agent_def.name}」未配置 llm_model，无法执行 LLM 调用。"
-                "请在「智能体管理」中为该智能体显式设置大模型。"
-            ),
-        )
+        if (agent_def.provider or "").lower() == "internlm":
+            agent_model = cfg.internlm.model or ""
+        else:
+            agent_model = cfg.llm.model or ""
 
     # 计算输入参数哈希快照（用于 AI 输出溯源）
     input_snapshot_hash = _compute_input_snapshot({
@@ -2980,18 +3016,18 @@ async def discover_agent_generate(req: AgentGenerateRequest):
     )
 
     # 评测修复 BEMCL-AI-P2-003：通过统一 LLMProvider 调用 LLM，走审计治理链
-    from .llm.schemas import ChatRequest, ChatMessage
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
     try:
-        _chat_resp = await _llm_provider.complete(ChatRequest(
-            model=agent_model,
-            messages=[
-                ChatMessage(role="system", content=system_prompt),
-                ChatMessage(role="user", content=user_prompt),
-            ],
-            temperature=0.7,  # 创造性生成用更高温度
+        content = await _call_llm_provider(
+            provider=agent_def.provider or "",
+            llm_model=agent_def.llm_model,
+            messages=messages,
+            cfg=cfg,
             max_tokens=8192,
-        ))
-        content = _chat_resp.content
+        )
     except Exception as e:
         logger.warning("Agent 创造性生成 LLM 调用失败: %s", e)
         raise HTTPException(status_code=502, detail=f"Agent 生成失败：{e}") from e
@@ -3151,6 +3187,21 @@ def _set_agent_gen_status(task_id: str, status: str, progress: int = 0,
     # 限制内存
     while len(_agent_gen_tasks) > 200:
         _agent_gen_tasks.popitem(last=False)
+    # 同步到全局后台任务注册表（供右下角 TaskNotifier 轮询展示/跳转）；
+    # 端点已用业务标题预登记时不会覆盖名称。
+    from .tasks import async_tasks as _async_tasks
+    _async_tasks.register_with_id(
+        task_id,
+        name=f"Agent 生成候选材料（{task_id}）",
+        type="agent",
+        detail="正在启动…",
+    )
+    _async_tasks.update(
+        task_id,
+        status="running" if status in ("running", "pending") else status,
+        progress=progress,
+        detail=step_label or (f"失败：{error[:120]}" if error else ""),
+    )
 
 
 @app.post("/discover/agent-generate/async", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
@@ -3158,10 +3209,19 @@ async def discover_agent_generate_async(req: AgentGenerateRequest):
     """异步启动 Agent 创造性生成，立即返回 task_id 供前端轮询进度。"""
     import uuid as _uuid
     task_id = f"aggen-{_uuid.uuid4().hex[:12]}"
+    # 先以业务标题登记全局后台任务（右下角 TaskNotifier 可见），状态由 _set_agent_gen_status 同步
+    from .tasks import async_tasks as _async_tasks
+    _async_tasks.register_with_id(
+        task_id,
+        name=f"Agent 生成候选材料（{req.task_title or '未命名任务'}）",
+        type="agent",
+        detail="正在初始化…",
+    )
     _set_agent_gen_status(task_id, "running", progress=10, step_label="正在初始化 Agent…")
 
     async def _bg_run():
         try:
+            cfg = get_config()
             _set_agent_gen_status(task_id, "running", progress=20, step_label="正在构造提示词…")
 
             agent_id = req.agent_id or "builtin_material_discovery"
@@ -3172,7 +3232,10 @@ async def discover_agent_generate_async(req: AgentGenerateRequest):
 
             agent_model = agent_def.llm_model
             if not agent_model:
-                raise ValueError(f"智能体「{agent_def.name}」未配置 llm_model")
+                if (agent_def.provider or "").lower() == "internlm":
+                    agent_model = cfg.internlm.model or ""
+                else:
+                    agent_model = cfg.llm.model or ""
 
             persona_parts: list[str] = [f"你的角色是「{agent_def.name}」。"]
             if agent_def.description:
@@ -3192,17 +3255,17 @@ async def discover_agent_generate_async(req: AgentGenerateRequest):
             _set_agent_gen_status(task_id, "running", progress=40, step_label="Agent 正在创造性地生成候选配方…")
 
             # 评测修复 BEMCL-AI-P2-003：通过统一 LLMProvider 调用 LLM，走审计治理链
-            from .llm.schemas import ChatRequest, ChatMessage
-            _chat_resp = await _llm_provider.complete(ChatRequest(
-                model=agent_model,
-                messages=[
-                    ChatMessage(role="system", content=system_prompt),
-                    ChatMessage(role="user", content=user_prompt),
-                ],
-                temperature=0.7,
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            content = await _call_llm_provider(
+                provider=agent_def.provider or "",
+                llm_model=agent_def.llm_model,
+                messages=messages,
+                cfg=cfg,
                 max_tokens=8192,
-            ))
-            content = _chat_resp.content
+            )
 
             _set_agent_gen_status(task_id, "running", progress=70, step_label="正在解析候选材料…")
             reasoning, candidates = _parse_agent_candidates(content, material_kind=req.material_kind)
@@ -3380,6 +3443,23 @@ def _filter_demo(records: list[dict], include_demo: bool = False) -> list[dict]:
         if include_demo or not r.get("is_demo"):
             out.append(r)
     return out
+
+
+def _find_release_card_for_candidate(candidate_id: str) -> dict | None:
+    """按候选查找放行卡（任一状态），用于放行门禁防死锁。"""
+    try:
+        store = app.state.release_card_store
+        if store is None:
+            return None
+        cards = store.list(limit=200)
+        items = cards if isinstance(cards, list) else (cards.get("items") or [])
+        for c in items:
+            cid = getattr(c, "candidate_id", None) if not isinstance(c, dict) else c.get("candidate_id")
+            if cid == candidate_id:
+                return c if isinstance(c, dict) else c.model_dump(mode="json")
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 def _auto_create_release_card_for_candidate(
@@ -3734,9 +3814,11 @@ async def list_candidates(candidate_type: str = "", scenario_id: str = "",
     评测修复 P2-002：limit/offset 分页参数此前被忽略导致全量返回。
     limit<=0 表示不分页（向后兼容旧调用方），limit>0 时返回分页切片。
     D2(P2-002)：默认过滤 SEED_ 演示数据，include_demo=True 时包含。
+    综合评分缺失（历史/生成时未写入）但属性齐全时按生成器方法补算，与工艺深化一致。
     """
     records = app.state.candidate_store.list_all(candidate_type, scenario_id)
     items = _filter_demo([r.model_dump() for r in records], include_demo)
+    _backfill_multi_objective_scores(items)
     total = len(items)
     if limit > 0:
         items = items[max(0, offset): max(0, offset) + limit]
@@ -3756,7 +3838,7 @@ async def get_candidate(candidate_id: str):
     return record.model_dump()
 
 
-@app.post("/candidates/promote-from-temporary")
+@app.post("/candidates/promote-from-temporary", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def promote_from_temporary(payload: dict = Body(...)):
     """P3：将临时性质预测结果转正为正式候选材料。
 
@@ -3794,7 +3876,19 @@ async def promote_from_temporary(payload: dict = Body(...)):
         or ""
     )
     if not candidate_type:
-        candidate_type = "crystal" if (candidate.get("formula") and not smiles) else "polymer"
+        # 兜底判定（修复：无机锂化合物的 SMILES 无碳原子，此前被误判为 polymer）：
+        # - 有化学式无 SMILES → 晶体（无机/陶瓷）
+        # - SMILES 含碳 → 分子/聚合物（含 [*] 端基标记的为聚合物）
+        # - SMILES 无碳（如 Li6PS5Cl 类无机盐）→ 晶体
+        import re as _re
+        _smiles_txt = smiles or ""
+        _has_carbon = bool(_re.search(r"[Cc]", _smiles_txt))
+        if candidate.get("formula") and not _smiles_txt:
+            candidate_type = "crystal"
+        elif _has_carbon:
+            candidate_type = "polymer"
+        else:
+            candidate_type = "crystal"
 
     # 组装完整 data：写入归属与来源谱系，便于跨模块追溯
     data = {**candidate, "candidate_id": candidate_id, "project_id": project_id, "task_id": task_id}
@@ -3872,6 +3966,64 @@ async def update_candidate_status(candidate_id: str, req: CandidateStatusRequest
     return updated.model_dump()
 
 
+@app.delete("/candidates/{candidate_id}", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def delete_candidate(candidate_id: str):
+    """删除候选材料（2B 数据治理：被业务对象引用的候选禁止删除，仅可淘汰归档；
+    仅清理其派生内部数据（candidate_artifacts）。"""
+    from .experiment.candidate_store import CandidateRecord
+    store = app.state.candidate_store
+    if store.get(candidate_id) is None:
+        raise HTTPException(status_code=404, detail=f"候选材料 {candidate_id} 不存在")
+    # 引用检查：实验任务 / 工艺方案 / 配方 BOM / 样品 / 放行卡
+    referenced: list[str] = []
+    try:
+        orders = agent.experiment_controller._store.list_orders()
+        if any(getattr(o, "candidate_id", "") == candidate_id for o in orders):
+            referenced.append("实验任务")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        schemes = app.state.process_scheme_store.list_by_candidate(candidate_id)
+        if schemes:
+            referenced.append("工艺方案")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        boms = app.state.bom_store.list_by_candidate(candidate_id)
+        if boms:
+            referenced.append("配方 BOM")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        samples = app.state.sample_store.list_all()
+        if any(getattr(s, "source_candidate_id", "") == candidate_id for s in samples):
+            referenced.append("样品")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        cards = app.state.release_card_store.list()
+        if any(getattr(c, "candidate_id", "") == candidate_id for c in cards):
+            referenced.append("放行卡")
+    except Exception:  # noqa: BLE001
+        pass
+    if referenced:
+        raise HTTPException(
+            status_code=409,
+            detail=f"候选材料已被{'、'.join(referenced)}引用，无法删除；请先改用「淘汰」状态归档",
+        )
+    # 清理候选的派生内部数据（候选快照/合规检查等），避免 FK 约束
+    try:
+        from .experiment.candidate_artifact_store import CandidateArtifact
+        store_art = app.state.candidate_artifact_store
+        for art in store_art.list_by_candidate(candidate_id):
+            store_art.delete(candidate_id, art.artifact_type or "")
+    except Exception:  # noqa: BLE001
+        pass
+    if not store.delete(candidate_id):
+        raise HTTPException(status_code=404, detail=f"候选材料 {candidate_id} 不存在")
+    return {"deleted": True, "candidate_id": candidate_id}
+
+
 class OneClickExperimentRequest(BaseModel):
     """一键生成实验单请求（配方来源 + 工艺路径双引用）。"""
     project_id: str = ""
@@ -3887,9 +4039,26 @@ async def create_one_click_experiment(candidate_id: str, req: OneClickExperiment
     record = app.state.candidate_store.get(candidate_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"候选材料 {candidate_id} 不存在")
-    # 放行门禁校验：关联候选若有 release_card_required 且未通过审批，拒绝下达实验
+    # 放行门禁校验：关联候选若有 release_card_required 且未通过审批，拒绝下达实验。
+    # 防死锁：若候选标记了放行要求但不存在任何放行卡（历史/建卡失败），自动补建待审批卡，
+    # 确保审批队列可见，而不是静默永久阻断。
     cand_data = record.data or {}
     if cand_data.get("release_card_required") and not cand_data.get("release_card_approved"):
+        existing_card = _find_release_card_for_candidate(candidate_id)
+        if existing_card is None:
+            _card_id = _auto_create_release_card_for_candidate(
+                {**cand_data, "candidate_id": candidate_id, "name": record.name or ""},
+                project_id=req.project_id or record.project_id,
+                reason="候选要求放行审批但未发现放行卡，已自动补建",
+            )
+            if _card_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        f"候选材料 {candidate_id} 需要通过放行卡审批后才能创建实验任务；"
+                        f"已自动生成放行卡 {_card_id}，请到「我的待办 → 放行卡」完成审批后重试"
+                    ),
+                )
         raise HTTPException(
             status_code=403,
             detail=f"候选材料 {candidate_id} 需要通过放行卡审批后才能创建实验任务",
@@ -3940,6 +4109,32 @@ async def update_process_scheme_status(process_id: str, req: ProcessSchemeStatus
     return updated.model_dump()
 
 
+@app.delete("/process-schemes/{process_id}", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def delete_process_scheme(process_id: str):
+    """删除工艺方案（2B 数据治理：已被配方 BOM 引用的方案禁止删除，仅可归档为 abandoned）。"""
+
+    store = app.state.process_scheme_store
+    if store.get(process_id) is None:
+        raise HTTPException(status_code=404, detail=f"工艺方案 {process_id} 不存在")
+    # 引用检查：配方 BOM 通过 process_id 关联该方案
+    referenced_bom = None
+    try:
+        for b in app.state.bom_store.list_all():
+            if b.process_id == process_id:
+                referenced_bom = b.bom_id or b.process_id or ""
+                break
+    except Exception:  # noqa: BLE001
+        pass
+    if referenced_bom:
+        raise HTTPException(
+            status_code=409,
+            detail=f"工艺方案已被配方 {referenced_bom} 引用，无法删除；请先将方案状态改为「已放弃」归档",
+        )
+    if not store.delete(process_id):
+        raise HTTPException(status_code=404, detail=f"工艺方案 {process_id} 不存在")
+    return {"deleted": True, "process_id": process_id}
+
+
 class ProcessDeepeningRequest(BaseModel):
     """工艺深化请求（process_engineer 角色，SCP 优先 + 本地回退）。"""
     candidate_id: str = Field(..., description="候选材料 ID")
@@ -3986,6 +4181,54 @@ async def create_process_deepening(candidate_id: str, req: ProcessDeepeningReque
 
 # ── 工艺人员工作台：初筛通过的候选配方与工艺方案 ───────────────────
 
+# 综合评分补算属性（与 generator 的 min-max 归一化方法一致，等权重）
+_SCORE_PROPS = [
+    ("stability_score", "maximize"),
+    ("band_gap", "maximize"),
+    ("formation_energy", "minimize"),
+    ("ionic_conductivity_estimate", "maximize"),
+]
+
+
+def _backfill_multi_objective_scores(records: list[dict]) -> None:
+    """为缺失综合评分的候选补算评分（原地修改）。
+
+    历史/种子/转正候选可能未写入 multi_objective_score（为 0），
+    但属性齐全时按与候选生成器一致的 min-max 归一化方法补算，
+    保证工作台列表评分与候选详情属性可对应。
+    属性优先取候选顶层字段，其次取 data JSONB（旧数据属性存于嵌套结构）。
+    """
+    def _prop(r, key):
+        v = r.get(key)
+        if v is None:
+            v = (r.get("data") or {}).get(key)
+        return v
+
+    def _num(v):
+        try:
+            return float(v or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    targets = [
+        r for r in records
+        if not _num(r.get("multi_objective_score"))
+        and any(_num(_prop(r, p)) != 0.0 for p, _ in _SCORE_PROPS)
+    ]
+    if not targets:
+        return
+    total_weight = float(len(_SCORE_PROPS))
+    for prop, direction in _SCORE_PROPS:
+        vals = [_num(_prop(r, prop)) for r in targets]
+        v_min, v_max = min(vals), max(vals)
+        rng = (v_max - v_min) if v_max > v_min else 1.0
+        for r, v in zip(targets, vals):
+            normalized = (v - v_min) / rng
+            if direction == "minimize":
+                normalized = 1.0 - normalized
+            r["multi_objective_score"] = _num(r.get("multi_objective_score")) + (1.0 / total_weight) * normalized
+
+
 @app.get("/process-engineer/workbench",
          dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def process_engineer_workbench(status: str = "", limit: int = 100):
@@ -3993,6 +4236,7 @@ async def process_engineer_workbench(status: str = "", limit: int = 100):
 
     属于候选状态机第二层（feasible → process_planning → process_confirmed）。
     可按候选状态过滤；每个候选附带其工艺方案列表（routes / evidence_refs / status）。
+    候选综合评分缺失（历史数据为 0）但属性齐全时，按生成器同方法补算返回。
     """
     from .experiment.candidate_store import CandidateStatus
     records = app.state.candidate_store.list_all()
@@ -4017,6 +4261,8 @@ async def process_engineer_workbench(status: str = "", limit: int = 100):
         })
         if len(items) >= limit:
             break
+    # 综合评分补算（仅当缺失且属性齐全）
+    _backfill_multi_objective_scores([it["candidate"] for it in items])
     return {"items": items, "count": len(items), "pipeline_statuses": sorted(pipeline)}
 
 
@@ -4026,10 +4272,13 @@ async def process_engineer_workbench(status: str = "", limit: int = 100):
 async def list_task_candidates(task_id: str):
     """查询任务下的所有候选材料（业务链路：任务 1 → N 候选材料）。"""
     records = app.state.candidate_store.list_all(task_id=task_id)
+    items = [r.model_dump() for r in records]
+    # 综合评分缺失但属性齐全时按生成器方法补算，保证与工作台/工艺深化评分一致
+    _backfill_multi_objective_scores(items)
     return {
         "task_id": task_id,
-        "candidates": [r.model_dump() for r in records],
-        "count": len(records),
+        "candidates": items,
+        "count": len(items),
     }
 
 
@@ -4461,6 +4710,7 @@ async def create_bom_from_route(candidate_id: str, req: BomFromRouteRequest):
         recipe_result = agent._handle_design_formula(
             target_material=target_material,
             quantity=float(req.quantity or 1.0),
+            cand_type=cand.candidate_type or "",
         )
     except Exception as exc:
         logger.exception("调用 FormulaAgent 生成 BOM 失败: %s", exc)
@@ -4669,6 +4919,7 @@ async def create_bom_from_process(candidate_id: str, req: BomFromProcessRequest)
         recipe_result = agent._handle_design_formula(
             target_material=target_material,
             quantity=float(req.quantity or 1.0),
+            cand_type=cand.candidate_type or "",
         )
     except Exception as exc:
         logger.exception("从工艺方案生成 BOM 失败: %s", exc)
@@ -6909,6 +7160,7 @@ async def _call_llm_provider(
     llm_model: str,
     messages: list[dict],
     cfg,
+    max_tokens: int = 1024,
 ) -> str:
     """调用指定的 LLM provider 完成对话，返回回复文本。
 
@@ -6935,7 +7187,7 @@ async def _call_llm_provider(
                 model=chat_cfg.model,
                 messages=[ChatMessage(role=m["role"], content=m["content"]) for m in messages],
                 temperature=0.7,
-                max_tokens=1024,
+                max_tokens=max_tokens,
             )
             resp = await provider_inst.complete(chat_req)
             return resp.content
@@ -6956,7 +7208,7 @@ async def _call_llm_provider(
         model=effective_model,
         messages=[ChatMessage(role=m["role"], content=m["content"]) for m in messages],
         temperature=0.7,
-        max_tokens=1024,
+        max_tokens=max_tokens,
     )
     resp = await _llm_provider.complete(chat_req)
     return resp.content
@@ -7475,6 +7727,14 @@ async def industrialization_check(req: IndustrializationCheckRequest):
             "checks": [
                 {"name": "物料匹配", "passed": False, "detail": "物料库中未找到匹配原料，无法进行工业化评估"},
             ],
+            # 执行过程透明化（#3）：步骤链 + 引擎说明
+            "process": [
+                {"step": "候选材料解析", "status": "done", "detail": f"化学式 {formula or '—'} / SMILES {smiles or '—'}"},
+                {"step": "物料库匹配", "status": "failed", "detail": "物料库中未找到匹配原料"},
+                {"step": "合规规则检查", "status": "skipped", "detail": "无匹配物料，跳过规则评估"},
+                {"step": "成本与供应链评估", "status": "skipped", "detail": "无匹配物料，跳过评估"},
+                {"step": "报告生成", "status": "done", "detail": "评估基于本地规则引擎 + 企业物料库，非 LLM 生成"},
+            ],
         }
         # 0021：若关联候选，持久化合规检查结果（含未匹配场景）
         if req.candidate_id:
@@ -7543,6 +7803,14 @@ async def industrialization_check(req: IndustrializationCheckRequest):
         "estimated_cost": round(report.estimated_unit_cost, 2),
         "supply_risk": supply_risk,
         "checks": checks,
+        # 执行过程透明化（#3）：步骤链 + 引擎说明
+        "process": [
+            {"step": "候选材料解析", "status": "done", "detail": f"化学式 {formula or '—'} / SMILES {smiles or '—'}"},
+            {"step": "物料库匹配", "status": "done", "detail": f"匹配到 {len(matched)} 个物料：" + "、".join(m.material_id for m in matched[:6])},
+            {"step": "合规规则检查", "status": "done", "detail": f"SMARTS 禁用结构 / REACH / 成本熔断 / EHS 毒性 共 {len(checks)} 项检查"},
+            {"step": "成本与供应链评估", "status": "done", "detail": f"估算成本 {round(report.estimated_unit_cost, 2)} 元/kg，供应链风险：{supply_risk}"},
+            {"step": "报告生成", "status": "done", "detail": "评估基于本地规则引擎 + 企业物料库，非 LLM 生成"},
+        ],
     }
     # 0021：若关联候选，持久化合规检查结果
     if req.candidate_id:
@@ -7642,6 +7910,41 @@ async def update_raw_material(material_id: str, req: RawMaterialUpsertRequest):
     )
     agent.raw_material_db.upsert_spec(spec)
     return spec.model_dump()
+
+
+@app.delete("/raw-materials/{material_id}", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def delete_raw_material(material_id: str):
+    """删除物料（2B 数据治理：被配方 BOM 引用的物料禁止删除，须先归档处理）。"""
+    existing = agent.raw_material_db.get_spec(material_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"物料 {material_id} 不存在")
+    # 引用检查：配方 BOM 明细引用了该物料则禁止删除
+    # BOM formulation 结构：{materials: [{material_name, amount, role}], target_smiles}
+    # 物料引用键为 material_name（物料库的 name 或 material_id 均可能）
+    try:
+        boms = app.state.bom_store.list_all()
+    except Exception:  # noqa: BLE001 - BOM 存储不可用时放宽引用检查
+        boms = []
+    referenced_bom_ids = []
+    for b in boms:
+        form = b.formulation or {}
+        materials = form.get("materials") or []
+        hit = False
+        for it in materials:
+            nm = (it.get("material_name") or it.get("material") or "").strip()
+            if nm and (nm == material_id or nm == existing.name):
+                hit = True
+                break
+        if hit:
+            referenced_bom_ids.append(b.bom_id or b.process_id or "")
+    if referenced_bom_ids:
+        raise HTTPException(
+            status_code=409,
+            detail=f"物料已被配方 {referenced_bom_ids[0]} 引用，无法删除；请先修改对应配方后再操作",
+        )
+    if not agent.raw_material_db.delete(material_id):
+        raise HTTPException(status_code=404, detail=f"物料 {material_id} 不存在")
+    return {"deleted": True, "material_id": material_id}
 
 
 # ===========================================================================
@@ -8940,7 +9243,8 @@ async def create_experiment_order(req: ExperimentOrderRequest):
             result["duplicated"] = True
             return result
 
-    # 放行门禁校验：关联候选若有 release_card_required 且未通过审批，拒绝创建实验任务
+    # 放行门禁校验：关联候选若有 release_card_required 且未通过审批，拒绝创建实验任务。
+    # 防死锁：无对应放行卡时自动补建待审批卡，避免审批队列为空导致的永久阻断。
     if req.candidate_id:
         record = app.state.candidate_store.get(req.candidate_id)
         # 评测修复 P1-3：candidate_id 不存在时直接 404，避免数据库层 FK 违反抛 500
@@ -8948,6 +9252,21 @@ async def create_experiment_order(req: ExperimentOrderRequest):
             raise HTTPException(status_code=404, detail=f"候选材料 {req.candidate_id} 不存在")
         cand_data = record.data or {}
         if cand_data.get("release_card_required") and not cand_data.get("release_card_approved"):
+            existing_card = _find_release_card_for_candidate(req.candidate_id)
+            if existing_card is None:
+                _card_id = _auto_create_release_card_for_candidate(
+                    {**cand_data, "candidate_id": req.candidate_id, "name": record.name or ""},
+                    project_id=req.project_id or record.project_id,
+                    reason="候选要求放行审批但未发现放行卡，已自动补建",
+                )
+                if _card_id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=(
+                            f"候选材料 {req.candidate_id} 需要通过放行卡审批后才能创建实验任务；"
+                            f"已自动生成放行卡 {_card_id}，请到「我的待办 → 放行卡」完成审批后重试"
+                        ),
+                    )
             raise HTTPException(
                 status_code=403,
                 detail=f"候选材料 {req.candidate_id} 需要通过放行卡审批后才能创建实验任务",
@@ -9098,6 +9417,48 @@ async def approve_experiment_order(order_id: str, req: OrderApprovalRequest):
         operator=req.approved_by or "system",
     ))
     return {"status": "approved", "order_id": order_id}
+
+
+class OrderMetaRequest(BaseModel):
+    """实验任务单元数据更新请求。"""
+    assignee: str = ""
+    priority: str = ""
+    notes: str = ""
+
+
+@app.patch("/experiments/orders/{order_id}",
+           dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def update_experiment_order_meta(order_id: str, req: OrderMetaRequest):
+    """编辑实验任务（负责人/优先级/备注）；仅草稿/待审批/已审批状态可编辑。"""
+    try:
+        ok = agent.experiment_controller.update_order_meta(
+            order_id, assignee=req.assignee, priority=req.priority, notes=req.notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"实验任务 {order_id} 不存在")
+    return {"order_id": order_id, "status": "updated"}
+
+
+@app.delete("/experiments/orders/{order_id}",
+            dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def delete_experiment_order(order_id: str):
+    """删除实验任务（仅草稿/待审批状态；已有实验数据或已审批的禁止删除）。"""
+    try:
+        ok = agent.experiment_controller.delete_order(order_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"实验任务 {order_id} 不存在")
+    get_audit_logger().log(AuditEntry(
+        event_type="decision",
+        module="experiment_order",
+        action="delete",
+        detail={"order_id": order_id},
+        operator="system",
+    ))
+    return {"status": "deleted", "order_id": order_id}
 
 
 @app.post("/experiments/orders/{order_id}/reject", dependencies=[Depends(require_role(UserRole.PROJECT_MANAGER))])
@@ -11253,6 +11614,28 @@ async def update_equipment(equipment_id: str, req: EquipmentUpsertRequest):
     return eq.model_dump()
 
 
+@app.delete("/equipment/{equipment_id}", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def delete_equipment(equipment_id: str):
+    """删除设备（2B 数据治理：被实验任务引用的设备禁止删除，须先改为退役状态）。"""
+    store: EquipmentStore = app.state.equipment_store
+    if store.get(equipment_id) is None:
+        raise HTTPException(status_code=404, detail=f"设备 {equipment_id} 不存在")
+    # 引用检查：实验任务（订单）引用了该设备则禁止删除
+    try:
+        orders = app.state.experiment_controller.list_orders()
+    except Exception:  # noqa: BLE001 - 实验控制器不可用时放宽引用检查
+        orders = []
+    referenced = [o for o in orders if getattr(o, "equipment_id", "") == equipment_id]
+    if referenced:
+        raise HTTPException(
+            status_code=409,
+            detail=f"设备已被 {len(referenced)} 个实验任务引用，无法删除；请先将设备状态改为「退役」归档",
+        )
+    if not store.delete(equipment_id):
+        raise HTTPException(status_code=404, detail=f"设备 {equipment_id} 不存在")
+    return {"deleted": True, "equipment_id": equipment_id}
+
+
 # --- 样品管理 API ---
 
 class SampleCreateRequest(BaseModel):
@@ -12679,7 +13062,7 @@ async def ingest_papers(req: IngestPapersRequest):
     return stats
 
 
-@app.post("/knowledge/search_and_ingest")
+@app.post("/knowledge/search_and_ingest", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def search_and_ingest(req: LiteratureSearchRequest):
     """一体化：检索 + 入库。返回检索结果和入库统计。"""
     papers = await _literature_researcher.search(req.query, req.limit)
@@ -12704,7 +13087,7 @@ class ExtractClaimsRequest(BaseModel):
     paper_limit: int = 10
 
 
-@app.post("/knowledge/extract_claims")
+@app.post("/knowledge/extract_claims", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def extract_claims(req: ExtractClaimsRequest):
     """LLM 驱动的主张抽取：从材料关联文献的摘要中自动提取结构化主张。"""
     material_store = get_material_store()
@@ -13188,7 +13571,7 @@ async def review_committee_case(case_id: str, req: CommitteeCaseReviewRequest, r
     if req.decision not in valid_decisions:
         raise HTTPException(status_code=400, detail=f"decision 必须为 {valid_decisions}")
 
-    from .committee.enums import CaseStatus, Decision
+    from .committee.enums import CaseStatus
     decision_map = {
         "approve": CaseStatus.PASS,
         "reject": CaseStatus.REJECT,
@@ -13661,7 +14044,7 @@ async def get_control_plane_run(run_id: str):
     return run.model_dump()
 
 
-@app.post("/control-plane/runs/{run_id}/resume")
+@app.post("/control-plane/runs/{run_id}/resume", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def resume_control_plane_run(run_id: str, request: Request):
     """恢复运行。"""
     _require_control_plane(_run_manager)
@@ -13676,7 +14059,7 @@ async def resume_control_plane_run(run_id: str, request: Request):
     return run.model_dump()
 
 
-@app.post("/control-plane/runs/{run_id}/cancel")
+@app.post("/control-plane/runs/{run_id}/cancel", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def cancel_control_plane_run(run_id: str, request: Request):
     """取消运行。"""
     _require_control_plane(_run_manager)
@@ -14184,6 +14567,7 @@ def _init_hybrid_stack() -> None:
         _capability_router, _model_router, IntentInterpreter(), PlanValidator(),
         domain_pack=domain_pack,
         domain_pack_provider=domain_pack_provider,
+        tool_executor=lambda action, **kw: agent.tools.execute(action, **kw),
     )
     # 把 capability_router 注入 executor，让策略检查（prohibited/risk/human_review）生效
     if _executor is not None:
@@ -14220,7 +14604,7 @@ async def list_domain_packs():
     try:
         from .industrialization.domain_pack_store import DomainPackStore
         store = DomainPackStore()
-        for p in store.list_packs(active_only=True):
+        for p in store.list_packs():
             data = p.data or {}
             packs.append({
                 "domain_key": p.domain_key,
@@ -14234,6 +14618,55 @@ async def list_domain_packs():
     except Exception:
         packs = []
     return {"packs": packs, "count": len(packs)}
+
+
+@app.get("/settings/domain")
+async def get_active_domain():
+    """获取当前生效的研发领域（DB 持久化，系统启动时读取并按其执行）。"""
+    from .industrialization.domain_pack_store import DomainPackStore
+    store = DomainPackStore()
+    pack = store.resolve_active_pack()
+    packs = store.list_packs()
+    return {
+        "active_domain_key": pack.domain_key if pack else "",
+        "active_domain_name": pack.name if pack else "",
+        "packs": [
+            {
+                "domain_key": p.domain_key,
+                "name": p.name,
+                "description": p.description,
+                "material_kind": _infer_domain_material_kind(p.data or {}),
+                "is_active": p.is_active,
+            }
+            for p in packs
+        ],
+    }
+
+
+@app.post("/settings/domain", dependencies=[Depends(require_role(UserRole.ADMIN))])
+async def set_active_domain(payload: dict = Body(...)):
+    """设置系统默认研发领域（DB 持久化）。
+
+    将指定领域包置为活跃、其余置为非活跃；系统重启后按该领域执行
+    （_resolve_material_domain 启动时读取活跃包）。
+    """
+    domain_key = str(payload.get("domain_key") or "").strip()
+    if not domain_key:
+        raise HTTPException(status_code=400, detail="domain_key 不能为空")
+    from .industrialization.domain_pack_store import DomainPackStore
+    store = DomainPackStore()
+    target = store.get_pack(domain_key)
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"领域包 {domain_key} 不存在")
+    for p in store.list_packs():
+        store.set_active(p.domain_key, p.domain_key == domain_key)
+    updated = store.get_pack(domain_key)
+    return {
+        "domain_key": domain_key,
+        "name": updated.name if updated else "",
+        "is_active": True,
+        "message": f"研发领域已切换为「{updated.name if updated else domain_key}」，后续请求按该领域执行",
+    }
 
 
 def _infer_domain_material_kind(data: dict) -> str:

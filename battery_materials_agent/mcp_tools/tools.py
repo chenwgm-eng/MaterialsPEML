@@ -219,10 +219,11 @@ class MCPToolRegistry:
 
         self.register(MCPTool(
             name="generate_polymer_candidates",
-            description="生成聚合物电解质候选材料（基于 LLM + 分子设计规则）",
+            description="生成聚合物候选材料（电池电解质 PEO 系 / 工程塑料改性体系，按 material_system 自动切换）",
             parameters=[
                 MCPToolParameter(name="target_properties", type="object", description="目标性质", required=False),
                 MCPToolParameter(name="num_candidates", type="integer", description="候选数量", required=False, default=10),
+                MCPToolParameter(name="material_system", type="string", description="材料体系（如 聚丙烯改性体系/生物降解材料体系），非空时走工程塑料生成模式", required=False),
             ],
         ))
 
@@ -283,6 +284,23 @@ class MCPToolRegistry:
             description="基于企业物料库生成工业化配方（BOM/BOP），评估合规性与量产成本",
             parameters=[
                 MCPToolParameter(name="target_material", type="object", description="目标材料信息（含目标属性、候选 SMILES 等）", required=False),
+            ],
+        ))
+
+        self.register(MCPTool(
+            name="search_literature",
+            description="多源文献检索（LLM/SCP/学术 API/本地知识库并行，支持中英文），返回去重排序的文献列表",
+            parameters=[
+                MCPToolParameter(name="query", type="string", description="检索关键词（支持中文，自动转译为英文）"),
+                MCPToolParameter(name="limit", type="integer", description="返回文献数量上限", required=False, default=10),
+            ],
+        ))
+
+        self.register(MCPTool(
+            name="build_knowledge_graph",
+            description="基于检索到的文献构建材料研发知识图谱（实体节点 + 关联边 + 溯源）",
+            parameters=[
+                MCPToolParameter(name="papers", type="array", description="文献列表（search_literature 的输出）"),
             ],
         ))
 

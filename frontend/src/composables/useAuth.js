@@ -4,7 +4,7 @@ import { ROLE_RANK } from '@/constants/roles'
 // 全局响应式登录态（模块级单例，跨组件共享）
 const _userRole = ref(localStorage.getItem('userRole') || 'viewer')
 const _userId = ref(localStorage.getItem('userId') || '')
-const _isLoggedIn = ref(!!localStorage.getItem('authToken'))
+const _isLoggedIn = ref(!!(localStorage.getItem('authToken') || sessionStorage.getItem('authToken')))
 
 /**
  * 操作-角色映射表（action → 允许的角色列表）。
@@ -68,7 +68,9 @@ export function useAuth() {
     }
     if (token) {
       _isLoggedIn.value = true
-      localStorage.setItem('authToken', token)
+      // 与 client.setUserId 保持同一存储位置（记住登录状态 → localStorage，否则 sessionStorage）
+      const store = localStorage.getItem('authToken') ? localStorage : sessionStorage
+      store.setItem('authToken', token)
     }
   }
 
@@ -80,6 +82,8 @@ export function useAuth() {
     localStorage.removeItem('userId')
     localStorage.removeItem('userRole')
     localStorage.removeItem('authToken')
+    sessionStorage.removeItem('userId')
+    sessionStorage.removeItem('authToken')
   }
 
   /** 角色等级比较（用于权限判断） */

@@ -136,7 +136,7 @@ function updateMotionPreference() {
 const typeColor = {
   material: '#2050d0',
   property: '#10b981',
-  method: '#fa8c16',
+  method: '#1d4ed8',
   application: '#8b5cf6',
   institution: '#ef4444',
 }
@@ -499,7 +499,7 @@ watch(
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #8a92a6;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -566,7 +566,7 @@ watch(
 
 .metric-label {
   font-size: 11px;
-  color: #8a92a6;
+  color: var(--text-muted);
 }
 
 .detail-block {
@@ -602,7 +602,7 @@ watch(
 
 .property-key {
   font-size: 11px;
-  color: #8a92a6;
+  color: var(--text-muted);
 }
 
 .property-value {
@@ -653,7 +653,7 @@ watch(
 .relation-weight {
   margin-left: auto;
   font-size: 11px;
-  color: #8a92a6;
+  color: var(--text-muted);
   background: #fff;
   padding: 0 6px;
   border-radius: 8px;

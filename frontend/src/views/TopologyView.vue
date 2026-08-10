@@ -52,7 +52,7 @@
             <div class="column-title">
               <RobotOutlined class="column-icon agent-icon" />
               <span class="column-name">智能体</span>
-              <a-tag color="purple" class="column-count">{{ filteredAgents.length }}</a-tag>
+              <a-tag color="blue" class="column-count">{{ filteredAgents.length }}</a-tag>
             </div>
             <div class="column-subtitle">决定「谁去调」</div>
             <div class="column-filters">

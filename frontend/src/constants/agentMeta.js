@@ -7,7 +7,7 @@
 
 // 角色 → 显示颜色（与 global.css --role-* 变量对应）
 export const AGENT_ROLE_COLOR = {
-  project_manager: '#f97316',
+  project_manager: '#1d4ed8',
   material_discovery: '#10b981',
   synthesis_planning: '#f59e0b',
   dft_verification: '#8b5cf6',

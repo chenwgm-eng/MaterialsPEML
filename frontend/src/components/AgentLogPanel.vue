@@ -17,7 +17,9 @@
         <span class="log-agent" :style="{ color: agentColor(ev.agent_id) }">
           {{ ev.agent_name || ev.agent_id || 'system' }}
         </span>
-        <span class="log-icon">{{ iconFor(ev.event_type) }}</span>
+        <span class="log-icon">
+          <component :is="iconComponent(ev.event_type)" aria-hidden="true" />
+        </span>
         <span class="log-content">{{ ev.content }}</span>
       </div>
     </div>
@@ -26,6 +28,15 @@
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
+import {
+  RobotOutlined,
+  ToolOutlined,
+  CheckCircleOutlined,
+  CaretRightOutlined,
+  CloseCircleOutlined,
+  TrophyOutlined,
+  BulbOutlined,
+} from '@ant-design/icons-vue'
 import { agentRoleColor, AGENT_FALLBACK_COLOR } from '@/constants/agentMeta'
 
 const props = defineProps({
@@ -37,13 +48,13 @@ const props = defineProps({
 const emit = defineEmits(['clear'])
 
 const EVENT_ICON = {
-  thinking: '💭',
-  tool_call: '🔧',
-  tool_result: '✅',
-  step_start: '▶',
-  step_complete: '✔',
-  error: '❌',
-  complete: '🎉',
+  thinking: BulbOutlined,
+  tool_call: ToolOutlined,
+  tool_result: CheckCircleOutlined,
+  step_start: CaretRightOutlined,
+  step_complete: CheckCircleOutlined,
+  error: CloseCircleOutlined,
+  complete: TrophyOutlined,
 }
 
 const bodyRef = ref(null)
@@ -61,8 +72,8 @@ function agentColor(agentId) {
   return agentRoleColor(agent.role)
 }
 
-function iconFor(type) {
-  return EVENT_ICON[type] || '·'
+function iconComponent(type) {
+  return EVENT_ICON[type] || RobotOutlined
 }
 
 function formatTime(ts) {

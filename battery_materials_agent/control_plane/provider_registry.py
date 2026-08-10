@@ -234,7 +234,7 @@ class ProviderRegistry:
                 provider_type=ProviderType.ASKCOS,
                 name="AskCos Retrosynthesis",
                 endpoint=os.getenv("ASKCOS_BASE_URL", "http://localhost:5000"),
-                auth_secret_ref="ASKCOS_API_KEY",
+                auth_secret_ref="",  # 本地自部署服务，无需 API Key
                 version="v1",
             ),
             ProviderDescriptor(

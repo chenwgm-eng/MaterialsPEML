@@ -341,8 +341,21 @@
       @update:open="(v) => (generateVisible = v)"
     >
       <a-form layout="vertical" size="small">
-        <a-form-item label="委员会 Case ID" required>
-          <a-input v-model:value="generateCaseId" placeholder="请输入 Case ID（如 cmt-xxxxxxxx）" />
+        <a-form-item label="委员会 Case" required>
+          <a-select
+            v-model:value="generateCaseId"
+            show-search
+            placeholder="选择委员会 Case"
+            :filter-option="(input, option) => (option.label || '').toLowerCase().includes(input.toLowerCase())"
+            :loading="caseListLoading"
+            allow-clear
+          >
+            <a-select-option v-for="c in caseOptions" :key="c.value" :value="c.value" :label="c.label">
+              {{ c.label }}
+              <span v-if="c.type" class="case-option-type">{{ c.type }}</span>
+            </a-select-option>
+          </a-select>
+          <div class="form-help">仅展示可生成放行卡的委员会案件；如列表为空请先在「委员会中心」发起评审。</div>
         </a-form-item>
       </a-form>
       <template #footer>
@@ -377,6 +390,7 @@ import {
   reviewReleaseCard,
   getReleaseCardMetrics,
 } from '@/api/releaseCards'
+import { getCommitteeCases } from '@/api/committees'
 import { useMdmDict } from '@/utils/mdmDict'
 import EmptyState from '@/components/EmptyState.vue'
 import { MESSAGES } from '@/constants/glossary'
@@ -422,6 +436,28 @@ const reviewForm = reactive({
 const generateVisible = ref(false)
 const generateSubmitting = ref(false)
 const generateCaseId = ref('')
+const caseListLoading = ref(false)
+const caseOptions = ref([])
+
+// 委员会 Case 列表（生成放行卡时选择）
+async function loadCaseOptions() {
+  caseListLoading.value = true
+  try {
+    const res = await getCommitteeCases({ limit: 50 })
+    const cases = Array.isArray(res) ? res : (res?.cases || [])
+    caseOptions.value = cases
+      .filter((c) => c.case_id)
+      .map((c) => ({
+        value: c.case_id,
+        label: `${c.case_id}${c.title ? ' · ' + c.title : ''}`,
+        type: c.committee_type || '',
+      }))
+  } catch {
+    caseOptions.value = []
+  } finally {
+    caseListLoading.value = false
+  }
+}
 
 // --- Table columns ---
 const columns = [
@@ -670,11 +706,12 @@ async function submitReview() {
 
 function openGenerate() {
   generateCaseId.value = ''
+  loadCaseOptions()
   generateVisible.value = true
 }
 
 async function submitGenerate() {
-  const caseId = generateCaseId.value.trim()
+  const caseId = generateCaseId.value?.trim?.() || generateCaseId.value || ''
   if (!caseId) {
     message.warning('请输入委员会 Case ID')
     return
@@ -863,8 +900,8 @@ onMounted(async () => {
 .rec-conditional .rec-banner-value { color: var(--primary); }
 .rec-need_evidence { background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.3); }
 .rec-need_evidence .rec-banner-value { color: var(--warning); }
-.rec-human_review { background: rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.3); }
-.rec-human_review .rec-banner-value { color: #8b5cf6; }
+.rec-human_review { background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.3); }
+.rec-human_review .rec-banner-value { color: var(--warning); }
 .rec-reject { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.3); }
 .rec-reject .rec-banner-value { color: var(--error); }
 

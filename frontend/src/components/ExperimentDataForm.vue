@@ -219,6 +219,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { message } from 'ant-design-vue'
 import { UploadOutlined } from '@ant-design/icons-vue'
 import { getPropertyTemplate, listPropertyTemplates } from '@/api/properties'
 import { useUnitSymbols, usePropertyUnits } from '@/utils/mdmDict'
@@ -345,6 +346,16 @@ async function onExperimentTypeChange(type) {
 function clearTemplateValues() {
   for (const k of Object.keys(templateValues)) {
     delete templateValues[k]
+  }
+}
+
+// 数值字段变更校验：非法数值（含科学计数法校验）清空并提示
+function onNumericFieldChange(field) {
+  const v = String(templateValues[field.key] ?? '').trim()
+  if (v === '') return
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(v)) {
+    message.warning(`「${field.label_cn || field.key}」不是合法数值，已清空`)
+    templateValues[field.key] = null
   }
 }
 

@@ -1,5 +1,9 @@
 <template>
   <div class="capability-center">
+    <div class="page-header">
+      <h1 class="page-title">能力契约</h1>
+      <p class="page-subtitle">管理 AI 能力契约：风险等级、降级链与 SLA，确保调用可追溯</p>
+    </div>
     <!-- 统计条 -->
     <div class="stat-row">
       <div class="stat-item">

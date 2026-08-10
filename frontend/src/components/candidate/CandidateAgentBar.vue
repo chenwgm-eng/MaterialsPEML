@@ -7,7 +7,9 @@
       <template #content>
         <div class="agent-detail-card">
           <div class="agent-head">
-            <div class="agent-avatar-lg">{{ agent?.avatar || '🔬' }}</div>
+            <div class="agent-avatar-lg">
+              <component :is="agentIcon" aria-hidden="true" />
+            </div>
             <div class="agent-meta">
               <div class="agent-name-lg">{{ agent?.name || '首席材料学家' }}</div>
               <div class="agent-tags">
@@ -42,7 +44,9 @@
         </div>
       </template>
       <span class="agent-chip" :class="{ 'agent-chip-loading': agentLoading }">
-        <span class="agent-avatar">{{ agent?.avatar || '🔬' }}</span>
+        <span class="agent-avatar">
+          <component :is="agentIcon" aria-hidden="true" />
+        </span>
         <span class="agent-name">{{ agent?.name || '首席材料学家' }}</span>
         <a-tag color="orange" size="small" class="ai-tag">AI</a-tag>
       </span>
@@ -81,6 +85,7 @@ import {
   LoadingOutlined,
 } from '@ant-design/icons-vue'
 import { listAgents } from '@/api/agents'
+import { resolveAgentIcon } from '@/utils/agentAvatar'
 
 const props = defineProps({
   loading: { type: Boolean, default: false },
@@ -112,6 +117,8 @@ const loadingHint = computed(() => {
   }
   return 'Agent 正在创造性地生成候选配方，通常需要 30-60 秒'
 })
+
+const agentIcon = computed(() => resolveAgentIcon(agent.value?.avatar))
 
 async function loadAgent() {
   agentLoading.value = true

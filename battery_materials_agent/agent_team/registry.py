@@ -15,7 +15,7 @@ _V2_MIGRATION_MAP: dict[str, dict] = {
     "builtin_material_discovery": {
         "agent_id": "molecule_polymer_design",
         "role": "thinker",
-        "max_autonomy_level": "L0",
+        "max_autonomy_level": "L1",
         "capabilities": ["molecule_polymer_design", "structure_validation", "property_prediction"],
         "required_capabilities": ["structure_validation"],
         "optional_capabilities": ["material_reference_lookup"],
@@ -60,7 +60,7 @@ _V2_MIGRATION_MAP: dict[str, dict] = {
     "builtin_literature_researcher": {
         "agent_id": "evidence_research",
         "role": "analyst",
-        "max_autonomy_level": "L0",
+        "max_autonomy_level": "L1",
         "capabilities": ["evidence_research", "material_knowledge_query"],
         "required_capabilities": [],
         "optional_capabilities": ["material_reference_lookup", "material_knowledge_query"],

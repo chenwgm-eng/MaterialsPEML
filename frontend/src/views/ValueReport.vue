@@ -1,5 +1,9 @@
 <template>
   <div class="value-report">
+    <div class="page-header">
+      <h1 class="page-title">收益账单</h1>
+      <p class="page-subtitle">统计研发投入与收益，按项目查看成本与价值产出</p>
+    </div>
     <!-- 顶部工具栏 -->
     <div class="filter-bar">
       <a-space wrap>

@@ -28,6 +28,7 @@ import {
   FileSearchOutlined,
   FolderOpenOutlined,
   TeamOutlined,
+  LoadingOutlined,
 } from '@ant-design/icons-vue'
 import { MESSAGES } from '@/constants/glossary'
 
@@ -49,7 +50,7 @@ const props = defineProps({
   type: {
     type: String,
     default: 'create',
-    validator: (v) => ['create', 'search', 'data', 'team'].includes(v),
+    validator: (v) => ['create', 'search', 'data', 'team', 'loading'].includes(v),
   },
   description: { type: String, default: MESSAGES.empty },
   actionText: { type: String, default: '' },
@@ -64,6 +65,7 @@ const iconMap = {
   search: FileSearchOutlined,
   data: InboxOutlined,
   team: TeamOutlined,
+  loading: LoadingOutlined,
 }
 
 const iconComponent = computed(() => props.actionIcon || iconMap[props.type] || ExperimentOutlined)

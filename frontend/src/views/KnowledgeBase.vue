@@ -659,7 +659,7 @@ onMounted(loadMaterials)
 }
 .material-meta {
   font-size: 11px;
-  color: #8a92a6;
+  color: var(--text-muted);
   margin-top: 3px;
 }
 .material-meta .sep { margin: 0 5px; opacity: 0.5; }
@@ -730,7 +730,7 @@ onMounted(loadMaterials)
   gap: 6px;
   flex-wrap: wrap;
   font-size: 11px;
-  color: #8a92a6;
+  color: var(--text-muted);
 }
 .confidence { margin-left: auto; }
 </style>

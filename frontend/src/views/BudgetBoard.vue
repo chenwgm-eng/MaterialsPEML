@@ -1,5 +1,9 @@
 <template>
   <div class="budget-board">
+    <div class="page-header">
+      <h1 class="page-title">预算看板</h1>
+      <p class="page-subtitle">按范围查看资源预算限额与消耗，识别超支风险</p>
+    </div>
     <!-- Filter Bar -->
     <div class="filter-bar">
       <a-space wrap>
@@ -334,9 +338,9 @@ function usagePercent(b) {
 }
 
 function usageColor(pct) {
-  if (pct >= 90) return '#f97316'
-  if (pct >= 70) return '#fb923c'
-  return '#fdba74'
+  if (pct >= 90) return '#1d4ed8'
+  if (pct >= 70) return '#3b82f6'
+  return '#93c5fd'
 }
 
 // --- API calls ---

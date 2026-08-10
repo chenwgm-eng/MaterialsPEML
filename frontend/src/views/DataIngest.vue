@@ -105,7 +105,7 @@
                 <a-tag v-if="confidenceOf(record.key) === 'exact'" color="green">精确</a-tag>
                 <a-tag v-else-if="confidenceOf(record.key) === 'alias'" color="blue">别名</a-tag>
                 <a-tag v-else-if="confidenceOf(record.key) === 'fuzzy'" color="orange">模糊</a-tag>
-                <a-tag v-else-if="confidenceOf(record.key) === 'manual'" color="purple">手动</a-tag>
+                <a-tag v-else-if="confidenceOf(record.key) === 'manual'" color="blue">手动</a-tag>
                 <span v-else class="text-muted">未映射</span>
               </template>
             </template>

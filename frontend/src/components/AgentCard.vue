@@ -15,7 +15,10 @@
     @keydown.space.prevent="onSelect"
   >
     <div class="card-main">
-      <div class="avatar">{{ agent.avatar || '🤖' }}</div>
+      <div class="avatar">
+        <component :is="avatarIcon || RobotOutlined" v-if="!customAvatarText" aria-hidden="true" />
+        <template v-else>{{ agent.avatar }}</template>
+      </div>
       <div class="info">
         <div class="info-head">
           <span class="name">{{ agent.name }}</span>
@@ -63,7 +66,9 @@
 
 <script setup>
 import { computed } from 'vue'
+import { RobotOutlined } from '@ant-design/icons-vue'
 import { agentRoleColor, agentRoleLabel } from '@/constants/agentMeta'
+import { resolveAgentIcon, isEmojiAvatar } from '@/utils/agentAvatar'
 
 const props = defineProps({
   agent: { type: Object, required: true },
@@ -81,6 +86,8 @@ const emit = defineEmits(['select', 'edit', 'delete', 'detail'])
 const roleColor = computed(() => agentRoleColor(props.agent.role))
 const roleLabel = computed(() => agentRoleLabel(props.agent.role))
 const isDev = computed(() => props.agent.status === 'development')
+const avatarIcon = computed(() => resolveAgentIcon(props.agent.avatar))
+const customAvatarText = computed(() => props.agent.avatar && !isEmojiAvatar(props.agent.avatar))
 
 const HEALTH_LABEL = {
   healthy: '正常',

@@ -14,12 +14,13 @@ export const useTaskStore = defineStore('tasks', () => {
     tasks.value.push({
       id: task.id || `task_${Date.now()}`,
       name: task.name || '未命名任务',
-      type: task.type || 'research', // research / ecml / prediction
-      status: 'running', // running / completed / failed
-      progress: 0, // 0-100
-      detail: '',
+      type: task.type || 'research', // research / ecml / prediction / agent / synthesis
+      status: task.status || 'running', // running / completed / failed
+      progress: task.progress || 0, // 0-100
+      detail: task.detail || '',
+      link: task.link || '', // 点击任务跳转的路由（如 /workbench）
       startedAt: Date.now(),
-      completedAt: null,
+      completedAt: task.status === 'completed' || task.status === 'failed' ? Date.now() : null,
     })
   }
 

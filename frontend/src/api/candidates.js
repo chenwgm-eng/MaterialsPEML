@@ -29,6 +29,10 @@ export const updateCandidateStatus = (candidateId, data) =>
 export const updateProcessSchemeStatus = (processId, data) =>
   client.patch(`/process-schemes/${processId}/status`, data)
 
+/** 删除工艺方案（已被配方 BOM 引用的方案后端会返回 409，需改为归档） */
+export const deleteProcessScheme = (processId) =>
+  client.delete(`/process-schemes/${encodeURIComponent(processId)}`)
+
 /** 从已确认的工艺方案生成配方（BOM），打通 深化→配方 链路 */
 export const createBomFromProcess = (candidateId, data) =>
   client.post(`/candidates/${candidateId}/bom-from-process`, data)

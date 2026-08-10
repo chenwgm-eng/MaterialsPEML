@@ -32,7 +32,7 @@
         :value="overview.projects?.total || 0"
         label="项目总数"
         :icon="markRaw(ProjectOutlined)"
-        icon-color="#f97316"
+        icon-color="#1d4ed8"
       />
       <StatCard
         :value="overview.experiments?.total || 0"
@@ -92,7 +92,7 @@
       <a-card :bordered="false" class="chart-card">
         <template #title>
           <span class="card-title">ECML 运行次数趋势</span>
-          <a-tag color="purple" class="title-tag tabular-nums">单价 ¥{{ cost.compute?.unit_cost || 0 }}/次</a-tag>
+          <a-tag color="blue" class="title-tag tabular-nums">单价 ¥{{ cost.compute?.unit_cost || 0 }}/次</a-tag>
         </template>
         <div ref="computeLineRef" class="chart-box" />
       </a-card>
@@ -341,7 +341,7 @@ function toPercent(v) {
 
 function progressColor(p) {
   if (p >= 80) return '#d02050'
-  if (p >= 50) return '#d0a020'
+  if (p >= 50) return '#b45309'
   return '#20a050'
 }
 
@@ -349,7 +349,7 @@ function progressColor(p) {
 function rateColor(rate) {
   const p = toPercent(rate)
   if (p >= 95) return '#20a050'
-  if (p >= 80) return '#d0a020'
+  if (p >= 80) return '#b45309'
   return '#d02050'
 }
 
@@ -357,7 +357,7 @@ function rateColor(rate) {
 function recurrenceColor(rate) {
   const p = toPercent(rate)
   if (p < 20) return '#20a050'
-  if (p < 50) return '#d0a020'
+  if (p < 50) return '#b45309'
   return '#d02050'
 }
 
@@ -750,7 +750,8 @@ onBeforeUnmount(() => {
 }
 
 .alert-item .resource-label {
-  color: var(--error, #d02050);
+  /* 对比度修复：#f53f3f 作 13px 小字仅 3.7:1，加深至 #dc2626（4.5:1+） */
+  color: #dc2626;
 }
 
 .alert-list {
@@ -788,7 +789,7 @@ onBeforeUnmount(() => {
 .alert-inventory {
   font-family: monospace;
   font-weight: 600;
-  color: var(--error);
+  color: #dc2626;
   font-variant-numeric: tabular-nums;
 }
 
@@ -800,7 +801,8 @@ onBeforeUnmount(() => {
 
 .alert-action {
   margin-top: 2px;
-  color: var(--primary, #f97316);
+  /* 对比度修复：#1d4ed8 作 12px 小字仅 2.8:1，加深至 #1e40af */
+  color: #1e40af;
   line-height: 1.5;
 }
 

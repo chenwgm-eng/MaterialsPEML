@@ -226,15 +226,17 @@
               </a-menu>
             </template>
           </a-dropdown>
-          <a-button v-else size="small" type="primary" @click="showLogin = true">
+          <a-button v-else size="small" type="primary" @click="goLogin">
             <LoginOutlined /> 登录
           </a-button>
         </div>
       </a-layout-header>
 
       <a-layout-content id="main-content" class="main-content" tabindex="-1">
-        <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
+        <!-- 路由内容错误边界：按路由重置，页面渲染异常时显示可见错误态而非空白 -->
+        <RouteBoundary :key="route.path">
+          <!-- 不使用 transition mode="out-in"，避免真实浏览器过渡事件未触发时新页面永不挂载（内容区空白） -->
+          <router-view v-slot="{ Component }">
             <suspense>
               <component :is="Component" />
               <template #fallback>
@@ -244,32 +246,14 @@
                 </div>
               </template>
             </suspense>
-          </transition>
-        </router-view>
+          </router-view>
+        </RouteBoundary>
       </a-layout-content>
     </a-layout>
 
     <!-- 全局任务通知浮层 -->
     <TaskNotifier />
 
-    <!-- 登录弹窗 -->
-    <a-modal
-      v-model:open="showLogin"
-      title="登录"
-      :confirm-loading="loginLoading"
-      width="400px"
-      @ok="onLogin"
-    >
-      <a-form layout="vertical">
-        <a-form-item label="用户名">
-          <a-input v-model:value="loginForm.username" name="username" autocomplete="username" placeholder="admin…" @press-enter="onLogin" />
-        </a-form-item>
-        <a-form-item label="密码">
-          <a-input-password v-model:value="loginForm.password" name="password" autocomplete="current-password" placeholder="admin123…" @press-enter="onLogin" />
-        </a-form-item>
-        <div class="login-hint">默认管理员：admin / admin123</div>
-      </a-form>
-    </a-modal>
   </a-layout>
 </template>
 
@@ -279,16 +263,17 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSystemStore } from '@/stores/system'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getEcmlRuns } from '@/api/ecml'
-import { login as authLogin, getCurrentUser, logout as authLogout } from '@/api/auth'
+import { getCurrentUser, logout as authLogout } from '@/api/auth'
 import { setUserId, getUserId } from '@/api/client'
 import { useAuth } from '@/composables/useAuth'
 import { roleColor, roleLabel } from '@/constants/roles'
 import { message } from 'ant-design-vue'
 import TaskNotifier from '@/components/TaskNotifier.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import RouteBoundary from '@/components/base/RouteBoundary.vue'
 import IconRail from '@/layouts/IconRail.vue'
 import ContextColumn from '@/layouts/ContextColumn.vue'
-import { STABLE_ENTRIES, MENU_GROUPS } from '@/layouts/menuConfig'
+import { STABLE_ENTRIES, MENU_GROUPS, ENTRY_TO_GROUP_KEYS } from '@/layouts/menuConfig'
 import { sortItemsByDiscipline } from '@/utils/discipline'
 import { track } from '@/utils/telemetry'
 import { DISCIPLINE_OPTIONS } from '@/constants/roles'
@@ -337,6 +322,7 @@ import { MESSAGES } from '@/constants/glossary'
 const route = useRoute()
 const router = useRouter()
 const systemStore = useSystemStore()
+const projectStore = useProjectContextStore()
 
 const collapsed = ref(false)
 const selectedKeys = ref([route.path])
@@ -389,9 +375,35 @@ const shellGroups = computed(() => {
     .filter((g) => g.items.length > 0)
 })
 
+// 入口默认页（图标点击且当前页不属于该入口时跳转，保证点击导航后右侧始终有内容）
+const ENTRY_DEFAULT_PATH = {
+  workbench: '/',
+  project: '/projects',
+  capability: '/research',
+  admin: '/dashboard',
+}
+
+// 指定路径是否属于某稳定入口下的分组
+function pathBelongsToEntry(entryKey, path) {
+  const gkeys = ENTRY_TO_GROUP_KEYS[entryKey] || []
+  return gkeys.some((gkey) => {
+    const g = MENU_GROUPS.find((x) => x.key === gkey)
+    if (!g) return false
+    if (g.subGroups) return g.subGroups.some((s) => s.items.some((i) => i.path === path))
+    return g.items.some((i) => i.path === path)
+  })
+}
+
 function onEntrySelect(key) {
   activeEntry.value = key
   track('entry_select', { entry: key })
+  // 当前页面不属于该入口时，导航到入口默认页（避免仅切换中栏、右侧无变化）
+  if (!pathBelongsToEntry(key, route.path)) {
+    const target = ENTRY_DEFAULT_PATH[key]
+    if (target && target !== route.path) {
+      router.push(target)
+    }
+  }
 }
 
 // 根据当前路由同步菜单高亮与展开分组
@@ -417,9 +429,11 @@ function syncMenuState() {
 const { currentRole, isPmOrAdmin: isAdminRole, setUser, clearUser } = useAuth()
 // currentUser 仅承载展示用信息（display_name 等），role 一律从 useAuth 读取。
 const currentUser = ref(null)  // { user_id, username, display_name, role, ... }
-const showLogin = ref(false)
-const loginLoading = ref(false)
-const loginForm = ref({ username: '', password: '' })
+
+// 登录已迁移到独立登录页 /login，此处仅保留跳转入口
+function goLogin() {
+  router.push({ path: '/login', query: route.fullPath !== '/' ? { redirect: route.fullPath } : {} })
+}
 
 // 角色对应的菜单可见性规则（8.1 菜单重组后）：
 // admin / viewer: 全部可见
@@ -458,35 +472,6 @@ function isMenuVisible(path, role) {
   return true
 }
 
-async function onLogin() {
-  if (!loginForm.value.username?.trim() || !loginForm.value.password) {
-    message.warning('请输入用户名和密码')
-    return
-  }
-  loginLoading.value = true
-  try {
-    const data = await authLogin(loginForm.value)
-    setUserId(data.user_id, data.token)
-    setUser({ id: data.user_id, role: data.role, token: data.token })
-    currentUser.value = data
-    // 写入权限点并拉取导航可见入口（供守卫/导航壳层使用）
-    await systemStore.fetchMe()
-    activeEntry.value = pathToEntry(route.path)
-    showLogin.value = false
-    loginForm.value = { username: '', password: '' }
-    message.success(`欢迎，${data.display_name || data.username}`)
-    track('login', { user_id: data.user_id, role: data.role })
-    // 若当前页对新角色不可见，跳回总览
-    if (!isMenuVisible(route.path, data.role) && route.path !== '/') {
-      router.push('/')
-    }
-  } catch {
-    // 错误由拦截器处理
-  } finally {
-    loginLoading.value = false
-  }
-}
-
 async function onLogout() {
   // 调用后端 logout 端点以记录审计日志；无状态鉴权下失败不影响本地清理
   try {
@@ -499,9 +484,8 @@ async function onLogout() {
   currentUser.value = null
   track('logout')
   message.success('已退出登录')
-  if (!isMenuVisible(route.path, 'viewer') && route.path !== '/') {
-    router.push('/')
-  }
+  // 退出后统一回登录页（路由守卫也会兜底拦截未登录访问）
+  router.push('/login')
 }
 
 function onUserMenuClick({ key }) {
@@ -823,12 +807,12 @@ watch(
 )
 
 onMounted(async () => {
-  // 恢复登录会话（依据 localStorage 中的 userId 调用 /auth/me 校验）
+  // 恢复登录会话（依据本地凭证调用 /auth/me 校验）
   await restoreSession()
-  // 会话失效/未登录：清除 useAuth 残留内存态并自动弹出登录框
+  // 会话失效/未登录：清除 useAuth 残留内存态并跳转登录页
   if (!getUserId()) {
     clearUser()
-    showLogin.value = true
+    goLogin()
   }
   try {
     await systemStore.fetchHealth()
@@ -843,6 +827,9 @@ onMounted(async () => {
 .main-layout {
   height: 100vh;
   overflow: hidden;
+  /* 三栏重构：nav-shell 替代 a-layout-sider 后，外层须显式行布局，
+     否则 antd Layout 默认 column 会把 header+内容区挤到视口下方（右侧空白） */
+  flex-direction: row;
 }
 
 .skip-link {
@@ -1237,12 +1224,6 @@ onMounted(async () => {
 }
 .persp-muted {
   color: var(--text-muted);
-}
-
-.login-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: -8px;
 }
 
 /* —— 健康指示器 —— */

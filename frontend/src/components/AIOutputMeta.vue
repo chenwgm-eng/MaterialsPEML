@@ -144,11 +144,11 @@ const evidenceIcon = (type) => EVIDENCE_ICONS[type] || FileTextOutlined
 
 <style scoped>
 .ai-output-meta {
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--primary);
-  border-radius: 4px;
+  border: 1px solid var(--primary-border);
+  border-left: none;
+  border-radius: 6px;
   padding: 6px 10px;
-  background: var(--light-bg-hover);
+  background: var(--primary-bg);
   font-size: 12px;
 }
 .ai-output-meta.compact {

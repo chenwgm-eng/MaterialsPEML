@@ -115,7 +115,8 @@ class EquipmentStore:
                     "equipment_id": equipment.equipment_id,
                     "name": equipment.name,
                     "model": equipment.model,
-                    "category": equipment.category,
+                    # FK 约束不允许空字符串（fk_equipment_category），需转为 NULL
+                    "category": equipment.category or None,
                     "serial_number": equipment.serial_number,
                     "location": equipment.location,
                     "status": equipment.status.value,
@@ -202,6 +203,16 @@ class EquipmentStore:
                          f"WHERE equipment_id = :equipment_id AND {tenant_filter()}"),
                     {"status": status, "equipment_id": equipment_id, "tenant_id": get_tenant()},
                 )
+
+    def delete(self, equipment_id: str) -> bool:
+        """硬删除设备记录（调用方须先做引用检查）。返回是否删除成功。"""
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                text("DELETE FROM experiment.equipment "
+                     f"WHERE equipment_id = :equipment_id AND {tenant_filter()}"),
+                {"equipment_id": equipment_id, "tenant_id": get_tenant()},
+            )
+        return result.rowcount > 0
 
     def _row_to_equipment(self, row) -> Equipment:
         return Equipment(

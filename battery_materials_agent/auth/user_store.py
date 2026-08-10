@@ -222,7 +222,8 @@ class UserStore:
                     "project_ids": json.dumps(user.project_ids),
                     "is_active": user.is_active,
                     "created_at": user.created_at,
-                    "last_login": user.last_login,
+                    # timestamptz 列不允许空字符串，需转 NULL（与 FK 空串同策略）
+                    "last_login": user.last_login or None,
                     "password_hash": user.password_hash,
                     "tenant_id": user.tenant_id or "default",
                     "auth_source": user.auth_source or "local",

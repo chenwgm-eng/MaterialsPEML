@@ -88,7 +88,8 @@
             <StatusBadge :status="sampleStatusToBadge(record.status)" :label="statusLabel(record.status)" />
           </template>
           <template v-else-if="column.key === 'quantity'">
-            <span class="num">{{ record.quantity }} {{ record.unit }}</span>
+            <span v-if="record.quantity" class="num">{{ record.quantity }} {{ record.unit }}</span>
+            <span v-else class="text-muted">未称量</span>
           </template>
           <template v-else-if="column.key === 'storage_condition'">
             <a-tag v-if="isCorrupted(record.storage_condition)" color="warning">数据已损坏</a-tag>
@@ -867,7 +868,14 @@ onMounted(async () => {
   font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
+
+/* 统计卡按语义着色：总数蓝 / 库存绿 / 使用橙 / 消耗灰 */
+.stat-item:nth-child(1) .stat-value { color: var(--primary, #1d4ed8); }
+.stat-item:nth-child(2) .stat-value { color: #047857; }
+.stat-item:nth-child(3) .stat-value { color: #b45309; }
+.stat-item:nth-child(4) .stat-value { color: var(--text-secondary, #6b7280); }
 
 .stat-label {
   font-size: 12px;

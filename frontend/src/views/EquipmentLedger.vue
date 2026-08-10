@@ -106,12 +106,14 @@
               <a-dropdown>
                 <a-button size="small" type="text">操作 <DownOutlined /></a-button>
                 <template #overlay>
-                  <a-menu @click="({ key }) => onStatusChange(record, key)">
-                    <a-menu-item key="idle"><a-tag color="#10b981">空闲</a-tag></a-menu-item>
-                    <a-menu-item key="in_use"><a-tag color="#3b82f6">使用中</a-tag></a-menu-item>
-                    <a-menu-item key="maintenance"><a-tag color="#f59e0b">维护中</a-tag></a-menu-item>
-                    <a-menu-item key="calibration"><a-tag color="#8b5cf6">校准中</a-tag></a-menu-item>
-                    <a-menu-item key="retired"><a-tag color="#64748b">退役</a-tag></a-menu-item>
+                  <a-menu @click="({ key }) => onActionClick(record, key)">
+                    <a-menu-item key="idle"><a-tag color="#047857">空闲</a-tag></a-menu-item>
+                    <a-menu-item key="in_use"><a-tag color="#1d4ed8">使用中</a-tag></a-menu-item>
+                    <a-menu-item key="maintenance"><a-tag color="#b45309">维护中</a-tag></a-menu-item>
+                    <a-menu-item key="calibration"><a-tag color="#1d4ed8">校准中</a-tag></a-menu-item>
+                    <a-menu-item key="retired"><a-tag color="#4b5563">退役</a-tag></a-menu-item>
+                    <a-menu-divider />
+                    <a-menu-item key="delete" danger><DeleteOutlined /> 删除设备</a-menu-item>
                   </a-menu>
                 </template>
               </a-dropdown>
@@ -235,9 +237,9 @@
 <script setup>
 import { h, ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { SearchOutlined, PlusOutlined, EditOutlined, DownOutlined, WarningOutlined } from '@ant-design/icons-vue'
-import { listEquipment, createEquipment, updateEquipment } from '@/api/equipment'
-import { message, Tag } from 'ant-design-vue'
+import { SearchOutlined, PlusOutlined, EditOutlined, DownOutlined, WarningOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { listEquipment, createEquipment, updateEquipment, deleteEquipment } from '@/api/equipment'
+import { message, Tag, Modal } from 'ant-design-vue'
 import { useMdmDict } from '@/utils/mdmDict'
 import EmptyState from '@/components/EmptyState.vue'
 import SectionHeader from '@/components/SectionHeader.vue'
@@ -332,8 +334,9 @@ const calibrationDueCount = computed(() =>
 )
 
 function statusColor(status) {
-  const map = { idle: '#10b981', in_use: '#3b82f6', maintenance: '#f59e0b', calibration: '#8b5cf6', retired: '#64748b' }
-  return map[status] || '#64748b'
+  // 实底 tag（白字）：底色加深保证 5:1+（原 #10b981/#f59e0b 白字仅 2.2-2.5:1）
+  const map = { idle: '#047857', in_use: '#1d4ed8', maintenance: '#b45309', calibration: '#1d4ed8', retired: '#4b5563' }
+  return map[status] || '#4b5563'
 }
 
 function statusLabel(status) {
@@ -435,6 +438,30 @@ async function onStatusChange(record, newStatus) {
   }
 }
 
+// 操作菜单：状态变更 / 删除（2B 数据治理：被实验引用的设备后端会拒绝删除）
+async function onActionClick(record, key) {
+  if (key === 'delete') {
+    Modal.confirm({
+      title: '删除设备',
+      content: `确定删除设备「${record.name || record.equipment_id}」吗？删除后不可恢复。`,
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteEquipment(record.equipment_id)
+          message.success('设备已删除')
+          await onQuery()
+        } catch {
+          // 错误（含被引用 409）由拦截器统一提示
+        }
+      },
+    })
+    return
+  }
+  await onStatusChange(record, key)
+}
+
 onMounted(async () => {
   onQuery()
   if (route.query.create === '1') {
@@ -492,7 +519,14 @@ onMounted(async () => {
   font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
+
+/* 统计卡语义着色：总数蓝 / 空闲绿 / 使用中橙 / 校准到期红 */
+.stat-item:nth-child(1) .stat-value { color: var(--primary, #1d4ed8); }
+.stat-item:nth-child(2) .stat-value { color: #047857; }
+.stat-item:nth-child(3) .stat-value { color: #1d4ed8; }
+.stat-item:nth-child(4) .stat-value { color: #dc2626; }
 
 .stat-label {
   font-size: 12px;

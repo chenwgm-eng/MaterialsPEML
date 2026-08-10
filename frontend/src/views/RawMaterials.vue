@@ -40,7 +40,7 @@
         <span class="stat-value">{{ reachCompliantCount }}/{{ materials.length }}</span>
         <span class="stat-label">
           REACH 合规
-          <a-tag color="purple" class="ai-badge-mini">AI</a-tag>
+          <a-tag color="orange" class="ai-badge-mini">AI</a-tag>
         </span>
       </div>
       <div class="stat-item">
@@ -146,6 +146,7 @@
             <a-space>
               <a-button type="link" size="small" @click="onViewRow(record)">详情</a-button>
               <a-button type="link" size="small" @click="onEditRow(record)">编辑</a-button>
+              <a-button type="link" size="small" danger @click="onDeleteRow(record)">删除</a-button>
             </a-space>
           </template>
         </template>
@@ -381,7 +382,7 @@
           <div v-if="detailMaterial" class="compliance-section">
             <div class="compliance-header">
               <span class="compliance-title">REACH 合规检查</span>
-              <a-tag color="purple" class="agent-tag">
+              <a-tag color="orange" class="agent-tag">
                 <RobotOutlined /> AI 合规检查
               </a-tag>
             </div>
@@ -648,7 +649,7 @@ import {
   EyeOutlined, HistoryOutlined, SaveOutlined, CopyOutlined, CheckCircleOutlined,
   FileAddOutlined, UploadOutlined, ReloadOutlined, RobotOutlined,
 } from '@ant-design/icons-vue'
-import { getRawMaterials, createRawMaterial, updateRawMaterial } from '@/api/rawMaterials'
+import { getRawMaterials, createRawMaterial, updateRawMaterial, deleteRawMaterial } from '@/api/rawMaterials'
 import {
   getMaterialTypeTemplate,
   getCategories,
@@ -656,7 +657,7 @@ import {
 import { listVersions, createVersion, activateVersion } from '@/api/versions'
 import { createMaterialRequest } from '@/api/materialRequests'
 import client from '@/api/client'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import MoleculeView from '@/components/MoleculeView.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import {
@@ -887,7 +888,7 @@ function categoryLabel(cat) {
 function categoryColor(cat) {
   const raw = industrialCategoryColor(cat, categoryOptions.value)
   const statusColorMap = {
-    purple: '#8b5cf6',
+    purple: '#3b82f6',
     blue: '#3b82f6',
     green: '#10b981',
     orange: '#f59e0b',
@@ -1020,6 +1021,30 @@ function onEditRow(record) {
   formRef.value?.clearValidate()
   loadMaterialTemplate(form.value.category)
   formModalVisible.value = true
+}
+
+// 删除物料（2B 数据治理：被配方 BOM 引用的物料后端会拒绝删除并提示）
+function onDeleteRow(record) {
+  Modal.confirm({
+    title: '删除物料',
+    content: `确定删除物料「${record.name || record.material_id}」吗？删除后不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await deleteRawMaterial(record.material_id)
+        message.success('物料已删除')
+        if (selectedMaterial.value?.material_id === record.material_id) {
+          selectedMaterial.value = null
+          selectedRowKeys.value = []
+        }
+        await onQuery()
+      } catch {
+        // 错误（含被引用 409）由拦截器统一提示
+      }
+    },
+  })
 }
 
 // Task 13：从"待补充证据"徽章入口直接打开编辑弹窗，聚焦合规证据上传
@@ -1537,7 +1562,7 @@ onMounted(async () => {
   padding: 12px 14px;
   background: var(--light-bg-card);
   border: 1px solid var(--border);
-  border-left: 3px solid #8b5cf6;
+  border-left: 3px solid var(--primary-border);
   border-radius: var(--radius-lg);
 }
 

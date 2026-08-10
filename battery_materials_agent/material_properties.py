@@ -201,6 +201,15 @@ BUILTIN_CATEGORIES: list[PropertyCategory] = [
             PropertyField(key="crystallinity", label_cn="结晶度", label_en="Crystallinity", category="polymer", value_type="float", unit="%", description="结晶区占总质量的百分比"),
             PropertyField(key="tensile_strength", label_cn="拉伸强度", label_en="Tensile Strength", category="polymer", value_type="float", unit="MPa", description="拉伸断裂时的最大应力"),
             PropertyField(key="elongation_at_break", label_cn="断裂伸长率", label_en="Elongation at Break", category="polymer", value_type="float", unit="%", description="断裂时的伸长量占原长的百分比"),
+            PropertyField(key="flexural_modulus", label_cn="弯曲模量", label_en="Flexural Modulus", category="polymer", value_type="float", unit="MPa", description="三点弯曲试验的弯曲模量"),
+            PropertyField(key="impact_strength", label_cn="冲击强度", label_en="Impact Strength", category="polymer", value_type="float", unit="kJ/m²", description="简支梁/悬臂梁缺口冲击强度"),
+            PropertyField(key="heat_deflection_temp", label_cn="热变形温度", label_en="Heat Deflection Temperature", category="polymer", value_type="float", unit="C", description="HDT，1.8 MPa 载荷下热变形温度"),
+            PropertyField(key="vicat_softening_temp", label_cn="维卡软化温度", label_en="Vicat Softening Temperature", category="polymer", value_type="float", unit="C", description="维卡软化点（VST）"),
+            PropertyField(key="melt_flow_index", label_cn="熔融指数", label_en="Melt Flow Index", category="polymer", value_type="float", unit="g/10min", description="MFI，熔体流动速率"),
+            PropertyField(key="flame_retardancy", label_cn="阻燃等级", label_en="Flame Retardancy", category="polymer", value_type="str", unit="", description="UL94 阻燃等级（V-0/V-1/V-2/HB）或氧指数"),
+            PropertyField(key="thermal_stability", label_cn="热稳定温度", label_en="Thermal Stability", category="polymer", value_type="float", unit="C", description="5% 热失重温度（TGA 测试）"),
+            PropertyField(key="dielectric_loss", label_cn="介电损耗", label_en="Dielectric Loss", category="polymer", value_type="float", unit="", description="tan δ，介电损耗角正切"),
+            PropertyField(key="biodegradation_rate", label_cn="生物降解率", label_en="Biodegradation Rate", category="polymer", value_type="float", unit="%", description="标准堆肥条件下降解率（ISO 14855）"),
         ],
     ),
 ]
@@ -294,6 +303,12 @@ class PropertyRegistry:
         "band_gap", "formation_energy",
         "boiling_point", "melting_point", "density", "logp", "tpsa",
         "solubility", "vapor_pressure", "refractive_index", "flash_point",
+        # 高分子领域（kingfa）：可作为研发目标属性的工程性能
+        "tensile_strength", "flexural_modulus", "impact_strength",
+        "heat_deflection_temp", "vicat_softening_temp", "melt_flow_index",
+        "flame_retardancy", "thermal_stability", "elongation_at_break",
+        "glass_transition_temp", "crystallinity", "molecular_weight",
+        "dielectric_loss", "biodegradation_rate",
     )
 
     # 可作为 ECML 目标性质的字段

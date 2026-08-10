@@ -98,7 +98,7 @@
                         <component :is="committeeStepIcon(item)" />
                       </span>
                       <span class="step-task">{{ item.task }}</span>
-                      <a-tag v-if="committeeStepType(item)" size="small" color="purple">
+                      <a-tag v-if="committeeStepType(item)" size="small" color="blue">
                         <AuditOutlined /> {{ committeeStepType(item) }}
                       </a-tag>
                       <a-tag v-if="committeeStepRole(item)" size="small" color="cyan">
@@ -553,7 +553,7 @@ function normalizeTeam(planData) {
             id: t,
             name: t,
             role: 'custom',
-            avatar: '🤖',
+            avatar: '',
             tools: [],
             expertise: [],
             llm_model: 'LongCat-2.0',
