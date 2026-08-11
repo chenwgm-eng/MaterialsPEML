@@ -873,8 +873,8 @@ function beforeImportUpload(file) {
 
 function downloadTemplate() {
   const templateData = [
-    { '样品 ID': 'SMP_001', '属性': 'ionic_conductivity', '数值': 1.5e-4, '单位': condUnit.value, '方法': 'EIS', '录入人': '操作员', '仪器 ID': '', '批次 ID': '', '原始数据 URI': '' },
-    { '样品 ID': 'SMP_002', '属性': 'ionic_conductivity', '数值': 2.1e-4, '单位': condUnit.value, '方法': 'EIS', '录入人': '操作员', '仪器 ID': '', '批次 ID': '', '原始数据 URI': '' },
+    { '样品 ID': 'SMP_001', '属性': 'tensile_strength', '数值': 45.2, '单位': 'MPa', '方法': '拉伸试验', '录入人': '操作员', '仪器 ID': '', '批次 ID': '', '原始数据 URI': '' },
+    { '样品 ID': 'SMP_002', '属性': 'flexural_modulus', '数值': 2100, '单位': 'MPa', '方法': '弯曲试验', '录入人': '操作员', '仪器 ID': '', '批次 ID': '', '原始数据 URI': '' },
   ]
   const ws = XLSX.utils.json_to_sheet(templateData)
   const wb = XLSX.utils.book_new()

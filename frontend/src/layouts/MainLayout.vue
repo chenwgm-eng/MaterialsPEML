@@ -360,13 +360,17 @@ const stableNavEntries = computed(() => {
 const shellGroups = computed(() => {
   const perms = systemStore.permissions
   const visible = systemStore.visibleEntries
+  // Q11 角色精简：研究员（含实验员）默认隐藏 researchHidden 标记项（知识图谱/主数据治理等专业工具）
+  const isResearcherLike = ['researcher', 'experimenter', 'reviewer'].includes(currentRole.value)
   return MENU_GROUPS.filter(
     (g) => g.entryKey === activeEntry.value && visible.includes(g.entryKey),
   )
     .map((g) => {
       const items = g.subGroups ? g.subGroups.flatMap((s) => s.items) : g.items
       const filtered = items.filter(
-        (it) => !it.requiredAnyPermission?.length || it.requiredAnyPermission.some((p) => perms.includes(p)),
+        (it) =>
+          (!it.requiredAnyPermission?.length || it.requiredAnyPermission.some((p) => perms.includes(p))) &&
+          !(isResearcherLike && it.researchHidden),
       )
       // Step D：专业画像聚焦排序（只改默认顺序，空画像/无匹配保持原顺序，不改权限过滤）
       const sorted = sortItemsByDiscipline(filtered, systemStore.disciplines, systemStore.primaryDiscipline)

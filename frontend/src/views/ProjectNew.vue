@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="project-new-page" :class="{ 'embedded': embedded }">
     <SectionHeader
       v-if="!embedded"
@@ -32,20 +32,17 @@
 
       <a-form ref="formRef" layout="vertical" size="small" :model="form" :rules="formRules">
         <a-form-item label="项目名称" name="name" required>
-          <a-input v-model:value="form.name" placeholder="如 高镍正极材料开发项目" />
+          <a-input v-model:value="form.name" placeholder="如 玻纤增强 PA6 改性料开发项目" />
         </a-form-item>
 
         <a-form-item label="研发目标" name="goal" required>
-          <a-textarea
-            v-model:value="form.goal"
-            :rows="3"
-            placeholder="例如：找到高离子电导率的固态电解质材料"
-          />
+          <!-- Q12 智能目标框：一句话目标 + 模板 + 解析回填 -->
+          <GoalIntentInput v-model="form.goal" :rows="3" @parsed="onGoalParsed" />
           <div class="form-help">描述越具体，AI 拆解出的任务越贴合需求；可包含期望性能、应用场景等。</div>
         </a-form-item>
 
         <a-form-item label="目标应用" name="target_application" required>
-          <a-input v-model:value="form.target_application" placeholder="如 锂镧锆氧（LLZO）固态电解质" />
+          <a-input v-model:value="form.target_application" placeholder="如 汽车轻量化结构件用 PA6/GF30 复合材料" />
         </a-form-item>
 
         <a-form-item label="负责人" name="owner" required>
@@ -125,7 +122,7 @@
             <a-input
               v-model:value="task.deliverable"
               size="small"
-              placeholder="如 锂镧锆氧（LLZO）固态电解质"
+              placeholder="如 汽车轻量化结构件 PA6/GF30"
             />
           </div>
 
@@ -144,7 +141,7 @@
                   v-model:value="p.name"
                   size="small"
                   class="prop-name"
-                  placeholder="如 ionic_conductivity"
+                  placeholder="如 tensile_strength"
                 />
                 <a-select v-model:value="p.direction" size="small" class="prop-dir">
                   <a-select-option value="maximize">最大化</a-select-option>
@@ -345,6 +342,7 @@ import { listAgents } from '@/api/agents'
 import { listUsers } from '@/api/auth'
 import { required, lengthRange } from '@/utils/formRules'
 import EmptyState from '@/components/EmptyState.vue'
+import GoalIntentInput from '@/components/GoalIntentInput.vue'
 import { resolveAgentIcon } from '@/utils/agentAvatar'
 import { useLeaveGuard } from '@/composables/useLeaveGuard'
 
@@ -377,6 +375,13 @@ const formRules = {
   goal: required('请输入研发目标'),
   target_application: required('请输入目标应用'),
   owner: required('请输入负责人'),
+}
+
+// Q12：智能解析回填——目标应用取自体系（如有）
+function onGoalParsed(parsed) {
+  if (parsed.material_system && !form.target_application) {
+    form.target_application = `${parsed.material_system} 改性材料`
+  }
 }
 
 // ── 项目经理 Agent 信息（右侧面板展示） ──

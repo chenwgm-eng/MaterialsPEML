@@ -153,6 +153,8 @@ class BatteryMaterialsAgent:
             compliance_node=self.compliance_node,
             feasibility_screener=self.feasibility_screener,
             approval_engine=self.approval_engine,
+            # v4.1：领域包 target_thresholds 覆盖 ECML 默认达标阈值（企业规格可配）
+            domain_thresholds=(self.formula_agent.domain_pack or {}).get("target_thresholds") if getattr(self.formula_agent, "domain_pack", None) else None,
         )
         self.tools = MCPToolRegistry()
         self._register_tool_handlers()
@@ -431,9 +433,14 @@ class BatteryMaterialsAgent:
         if not candidate:
             candidate = system
 
-        # 基材选择（按体系）
+        # 基材选择（按体系）——v4.1：物料库按工程塑料基材出库
         base_map = [
-            (("聚丙烯", "pp"), "RM-001", "PEO", 85.0),   # 演示库中以 PEO 近似 PP 基材价
+            (("聚丙烯", "pp", "pp "), "RM-001", "PP 基材（均聚）", 8.5),
+            (("尼龙", "pa6", "pa66", "polyamide"), "RM-002", "PA6 基材", 18.0),
+            (("聚碳酸酯", "pc "), "RM-003", "PC 基材", 22.0),
+            (("abs", "丙烯腈"), "RM-004", "ABS 基材", 15.0),
+            (("pbt", "聚酯"), "RM-005", "PBT 基材", 19.0),
+            (("生物降解", "pbat", "pla"), "RM-006", "PBAT 基材", 14.0),
         ]
         # 增强/助剂（按体系关键词）
         reinforcement_map = [
@@ -443,6 +450,10 @@ class BatteryMaterialsAgent:
             (("生物降解",), ("PBAT", "PBAT 生物降解共聚酯", 15.0)),
         ]
         base_id, base_name, base_price = base_map[0][1], base_map[0][2], base_map[0][3]
+        for kws, bid, bname, bprice in base_map:
+            if any(k in system.lower() or k in candidate.lower() for k in kws):
+                base_id, base_name, base_price = bid, bname, bprice
+                break
         reinforcement = ("GF30", "玻璃纤维", 6.5)
         for kws, r in reinforcement_map:
             if any(k in system.lower() or k in candidate.lower() for k in kws):
@@ -453,7 +464,7 @@ class BatteryMaterialsAgent:
         bom = [
             {"material_id": base_id, "material_name": base_name,
              "cas_number": "", "amount": 0.70, "unit_price": base_price,
-             "cost": round(0.70 * base_price, 2), "supplier": "国泰华荣", "in_stock": True},
+             "cost": round(0.70 * base_price, 2), "supplier": "金发科技供应链", "in_stock": True},
             {"material_id": "RM-ENG-01", "material_name": reinforcement[1],
              "cas_number": "", "amount": 0.30, "unit_price": reinforcement[2],
              "cost": round(0.30 * reinforcement[2], 2), "supplier": "巨石/泰山玻纤", "in_stock": True},
@@ -484,7 +495,7 @@ class BatteryMaterialsAgent:
     def _handle_crystal_pred(self, features=None, property_name="band_gap"):
         return self.crystal_predictor.predict(features or {}, property_name).model_dump()
 
-    def _handle_polymer_pred(self, features=None, property_name="ionic_conductivity"):
+    def _handle_polymer_pred(self, features=None, property_name="tensile_strength"):
         return self.polymer_predictor.predict(features or {}, property_name).model_dump()
 
     def _handle_synthesis(self, smiles=""):
@@ -545,10 +556,10 @@ class BatteryMaterialsAgent:
         if quantity_kg is not None:
             quantity = quantity_kg
         if target_material is None:
-            target_material = {"target_property": "ionic_conductivity"}
+            target_material = {"target_property": "tensile_strength"}
         # 兼容字符串形式
         if isinstance(target_material, str):
-            target_material = {"candidate": target_material, "target_property": "ionic_conductivity"}
+            target_material = {"candidate": target_material, "target_property": "tensile_strength"}
 
         try:
             try:

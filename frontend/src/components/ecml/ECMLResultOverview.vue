@@ -120,12 +120,12 @@ const pipelineStats = computed(() => [
 function scoreCandidate(c) {
   let score = 0
   let count = 0
-  if (c.predicted_ionic_conductivity != null) {
-    score += Math.min(Number(c.predicted_ionic_conductivity) / 10, 1) * 0.5
+  if (c.tensile_strength != null) {
+    score += Math.min(Number(c.tensile_strength) / 100, 1) * 0.5
     count += 0.5
   }
-  if (c.stability_score != null) {
-    score += Number(c.stability_score) * 0.25
+  if (c.flexural_modulus != null) {
+    score += Math.min(Number(c.flexural_modulus) / 8000, 1) * 0.25
     count += 0.25
   }
   if (c.industrialization_score != null) {
@@ -151,12 +151,10 @@ const bestCandidateProps = computed(() => {
   const c = bestCandidate.value
   if (!c) return []
   const result = []
-  if (c.predicted_ionic_conductivity != null) {
-    result.push({ label: '预测电导率', value: `${formatSci(c.predicted_ionic_conductivity, 3)} ${props.condUnit}` })
-  }
-  if (c.band_gap != null) result.push({ label: '带隙', value: `${formatNumber(c.band_gap, 4)} ${props.energyUnit}` })
-  if (c.formation_energy != null) result.push({ label: '形成能', value: `${formatNumber(c.formation_energy, 4)} ${props.energyPerAtomUnit}` })
-  if (c.stability_score != null) result.push({ label: '稳定性', value: formatNumber(c.stability_score, 3) })
+  if (c.tensile_strength != null) result.push({ label: '拉伸强度', value: `${formatNumber(c.tensile_strength, 4)} MPa` })
+  if (c.flexural_modulus != null) result.push({ label: '弯曲模量', value: `${formatNumber(c.flexural_modulus, 4)} MPa` })
+  if (c.impact_strength != null) result.push({ label: '冲击强度', value: `${formatNumber(c.impact_strength, 4)} kJ/m²` })
+  if (c.heat_deflection_temp != null) result.push({ label: '热变形温度', value: `${formatNumber(c.heat_deflection_temp, 4)} °C` })
   if (c.industrialization_score != null) {
     result.push({ label: '工业化评分', value: `${(Number(c.industrialization_score) * 100).toFixed(1)}%` })
   }

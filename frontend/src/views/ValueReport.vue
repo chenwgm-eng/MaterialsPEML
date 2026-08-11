@@ -196,7 +196,7 @@
           <a-input-number v-model:value="baselineForm.past_candidate_count" style="width: 100%" :min="0" :precision="0" />
         </a-form-item>
         <a-form-item label="成功标准">
-          <a-textarea v-model:value="baselineForm.success_criteria" :rows="2" :placeholder="`如：离子电导率 ≥ 1e-3 ${condUnit}`" />
+          <a-textarea v-model:value="baselineForm.success_criteria" :rows="2" :placeholder="`如：拉伸强度 ≥ 100 MPa，弯曲模量 ≥ 6000 MPa`" />
         </a-form-item>
         <a-form-item label="备注">
           <a-textarea v-model:value="baselineForm.notes" :rows="2" />

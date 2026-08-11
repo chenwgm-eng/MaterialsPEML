@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 import asyncio
 import json
 import hashlib
+import re
 import uuid
 import logging
 
@@ -35,21 +36,63 @@ class PolymerCandidate(BaseModel):
 
 
 # 聚合物属性提取器与方向（与晶体保持一致语义，仅支持可计算字段）
+# v4.1 改性塑料：工程塑料候选属性存于 data（字段名与全链路 tensile_strength 等一致）
 _POLY_PROPERTY_GETTERS = {
     "ionic_conductivity": lambda c: c.predicted_ionic_conductivity,
     "molecular_weight": lambda c: c.molecular_weight,
+    "tensile_strength": lambda c: float((c.data or {}).get("tensile_strength") or 0.0),
+    "flexural_modulus": lambda c: float((c.data or {}).get("flexural_modulus") or 0.0),
+    "impact_strength": lambda c: float((c.data or {}).get("impact_strength") or 0.0),
+    "heat_deflection_temp": lambda c: float((c.data or {}).get("heat_deflection_temp") or 0.0),
+    "melt_flow_index": lambda c: float((c.data or {}).get("melt_flow_index") or 0.0),
+    "elongation_at_break": lambda c: float((c.data or {}).get("elongation_at_break") or 0.0),
+    "thermal_stability": lambda c: float((c.data or {}).get("thermal_stability") or 0.0),
+    "glass_transition_temp": lambda c: float((c.data or {}).get("glass_transition_temp") or 0.0),
 }
 _POLY_PROPERTY_DIRECTION = {
     "ionic_conductivity": "maximize",
     "molecular_weight": "minimize",  # 通常希望分子量适中偏小以利加工
+    "tensile_strength": "maximize",
+    "flexural_modulus": "maximize",
+    "impact_strength": "maximize",
+    "heat_deflection_temp": "maximize",
+    "melt_flow_index": "maximize",
+    "elongation_at_break": "maximize",
+    "thermal_stability": "maximize",
+    "glass_transition_temp": "maximize",
 }
+
+# 电池时代属性集（走电解质 KNOWN_POLYMERS 通道），其余高分子目标走工程塑料模式
+_BATTERY_POLYMER_PROPS = {"ionic_conductivity", "molecular_weight"}
+
+
+def _is_engineering_target(dict_props: dict | None) -> bool:
+    """判断目标是否属于高分子工程性能（非电池电解质属性）。"""
+    if not dict_props:
+        return True
+    t = dict_props.get("target_property") or ""
+    if t and t not in _BATTERY_POLYMER_PROPS:
+        return True
+    props = dict_props.get("properties") or []
+    if isinstance(props, list):
+        for p in props:
+            key = (p or {}).get("property") or (p or {}).get("target_property") or ""
+            if key and key not in _BATTERY_POLYMER_PROPS:
+                return True
+    return False
 
 
 def _apply_polymer_multi_objective(
     candidates: list[PolymerCandidate],
     target_properties: list[dict],
 ) -> list[PolymerCandidate]:
-    """聚合物多目标加权评分（与晶体 _apply_multi_objective 同算法）。"""
+    """聚合物多目标加权评分（与晶体 _apply_multi_objective 同算法）。
+
+    v4.1（ADR-0003）：归一化采用**绝对规格基准**（material_properties.REFERENCE_RANGES），
+    与后端补算 `_backfill_multi_objective_scores` 同源，分数跨列表/轮次可比。
+    """
+    from ..material_properties import REFERENCE_RANGES
+
     if not candidates:
         return candidates
 
@@ -91,14 +134,22 @@ def _apply_polymer_multi_objective(
     if not filtered:
         return filtered
 
-    # 2. min-max 归一化 + 加权求和
+    # 2. 绝对规格基准归一化 + 加权求和（ADR-0003）
     total_weight = sum(cfg["weight"] for cfg in configs) or 1.0
     for cfg in configs:
-        vals = [_POLY_PROPERTY_GETTERS[cfg["property"]](c) for c in filtered]
-        v_min, v_max = min(vals), max(vals)
-        rng = v_max - v_min if v_max > v_min else 1.0
-        for c, v in zip(filtered, vals):
-            normalized = (v - v_min) / rng
+        ref = REFERENCE_RANGES.get(cfg["property"])
+        for c in filtered:
+            v = _POLY_PROPERTY_GETTERS[cfg["property"]](c)
+            if ref is not None:
+                lo, hi, _unit, _src = ref
+                rng = (hi - lo) if hi > lo else 1.0
+                normalized = max(0.0, min(1.0, (v - lo) / rng))
+            else:
+                # 无参考范围的属性回退池内相对
+                vals = [_POLY_PROPERTY_GETTERS[cfg["property"]](x) for x in filtered]
+                v_min, v_max = min(vals), max(vals)
+                rng = (v_max - v_min) if v_max > v_min else 1.0
+                normalized = (v - v_min) / rng
             if cfg["direction"] == "minimize":
                 normalized = 1.0 - normalized
             c.multi_objective_score += (cfg["weight"] / total_weight) * normalized
@@ -181,6 +232,118 @@ class PolymerDesignRules:
         ("Graphene", "石墨烯填料", "导热导电增强"),
         ("H3PO4", "磷酸掺杂", "PBI 高温膜质子传导"),
     ]
+
+    # ── 工程性能参考表（ADR-0003 / Q7 查表法） ──
+    # 每项: (拉伸MPa, 弯曲模量MPa, 缺口冲击kJ/m², HDT°C)。GF 按 30% 玻纤、CF 按 20% 碳纤、
+    # Talc 按 20% 填充的典型数据；无增强为纯料典型值。
+    # 来源：CAMPUS 塑料数据库典型值；GB/T 1040-2006、GB/T 9341-2008、GB/T 1843-2008、
+    # GB/T 1634-2019 参考区间；《工程塑料改性技术》（金发科技内部手册）。
+    REFERENCE_PROPERTIES = {
+        "PP":      {"T": 32, "F": 1400, "I": 4,  "H": 100},
+        "PA6":     {"T": 60, "F": 2000, "I": 7,  "H": 130},
+        "PA66":    {"T": 80, "F": 2400, "I": 6,  "H": 180},
+        "PC":      {"T": 65, "F": 2200, "I": 12, "H": 130},
+        "ABS":     {"T": 45, "F": 2000, "I": 18, "H": 95},
+        "PBT":     {"T": 55, "F": 2300, "I": 5,  "H": 150},
+        "PET":     {"T": 50, "F": 2400, "I": 4,  "H": 120},
+        "PLA":     {"T": 55, "F": 3500, "I": 3,  "H": 60},
+        "PBAT":    {"T": 32, "F": 300,  "I": 15, "H": 55},
+        "LCP":     {"T": 130, "F": 10000, "I": 8, "H": 280},
+        "PPS":     {"T": 75, "F": 3800, "I": 3,  "H": 240},
+        "PPSU":    {"T": 70, "F": 2400, "I": 20, "H": 200},
+        "POM":     {"T": 65, "F": 2600, "I": 6,  "H": 100},
+        "HDPE":    {"T": 28, "F": 900,  "I": 8,  "H": 80},
+        "PS":      {"T": 40, "F": 3000, "I": 2,  "H": 90},
+        "HIPS":    {"T": 25, "F": 1800, "I": 8,  "H": 85},
+        "SAN":     {"T": 70, "F": 3300, "I": 3,  "H": 100},
+        "rPET":    {"T": 55, "F": 2400, "I": 4,  "H": 80},
+        "EP":      {"T": 60, "F": 3000, "I": 6,  "H": 150},
+        "PEEK":    {"T": 95, "F": 3800, "I": 8,  "H": 280},
+        "Nafion":  {"T": 25, "F": 600,  "I": 15, "H": 120},
+        "PBI":     {"T": 110, "F": 7000, "I": 2, "H": 260},
+        "Med-PP":  {"T": 32, "F": 1400, "I": 4,  "H": 90},
+    }
+    # 增强加成（按骨架族 × 增强类型）。负值表示增强导致韧性/温度下降（脆化、无缺口失效）
+    _ENHANCE_BONUS = {
+        #  (T, F, I, H)
+        "GF": {
+            "PA":   (100, 4000, 8,  45),
+            "PP":   (60,  2000, 2,  40),
+            "PC":   (50,  5000, -4, 15),
+            "ABS":  (45,  2500, -4, 15),
+            "PBT":  (90,  5000, 5,  50),
+            "PET":  (100, 6000, 4,  70),
+            "PLA":  (60,  4000, 1,  45),
+            "POM":  (40,  5000, 1,  60),
+            "HDPE": (30,  1500, 2,  40),
+            "PS":   (30,  3000, 0,  35),
+            "HIPS": (20,  1500, 1,  25),
+            "SAN":  (60,  4000, 1,  45),
+            "rPET": (100, 6000, 4,  70),
+            "EP":   (120, 8000, 6,  60),
+            "PEEK": (80,  7000, 1,  45),
+            "LCP":  (100, 5000, 3,  50),
+            "PPS":  (100, 7000, 4,  60),
+            "PPSU": (50,  3000, -3, 20),
+            "POM ": (40,  5000, 1,  60),
+            "*":    (60,  3500, 3,  40),
+        },
+        "CF": {
+            "PA":   (80,  5000, 3,  40),
+            "PP":   (50,  3000, 0,  30),
+            "PC":   (40,  6000, -8, 10),
+            "ABS":  (35,  3000, -8, 10),
+            "PEEK": (70,  10000, -2, 30),
+            "EP":   (120, 12000, 4,  40),
+            "PPS":  (90,  9000, 0,  50),
+            "*":    (50,  4500, -1, 25),
+        },
+        "Talc": {
+            "*":    (10,  800,  -1, 5),
+        },
+    }
+
+    def reference_properties(self, abbr: str, filler_name: str):
+        """按骨架 × 增强查参考性能（查表法，Q7/ADR-0003）。
+
+        返回 (tensile, flexural, impact, hdt, source)。查不到组合时保守回退：
+        基材值 + 10% 幅度，绝不使用派生系数。
+        """
+        base = self.REFERENCE_PROPERTIES.get(abbr)
+        if base is None:
+            base = {"T": 50, "F": 2400, "I": 5, "H": 100}
+            source = "通用工程塑料典型值（CAMPUS 数据库）"
+        else:
+            source = "CAMPUS 塑料数据库典型值 / GB-T 1040、9341、1843、1634 参考区间"
+        # 增强类型识别
+        fname = (filler_name or "").upper()
+        if fname.startswith("GF"):
+            kind, fill_desc = "GF", "30% 玻纤增强"
+        elif fname.startswith("CF"):
+            kind, fill_desc = "CF", "20% 碳纤增强"
+        elif fname.startswith("TALC"):
+            kind, fill_desc = "Talc", "20% 滑石粉填充"
+        else:
+            kind, fill_desc = "", ""
+        if kind:
+            # 按骨架族匹配（PA6/PA66/PA12 → PA 族），无族匹配用通配
+            family = ""
+            for fam in ("PA", "POM", "HDPE", "PPSU", "PEEK", "LCP", "PPS"):
+                if abbr.startswith(fam) or abbr == fam:
+                    family = fam
+                    break
+            table = self._ENHANCE_BONUS.get(kind, {})
+            bonus = table.get(family) or table.get("*")
+            if bonus:
+                t_b, f_b, i_b, h_b = bonus
+                base = {
+                    "T": base["T"] + t_b,
+                    "F": base["F"] + f_b,
+                    "I": max(1, base["I"] + i_b),
+                    "H": base["H"] + h_b,
+                }
+                source = f"CAMPUS 典型值 + {fill_desc}（{family or '通用'}族，GB-T 参考区间）"
+        return base["T"], base["F"], base["I"], base["H"], source
 
 
 class PolymerCandidateGenerator:
@@ -267,11 +430,14 @@ class PolymerCandidateGenerator:
             dict_props = target_properties
 
         # kingfa/高分子研发领域：工程塑料骨架模式（改性塑料/工程塑料/生物降解等）
-        if material_system:
-            engineering = self._generate_engineering_plastics(num_candidates, material_system)
+        # v4.1：material_system 非空 / 无目标 / 目标为高分子工程性能时走工程塑料模式，
+        # 避免高分子任务回退到电池电解质候选（KNOWN_POLYMERS）
+        if material_system or not dict_props or _is_engineering_target(dict_props):
+            engineering = self._generate_engineering_plastics(
+                num_candidates, material_system or "改性塑料")
             if engineering:
                 if multi_obj_list:
-                    engineering = self._apply_multi_objective(engineering, multi_obj_list)
+                    engineering = _apply_polymer_multi_objective(engineering, multi_obj_list)
                 return engineering
 
         if self.config.engine_mode == EngineMode.INTERNLM:
@@ -324,11 +490,11 @@ class PolymerCandidateGenerator:
     def generate_derivatives(self, base_polymer: PolymerCandidate, num_variants: int = 5) -> list[PolymerCandidate]:
         variants = []
         modifications = [
-            ("with LiTFSI salt", "LiTFSI"),
-            ("with LLZO ceramic filler", "LLZO"),
-            ("with LATP filler", "LATP"),
-            ("with crosslinker", "crosslinked"),
-            ("blended with PEO", "PEO blend"),
+            ("with glass fiber", "GF30 玻纤增强"),
+            ("with carbon fiber", "CF20 碳纤增强"),
+            ("with flame retardant", "阻燃改性"),
+            ("with impact modifier", "增韧改性"),
+            ("with coupling agent", "偶联剂改性"),
         ]
         for suffix, desc in modifications[:num_variants]:
             variants.append(PolymerCandidate(
@@ -338,7 +504,10 @@ class PolymerCandidateGenerator:
                 monomer_smiles=list(base_polymer.monomer_smiles),
                 source="derivative",
                 description=f"{base_polymer.description} - {desc}",
-                predicted_ionic_conductivity=base_polymer.predicted_ionic_conductivity * 2,
+                data={
+                    **(base_polymer.data or {}),
+                    "tensile_strength": float(base_polymer.data.get("tensile_strength") or 50.0) + 30,
+                },
             ))
         return variants
 
@@ -388,20 +557,24 @@ class PolymerCandidateGenerator:
             if not system:
                 return True
             hay = (name + " " + abbr + " " + desc).lower()
-            if "聚丙烯" in system or "pp" in system:
+            # 词边界匹配缩写，避免 "pp" 误命中 "pps/ppsu"、"pa" 误命中 "pbat/pan"；
+            # PA6/PA66/PBAT 等数字后缀缩写无天然词边界，需显式枚举
+            has_pp = bool(re.search(r"\bpp\b|\bpp30\b|\bpp20\b", system))
+            has_pa = bool(re.search(r"\bpa\b|\bpa6\b|\bpa66\b|\bpa12\b|\bpa46\b|\bpa610\b|\bpa1010\b", system))
+            if "聚丙烯" in system or has_pp:
                 # 医用级 PP 仅归属医疗/熔喷体系，避免混入通用聚丙烯改性
                 if "medical-grade" in hay:
                     return "医疗" in system or "熔喷" in system or "防护" in system
                 return "polypropylene" in hay or "poly(propylene" in hay or "pp" == abbr.lower()
-            if "尼龙" in system or "pa" in system:
+            if "尼龙" in system or has_pa:
                 return "polyamide" in hay
-            if "苯乙烯" in system or "苯乙烯类" in system:
+            if "苯乙烯" in system or "苯乙烯类" in system or "abs" in system:
                 return any(k in hay for k in ("polystyrene", "hips", "styrene-acrylonitrile", "abs"))
             if "汽车" in system or "工程塑料" in system or "pc" in system:
                 return any(k in hay for k in ("polycarbonate", "abs", "pbt", "pet", "pom", "polyphenylene sulfide", "peek"))
             if "阻燃" in system:
                 return any(k in hay for k in ("polypropylene", "polyamide", "polycarbonate", "abs", "pbt"))
-            if "生物降解" in system:
+            if "生物降解" in system or bool(re.search(r"\bpbat\b|\bpla\b", system)):
                 return any(k in hay for k in ("polylactic", "pbat", "poly(butylene"))
             if "特种" in system or "lcp" in system or "pps" in system:
                 return any(k in hay for k in ("liquid crystal", "polyphenylene sulfide", "polyphenylsulfone", "peek"))
@@ -423,7 +596,8 @@ class PolymerCandidateGenerator:
         for i, (name, abbr, psmiles, smiles, desc) in enumerate(pool):
             if len(candidates) >= num_candidates:
                 break
-            filler = filler_pool[(h >> (i * 3)) % len(filler_pool)]
+            # i ≥ 11 时移位会溢出 32 位哈希（恒 0 导致全部同一填料），改用加法扰动
+            filler = filler_pool[(h + i * 7) % len(filler_pool)]
             fname, fdesc, feffect = filler
             # 体系适配：生物降解避开玻纤/碳纤（破坏可降解性）
             if "生物降解" in system and "GF" in fname:
@@ -441,14 +615,13 @@ class PolymerCandidateGenerator:
             if ("碳纤维" in system or "复材" in system or "复合材料" in system) and not fname.startswith("CF"):
                 filler = ("CF30", "碳纤维增强 30%", "高端结构件，航空航天/低空经济")
                 fname, fdesc, feffect = filler
-            # 典型拉伸强度参考（MPa）：按骨架与增强组合估算
-            base_strength = {"PP": 32, "PA6": 60, "PA66": 80, "PC": 65, "ABS": 45,
-                             "PBT": 55, "PET": 50, "PLA": 55, "PBAT": 32, "LCP": 130,
-                             "PPS": 75, "PPSU": 70, "POM": 65, "HDPE": 28,
-                             "PS": 40, "HIPS": 25, "SAN": 70, "rPET": 55, "EP": 60,
-                             "PEEK": 95, "Nafion": 25, "PBI": 110, "Med-PP": 32}.get(abbr, 50)
-            gf_bonus = 90 if fname.startswith("GF") else 60 if fname.startswith("CF") else 5
-            est_tensile = base_strength + gf_bonus
+            # ── 工程性能查表（ADR-0003 配套：绝对规格基准同源） ──
+            # 参考来源：CAMPUS 塑料数据库典型值 / GB-T 1040、GB-T 9341、GB-T 1843、GB-T 1634
+            # 参考区间；GF/CF 加成按 30%/20% 填充的行业典型数据（《工程塑料改性技术》金发科技内部手册）
+            # 查询失败时保守回退（基材值 + 10%），杜绝派生系数
+            est_tensile, est_flexural, est_impact, est_hdt, est_source = self._rules.reference_properties(
+                abbr, fname
+            )
             candidates.append(PolymerCandidate(
                 name=f"{abbr}/{fname}",
                 psmiles=f"Polymer({psmiles})",
@@ -460,7 +633,11 @@ class PolymerCandidateGenerator:
                 data={
                     "formula": f"{abbr}/{fname}",
                     "material_system": material_system or "改性塑料",
-                    "estimated_tensile_strength_mpa": est_tensile,
+                    "tensile_strength": est_tensile,
+                    "flexural_modulus": est_flexural,
+                    "impact_strength": est_impact,
+                    "heat_deflection_temp": est_hdt,
+                    "property_source": est_source,
                     "reinforcement": fname,
                     "process": "双螺杆挤出共混 → 注塑/挤出成型",
                 },
@@ -489,7 +666,7 @@ class PolymerCandidateGenerator:
                     json={
                         "model": self.config.llm.model,
                         "messages": [
-                            {"role": "system", "content": "You are a polymer chemist specializing in battery electrolyte materials."},
+                            {"role": "system", "content": "You are a polymer compounding scientist specializing in engineering plastics and polymer modification (PP/PA/PC/ABS/PBAT compounding, reinforcement and flame retardancy)."},
                             {"role": "user", "content": prompt},
                         ],
                         "temperature": self.config.llm.temperature,
@@ -515,7 +692,7 @@ class PolymerCandidateGenerator:
             provider_created_locally = True
 
         try:
-            prompt = f"""Generate {num_candidates} polymer candidates for battery electrolyte with target properties: {target_properties}
+            prompt = f"""Generate {num_candidates} polymer compounding candidates for plastic modification (reinforced/flame-retardant/biodegradable systems) with target properties: {target_properties}
 Return only a JSON list of objects with keys: name, smiles, psmiles, properties (dict).
 Example: [{{"name": "PEO", "smiles": "CCO", "psmiles": "[*]CCO[*]", "properties": {{"ionic_conductivity": 1e-5}}}}]"""
 
@@ -560,23 +737,23 @@ Example: [{{"name": "PEO", "smiles": "CCO", "psmiles": "[*]CCO[*]", "properties"
                         logger.warning("Failed to close temporary LLM provider: %s", close_err)
 
     def _build_generation_prompt(self, target_properties: dict | None) -> str:
-        props_str = json.dumps(target_properties or {"ionic_conductivity": "high"}, indent=2)
-        return f"""Generate {5} novel polymer electrolyte candidates for lithium batteries.
+        props_str = json.dumps(target_properties or {"tensile_strength": "high"}, indent=2)
+        return f"""Generate novel engineering plastic compounding candidates for polymer modification (reinforced / flame-retardant / impact-modified systems).
 
 Target properties:
 {props_str}
 
-For each polymer, provide:
+For each candidate, provide:
 1. Name
 2. PSMILES notation
 3. SMILES of monomer
-4. Brief description of design rationale
+4. Brief description of the compounding design rationale (base resin + reinforcement/modifier)
 
-Focus on polymers with:
-- High dielectric constant for salt dissociation
-- Flexible backbone for ion transport
-- Good mechanical stability
-- Thermal stability up to 200°C
+Focus on systems such as:
+- Glass/carbon fiber reinforced PP/PA/PC/ABS/PBT
+- Flame retardant systems (halogen-free, V-0)
+- Impact-modified alloys (PC/ABS, PA/POE)
+- High heat deflection temperature engineering plastics
 
 Return as JSON array with fields: name, psmiles, smiles, description"""
 

@@ -14,13 +14,13 @@ from battery_materials_agent.industrialization.domain_pack_store import DomainPa
 
 
 def _fake_db():
-    """构造轻量物料库桩：按分类返回物料。"""
+    """构造轻量物料库桩：按分类返回物料（v4.1 高分子体系分类）。"""
     db = SimpleNamespace()
     db.query_category = lambda cat: {
-        "BASE_POLYMER": [SimpleNamespace(material_id="RM-P", name="PEO")],
-        "LITHIUM_SALT": [SimpleNamespace(material_id="RM-S", name="LiTFSI")],
-        "BINDER": [SimpleNamespace(material_id="RM-B", name="PVDF")],
-        "FILLER": [SimpleNamespace(material_id="RM-F", name="SiO2")],
+        "BASE_POLYMER": [SimpleNamespace(material_id="RM-P", name="PP 基材")],
+        "material.reinforcement": [SimpleNamespace(material_id="RM-G", name="玻纤 GF30")],
+        "ADDITIVE": [SimpleNamespace(material_id="RM-A", name="抗氧剂")],
+        "FILLER": [SimpleNamespace(material_id="RM-F", name="滑石粉")],
     }.get(cat) or []
     db.get_all = lambda: []
     db.get_spec = lambda mid: None
@@ -31,34 +31,34 @@ def test_formula_agent_resolves_base_polymer_template():
     fa = FormulaAgent(raw_material_db=_fake_db(), config=None, domain_pack=DomainPackStore.builtin_fallback())
     tpl = fa._recipe_template_for("BASE_POLYMER")
     assert tpl["material_type"] == "BASE_POLYMER"
-    assert tpl["equipment"] == "双行星搅拌机"
+    assert tpl["equipment"] == "双螺杆挤出机"
 
 
 def test_formula_agent_resolves_default_template_for_unknown_type():
     fa = FormulaAgent(raw_material_db=_fake_db(), config=None, domain_pack=DomainPackStore.builtin_fallback())
-    # 未知材料类型回退到 "*" 默认模板（粉末冶金）
+    # 未知材料类型回退到 "*" 默认模板（高分子改性通用流程）
     tpl = fa._recipe_template_for("NEW_MATERIAL_TYPE")
     assert tpl["material_type"] == "*"
-    assert tpl["equipment"] == "球磨机"
+    assert tpl["equipment"] == "高速混合机"
 
 
 def test_formula_agent_known_target_uses_template_bom():
     fa = FormulaAgent(raw_material_db=_fake_db(), config=None, domain_pack=DomainPackStore.builtin_fallback())
-    target = SimpleNamespace(material_id="RM-P", name="PEO", category="BASE_POLYMER")
+    target = SimpleNamespace(material_id="RM-P", name="PP 基材", category="BASE_POLYMER")
     recipe = fa._recipe_for_known_target(target)
-    # 主成分 0.9 + 锂盐 0.1
-    assert recipe.bom.get("RM-P") == 0.9
-    assert recipe.bom.get("RM-S") == 0.1
-    assert recipe.equipment == "双行星搅拌机"
+    # v4.1：主成分 0.7 + 增强填料 0.3（改性塑料典型配方）
+    assert recipe.bom.get("RM-P") == 0.7
+    assert recipe.bom.get("RM-G") == 0.3
+    assert recipe.equipment == "双螺杆挤出机"
 
 
 def test_formula_agent_fallback_uses_domain_pack_fallback():
     fa = FormulaAgent(raw_material_db=_fake_db(), config=None, domain_pack=DomainPackStore.builtin_fallback())
     recipe = fa._fallback_recipe({"candidate": "未知新材料XYZ"})
-    # 回退配方按分类取首个物料：BASE_POLYMER 0.8 + LITHIUM_SALT 0.2
-    assert recipe.bom.get("RM-P") == 0.8
-    assert recipe.bom.get("RM-S") == 0.2
-    assert recipe.equipment == "双行星搅拌机"
+    # 回退配方按分类取首个物料：BASE_POLYMER 0.7 + material.reinforcement 0.3
+    assert recipe.bom.get("RM-P") == 0.7
+    assert recipe.bom.get("RM-G") == 0.3
+    assert recipe.equipment == "双螺杆挤出机"
 
 
 def test_formula_agent_uses_custom_domain_pack():

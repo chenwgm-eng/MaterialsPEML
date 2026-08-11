@@ -57,11 +57,12 @@
 
       <a-form layout="vertical" size="small">
         <a-form-item label="研发目标" required>
-          <a-textarea
+          <!-- Q12 智能目标框：一句话目标 + 场景模板 + 智能解析回填 -->
+          <GoalIntentInput
             id="rw-goal-input"
-            v-model:value="form.goal"
+            v-model="form.goal"
             :rows="3"
-            placeholder="例如：找到高离子电导率的固态电解质材料"
+            @parsed="onGoalParsed"
           />
           <div class="form-help">描述越具体，生成的计划越贴合需求；可包含期望性能、应用场景等。</div>
         </a-form-item>
@@ -412,6 +413,7 @@
 import { ref, computed, markRaw, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import GoalIntentInput from '@/components/GoalIntentInput.vue'
 import Orchestration from '@/views/Orchestration.vue'
 import {
   ThunderboltOutlined,
@@ -517,6 +519,19 @@ const currentPreferenceDescription = computed(() => {
   const mode = EXECUTION_PREFERENCE_MODES.find((m) => m.value === form.value.preference)
   return mode?.description || ''
 })
+
+// Q12：智能解析结果回填表单（体系/材料类型/目标属性）
+function onGoalParsed(parsed) {
+  if (parsed.material_system) {
+    form.value.material_system = parsed.material_system
+  }
+  if (parsed.material_scope === 'polymer' || parsed.material_scope === 'crystal') {
+    form.value.material_scope = parsed.material_scope
+  }
+  if (parsed.target_properties?.length) {
+    form.value.target_properties = parsed.target_properties
+  }
+}
 
 // 材料类型：完全由领域注册表（/domain-packs）驱动。
 // 与 material_system（体系名）解耦——material_scope 只用于下游路由/生成通道选择。

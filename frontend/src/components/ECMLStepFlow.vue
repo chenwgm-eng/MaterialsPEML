@@ -53,14 +53,15 @@ const props = defineProps({
 const emit = defineEmits(['step-click'])
 
 // agentId/agentName 与后端 ecml_engine._STEP_AGENT_MAP 保持一致
+// v4.1：描述切换为改性塑料领域（描述符/工程塑料体系）
 const steps = [
   { key: 'step1_route', title: '材料路由', desc: '判断材料类型，选择处理分支', agentId: 'builtin_material_router', agentName: '材料路由调度员' },
-  { key: 'step2_generate', title: '候选生成', desc: '生成 N 个候选结构', agentId: 'builtin_material_discovery', agentName: '首席材料学家' },
+  { key: 'step2_generate', title: '候选生成', desc: '生成 N 个候选配方（基材+增强/阻燃/增韧）', agentId: 'builtin_material_discovery', agentName: '首席材料学家' },
   { key: 'step3_industrialization', title: '工业化验证', desc: '配方合规审查与成本评估', agentId: 'builtin_industrialization', agentName: '配方工艺师' },
-  { key: 'step4_predict', title: '性质预测', desc: 'CGCNN/PolymerGNN 打分', agentId: 'builtin_battery_oracle', agentName: '材料性质预言者' },
-  { key: 'step5_verify', title: 'DFT 验证', desc: '精确计算 Top-K 候选材料', agentId: 'builtin_dft_verifier', agentName: 'DFT 计算专家' },
-  { key: 'step6_experiment', title: '实验闭环', desc: 'FINDUS 合成与表征', agentId: 'builtin_experiment_analyst', agentName: '实验数据分析员' },
-  { key: 'step7_feedback', title: '反馈迭代', desc: '湿数据对比，调整策略', agentId: 'builtin_battery_learner', agentName: '材料数据学习者' },
+  { key: 'step4_predict', title: '性质预测', desc: '描述符/ML 模型预测力学与热学性能', agentId: 'builtin_battery_oracle', agentName: '材料性质预言者' },
+  { key: 'step5_verify', title: '性能验证', desc: '候选性能交叉验证与证据核查', agentId: 'builtin_dft_verifier', agentName: 'DFT 计算专家' },
+  { key: 'step6_experiment', title: '实验闭环', desc: '标准测试方法（GB/T/ISO/ASTM）表征', agentId: 'builtin_experiment_analyst', agentName: '实验数据分析员' },
+  { key: 'step7_feedback', title: '反馈迭代', desc: '实测数据对比，调整策略', agentId: 'builtin_battery_learner', agentName: '材料数据学习者' },
 ]
 
 function isCurrent(key) {

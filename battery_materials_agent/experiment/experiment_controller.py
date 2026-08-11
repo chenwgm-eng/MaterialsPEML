@@ -83,6 +83,12 @@ class ExperimentType(str, Enum):
     TGA = "tga"
     EIS = "eis"
     CV = "cv"
+    # v4.1 改性塑料：力学/热学测试类型
+    TENSILE = "tensile"
+    FLEXURAL = "flexural"
+    IMPACT = "impact"
+    HDT = "hdt"
+    MFI = "mfi"
 
 
 class ExperimentTask(BaseModel):
@@ -181,6 +187,8 @@ class ExperimentResultRecord(BaseModel):
     # 评测修复 P2-5：数据质量分层标记（verified 实测已审 / estimated 估算 / simulated 模拟 / literature 文献）
     # 默认 estimated；QC 审批通过后置为 verified
     data_quality: str = "estimated"
+    # ADR-0002：溯源信息（JSONB）。模拟数据必须 source_type=simulation 且不得标 measured
+    provenance: list[dict] | None = None
 
     @field_validator('scenario_id', 'experiment_order_id', 'sample_id', 'sample_batch_id',
                      'source_type', 'source_system', 'uploaded_by', 'property_name',
@@ -795,12 +803,12 @@ class ExperimentDataStore:
                      source_system, uploaded_by, uploaded_at, property_name, value, unit,
                      test_method, test_conditions, instrument_id, raw_file_uri, qc_status,
                      qc_issues, reviewed_by, reviewed_at, learning_eligible, scenario_id,
-                     test_task_id, data_quality)
+                     test_task_id, data_quality, provenance)
                     VALUES (:result_id, :experiment_order_id, :sample_id, :sample_batch_id, :source_type,
                      :source_system, :uploaded_by, :uploaded_at, :property_name, :value, :unit,
                      :test_method, CAST(:test_conditions AS JSONB), :instrument_id, :raw_file_uri, :qc_status,
                      CAST(:qc_issues AS JSONB), :reviewed_by, :reviewed_at, :learning_eligible, :scenario_id,
-                     :test_task_id, :data_quality)
+                     :test_task_id, :data_quality, CAST(:provenance AS JSONB))
                     ON CONFLICT (result_id) DO UPDATE SET
                         experiment_order_id = EXCLUDED.experiment_order_id,
                         sample_id = EXCLUDED.sample_id,
@@ -823,7 +831,8 @@ class ExperimentDataStore:
                         learning_eligible = EXCLUDED.learning_eligible,
                         scenario_id = EXCLUDED.scenario_id,
                         test_task_id = EXCLUDED.test_task_id,
-                        data_quality = EXCLUDED.data_quality
+                        data_quality = EXCLUDED.data_quality,
+                        provenance = EXCLUDED.provenance
                     """),
                     {
                         "result_id": record.result_id,
@@ -851,6 +860,8 @@ class ExperimentDataStore:
                         "scenario_id": record.scenario_id or "",
                         "test_task_id": record.test_task_id or None,
                         "data_quality": record.data_quality or "estimated",
+                        # ADR-0002：溯源 JSONB（无则 NULL）
+                        "provenance": json.dumps(record.provenance, ensure_ascii=False) if record.provenance else None,
                     },
                 )
         except IntegrityError as e:
@@ -878,6 +889,8 @@ class ExperimentDataStore:
             scenario_id=row[20] if row[20] is not None else "",
             test_task_id=row[21] if len(row) > 21 and row[21] is not None else "",
             data_quality=(row[22] if len(row) > 22 and row[22] else "estimated"),
+            # ADR-0002：provenance JSONB 列（迁移 0059）
+            provenance=_safe_json_load(row[23], default=None) if len(row) > 23 and row[23] is not None else None,
         )
 
     def list_result_records(self, qc_status: str | None = None, order_id: str | None = None,
@@ -918,6 +931,7 @@ class ExperimentDataStore:
             scenario_id=r[20] if r[20] is not None else "",
             test_task_id=r[21] if len(r) > 21 and r[21] is not None else "",
             data_quality=(r[22] if len(r) > 22 and r[22] else "estimated"),
+            provenance=_safe_json_load(r[23], default=None) if len(r) > 23 and r[23] is not None else None,
         ) for r in rows]
 
     def count_result_records(self, order_id: str | None = None) -> int | dict[str, int]:
@@ -1435,13 +1449,13 @@ class ExperimentController:
             )
             return result
 
-        # demo 模式：保留原有模拟逻辑
+        # demo 模式：保留原有模拟逻辑（ADR-0002：metadata 显式标注模拟，与 production 对称）
         measured = self._simulate_measurement(experiment_type, recipe)
         result = ExperimentResult(
             task_id=task_id, experiment_type=experiment_type,
             status=ExperimentStatus.COMPLETED,
             measured_values=measured,
-            metadata={"recipe": recipe, "timestamp": datetime.now(timezone.utc).isoformat()},
+            metadata={"recipe": recipe, "timestamp": datetime.now(timezone.utc).isoformat(), "mode": "simulated"},
         )
         self.complete_task(task_id, result)
         return result
@@ -1463,6 +1477,30 @@ class ExperimentController:
                 "activation_energy_eV": 0.2 + u2 * 0.3,
                 "temperature_K": 298.15,
                 "frequency_Hz": 1e6,
+            }
+        elif exp_type == ExperimentType.TENSILE:
+            # v4.1 改性塑料：拉伸性能模拟（数值接近工程塑料常规范围）
+            return {
+                "tensile_strength_MPa": 40.0 + u * 140.0,
+                "elongation_at_break_pct": 5.0 + u2 * 120.0,
+                "tensile_modulus_MPa": 1500.0 + u3 * 3500.0,
+            }
+        elif exp_type == ExperimentType.FLEXURAL:
+            return {
+                "flexural_modulus_MPa": 2000.0 + u * 10000.0,
+                "flexural_strength_MPa": 60.0 + u2 * 160.0,
+            }
+        elif exp_type == ExperimentType.IMPACT:
+            return {
+                "impact_strength_kJ_m2": 5.0 + u * 45.0,
+            }
+        elif exp_type == ExperimentType.HDT:
+            return {
+                "heat_deflection_temp_C": 80.0 + u * 160.0,
+            }
+        elif exp_type == ExperimentType.MFI:
+            return {
+                "melt_flow_index_g_10min": 4.0 + u * 40.0,
             }
         elif exp_type == ExperimentType.EIS:
             return {

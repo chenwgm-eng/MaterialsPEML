@@ -170,7 +170,7 @@ class FormulaAgent:
                         json={
                             "model": llm.model,
                             "messages": [
-                                {"role": "system", "content": "You are a battery materials formulation and process architect."},
+                                {"role": "system", "content": "You are a polymer compounding formulation and process architect for plastic modification (compounding, reinforcement, flame retardancy)."},
                                 {"role": "user", "content": prompt},
                             ],
                             "temperature": llm.temperature,

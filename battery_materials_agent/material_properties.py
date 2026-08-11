@@ -28,7 +28,33 @@ PROPERTY_DIRECTION: dict[str, str] = {
     "total_energy": "minimize",
     "energy_above_hull": "minimize",
     "stability": "maximize",
+    # v4.1 改性塑料：高分子工程性能
+    "tensile_strength": "maximize",
+    "flexural_modulus": "maximize",
+    "impact_strength": "maximize",
+    "heat_deflection_temp": "maximize",
+    "melt_flow_index": "maximize",
+    "elongation_at_break": "maximize",
+    "thermal_stability": "maximize",
+    "crystallinity": "maximize",
+    "glass_transition_temp": "maximize",
     "molecular_weight": "minimize",
+}
+
+# 综合评分绝对规格基准（ADR-0003）：(下限, 上限, 单位, 来源)
+# 归一化时按此范围钳制——分数 = 属性距规格下界的达成度，跨列表/跨轮次可比。
+# 来源：CAMPUS 塑料数据库典型值 / GB-T 1040、9341、1843、1634 参考区间；
+# 上限取"增强工程塑料常见规格"（玻纤/碳纤增强典型上限）。
+REFERENCE_RANGES: dict[str, tuple[float, float, str, str]] = {
+    "tensile_strength": (0.0, 200.0, "MPa", "GB-T 1040 参考区间"),
+    "flexural_modulus": (0.0, 20000.0, "MPa", "GB-T 9341 参考区间"),
+    "impact_strength": (0.0, 60.0, "kJ/m2", "GB-T 1843 参考区间"),
+    "heat_deflection_temp": (0.0, 300.0, "C", "GB-T 1634 参考区间"),
+    "melt_flow_index": (0.0, 60.0, "g/10min", "GB-T 3682 参考区间"),
+    "elongation_at_break": (0.0, 500.0, "%", "GB-T 1040 参考区间"),
+    "thermal_stability": (0.0, 500.0, "C", "GB-T 33047 参考区间"),
+    "glass_transition_temp": (0.0, 300.0, "C", "GB-T 19466 参考区间"),
+    "crystallinity": (0.0, 100.0, "%", "物理定义范围"),
 }
 
 
@@ -295,12 +321,11 @@ class PropertyRegistry:
     # 标识字段：用于唯一标识一个化合物
     IDENTIFICATION_KEYS = ("formula", "smiles", "inchi", "inchikey", "cas_number", "name_cn", "name_en")
 
-    # 可预测字段：battery 分类下的数值型字段 + 部分 physicochemical 数值字段
+    # 可预测字段：通用物化 + 晶体 DFT 核心 + 高分子工程性能（v4.1 改性塑料为主）
     PREDICTABLE_KEYS = (
-        "ionic_conductivity", "electronic_conductivity", "electrochemical_window",
-        "transference_number", "theoretical_capacity", "operating_voltage",
-        "cycle_stability", "capacity_retention",
+        # 晶体 DFT 核心目标（晶体材料发现分支仍可用）
         "band_gap", "formation_energy",
+        # 通用物化性质
         "boiling_point", "melting_point", "density", "logp", "tpsa",
         "solubility", "vapor_pressure", "refractive_index", "flash_point",
         # 高分子领域（kingfa）：可作为研发目标属性的工程性能
@@ -313,17 +338,18 @@ class PropertyRegistry:
 
     # 可作为 ECML 目标性质的字段
     ECML_TARGET_KEYS = (
-        "ionic_conductivity", "band_gap", "formation_energy",
-        "electrochemical_window", "theoretical_capacity", "operating_voltage",
-        "cycle_stability", "capacity_retention",
+        "tensile_strength", "flexural_modulus", "impact_strength",
+        "heat_deflection_temp", "melt_flow_index", "thermal_stability",
+        "elongation_at_break", "glass_transition_temp",
     )
 
     # 可由实验测量的字段
     EXPERIMENTAL_KEYS = (
-        "ionic_conductivity", "electronic_conductivity", "electrochemical_window",
-        "transference_number", "theoretical_capacity", "operating_voltage",
-        "cycle_stability", "capacity_retention",
-        "boiling_point", "melting_point", "density", "solubility",
+        "tensile_strength", "flexural_modulus", "impact_strength",
+        "heat_deflection_temp", "vicat_softening_temp", "melt_flow_index",
+        "flame_retardancy", "thermal_stability", "elongation_at_break",
+        "glass_transition_temp", "crystallinity", "molecular_weight",
+        "density", "dielectric_loss", "biodegradation_rate",
     )
 
     def list_field_keys(self, category: str | None = None) -> list[str]:

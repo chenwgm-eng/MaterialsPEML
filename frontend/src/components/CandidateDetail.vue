@@ -706,53 +706,49 @@ const propColumns = [
 const propRows = computed(() => {
   const c = props.candidate
   const rows = []
-  if (c.band_gap != null)
+  if (c.tensile_strength != null)
     rows.push({
-      key: 'band_gap',
-      name: '带隙',
-      value: formatNumber(c.band_gap, 4),
-      unit: energyUnit.value,
-      source: c.band_gap_source || 'DFT',
-      predicted: true,
-      evidence: c.band_gap_evidence,
-    })
-  if (c.formation_energy != null)
-    rows.push({
-      key: 'formation_energy',
-      name: '形成能',
-      value: formatNumber(c.formation_energy, 4),
-      unit: `${energyUnit.value}/atom`,
-      source: c.formation_energy_source || 'DFT',
+      key: 'tensile_strength',
+      name: '拉伸强度',
+      value: formatNumber(c.tensile_strength, 4),
+      unit: 'MPa',
+      source: c.tensile_strength_source || 'ML 预测',
       predicted: true,
     })
-  if (c.ionic_conductivity_estimate != null)
+  if (c.flexural_modulus != null)
     rows.push({
-      key: 'cond1',
-      name: '离子电导率',
-      value: formatSci(c.ionic_conductivity_estimate, 3),
-      unit: condUnit.value,
-      source: 'ML 估计',
+      key: 'flexural_modulus',
+      name: '弯曲模量',
+      value: formatNumber(c.flexural_modulus, 4),
+      unit: 'MPa',
+      source: c.flexural_modulus_source || 'ML 预测',
       predicted: true,
-      evidence: 'computed',
     })
-  if (c.predicted_ionic_conductivity != null)
+  if (c.impact_strength != null)
     rows.push({
-      key: 'cond2',
-      name: '离子电导率（预测）',
-      value: formatSci(c.predicted_ionic_conductivity, 3),
-      unit: condUnit.value,
-      source: 'ML 预测',
+      key: 'impact_strength',
+      name: '冲击强度',
+      value: formatNumber(c.impact_strength, 4),
+      unit: 'kJ/m²',
+      source: c.impact_strength_source || 'ML 预测',
       predicted: true,
-      evidence: 'auxiliary',
     })
-  if (c.stability_score != null)
+  if (c.heat_deflection_temp != null)
     rows.push({
-      key: 'stab',
-      name: '稳定性评分',
-      value: formatNumber(c.stability_score, 3),
-      // 无量纲评分，无对应 MDM 单位
-      unit: '—',
-      source: c.stability_source || '经验模型',
+      key: 'heat_deflection_temp',
+      name: '热变形温度',
+      value: formatNumber(c.heat_deflection_temp, 4),
+      unit: '°C',
+      source: c.heat_deflection_temp_source || 'ML 预测',
+      predicted: true,
+    })
+  if (c.melt_flow_index != null)
+    rows.push({
+      key: 'melt_flow_index',
+      name: '熔体流动速率',
+      value: formatNumber(c.melt_flow_index, 4),
+      unit: 'g/10min',
+      source: c.melt_flow_index_source || 'ML 预测',
       predicted: true,
     })
   if (c.multi_objective_score != null)
@@ -770,18 +766,16 @@ const propRows = computed(() => {
 
 // 属性中文映射 + 跨尺度预测结果行
 const PROP_NAME_CN = {
-  band_gap: '带隙',
-  formation_energy: '形成能',
-  ionic_conductivity: '离子电导率',
+  tensile_strength: '拉伸强度',
+  flexural_modulus: '弯曲模量',
+  impact_strength: '冲击强度',
+  heat_deflection_temp: '热变形温度',
+  melt_flow_index: '熔体流动速率',
+  elongation_at_break: '断裂伸长率',
+  thermal_stability: '热稳定温度',
+  crystallinity: '结晶度',
   glass_transition_temp: '玻璃化转变温度',
   dielectric_constant: '介电常数',
-  elastic_modulus: '弹性模量',
-  thermal_conductivity: '热导率',
-  decomposition_temp: '分解温度',
-  total_energy: '总能量',
-  bulk_modulus: '体弹性模量',
-  shear_modulus: '剪切模量',
-  e_above_hull: '凸包上方能量',
 }
 
 const crossScalePropRows = computed(() => {

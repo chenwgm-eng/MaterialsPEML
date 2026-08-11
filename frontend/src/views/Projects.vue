@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="projects-page">
     <!-- 页面标题（跨页一致：#9 补齐语义标题） -->
     <div class="page-header">
@@ -144,7 +144,7 @@
                       <a-row :gutter="12">
                         <a-col :span="12">
                           <a-form-item label="目标应用">
-                            <a-input v-model:value="infoForm.target_application" placeholder="如 锂镧锆氧（LLZO）固态电解质" :disabled="!isEditing" />
+                            <a-input v-model:value="infoForm.target_application" placeholder="如 汽车轻量化结构件 PA6/GF30" :disabled="!isEditing" />
                           </a-form-item>
                         </a-col>
                         <a-col :span="6">
@@ -417,7 +417,7 @@
           <label class="form-label">任务标题 <span class="required">*</span></label>
           <a-input
             v-model:value="taskForm.title"
-            placeholder="如 高离子电导率 LLZO 电解质配方优化"
+            placeholder="如 玻纤增强 PA6 拉伸强度配方优化"
             allow-clear
           />
         </div>
@@ -425,7 +425,7 @@
           <label class="form-label">交付物（材料）</label>
           <a-input
             v-model:value="taskForm.deliverable"
-            placeholder="如 锂镧锆氧（LLZO）固态电解质"
+            placeholder="如 汽车轻量化结构件 PA6/GF30"
             allow-clear
           />
         </div>
@@ -445,7 +445,7 @@
                 v-model:value="p.name"
                 size="small"
                 class="prop-name"
-                placeholder="如 ionic_conductivity"
+                placeholder="如 tensile_strength"
               />
               <a-select v-model:value="p.direction" size="small" class="prop-dir" :options="directionOptions" />
               <a-input

@@ -260,10 +260,11 @@ const warnings = ref([])
 
 // ======== 实验类型选项 ========
 const EXPERIMENT_TYPE_LABELS = {
-  ionic_conductivity: '离子电导率',
-  electrochemical: '电化学性能',
-  eis: '电化学阻抗谱 (EIS)',
-  cv: '循环伏安法 (CV)',
+  tensile_strength: '拉伸强度',
+  flexural_modulus: '弯曲模量',
+  impact_strength: '冲击强度',
+  melt_flow_index: '熔体流动速率',
+  heat_deflection_temp: '热变形温度',
   xrd: 'X 射线衍射 (XRD)',
   sem: '扫描电镜 (SEM)',
   dsc: '差示扫描量热 (DSC)',
@@ -380,32 +381,32 @@ function validateTemperature() {
 
 function validateAllFields() {
   warnings.value = []
-  // 离子电导率校验
-  const ic = templateValues['ionic_conductivity']
-  if (ic !== null && ic !== undefined && ic !== '') {
-    const num = Number(ic)
+  // 拉伸强度校验
+  const ts = templateValues['tensile_strength']
+  if (ts !== null && ts !== undefined && ts !== '') {
+    const num = Number(ts)
     if (num < 0) {
-      warnings.value.push('离子电导率不应为负数，请检查数值')
-    } else if (num > 1) {
-      warnings.value.push(`离子电导率 ${num} ${condUnit.value} 超出常规范围（通常 < 1 ${condUnit.value}），请确认数据正确`)
+      warnings.value.push('拉伸强度不应为负数，请检查数值')
+    } else if (num > 500) {
+      warnings.value.push(`拉伸强度 ${num} MPa 超出常规范围（通常 < 500 MPa），请确认数据正确`)
     }
   }
-  // 电化学窗口校验
-  const ew = templateValues['electrochemical_window']
-  if (ew !== null && ew !== undefined && ew !== '') {
-    const num = Number(ew)
+  // 热变形温度校验
+  const hdt = templateValues['heat_deflection_temp']
+  if (hdt !== null && hdt !== undefined && hdt !== '') {
+    const num = Number(hdt)
     if (num < 0) {
-      warnings.value.push('电化学窗口不应为负数')
-    } else if (num > 10) {
-      warnings.value.push(`电化学窗口 ${num} ${voltageUnit.value} 超出常规范围，请确认数据正确`)
+      warnings.value.push('热变形温度不应为负数')
+    } else if (num > 400) {
+      warnings.value.push(`热变形温度 ${num} °C 超出常规范围，请确认数据正确`)
     }
   }
-  // 容量保持率校验
-  const cr = templateValues['capacity_retention']
-  if (cr !== null && cr !== undefined && cr !== '') {
-    const num = Number(cr)
+  // 结晶度校验
+  const cy = templateValues['crystallinity']
+  if (cy !== null && cy !== undefined && cy !== '') {
+    const num = Number(cy)
     if (num < 0 || num > 100) {
-      warnings.value.push(`容量保持率 ${num}% 超出 0-100% 范围，请检查数值`)
+      warnings.value.push(`结晶度 ${num}% 超出 0-100% 范围，请检查数值`)
     }
   }
   // 温度校验

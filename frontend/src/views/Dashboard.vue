@@ -18,9 +18,9 @@
                 <a-menu @click="onStartMenuClick">
                   <a-menu-item key="research">从研发工作台开始</a-menu-item>
                   <a-menu-divider />
-                  <a-menu-item key="LiCoO2">从 LiCoO2 开始</a-menu-item>
-                  <a-menu-item key="PEO">从 PEO 开始</a-menu-item>
-                  <a-menu-item key="LiFePO4">从 LiFePO4 开始</a-menu-item>
+                  <a-menu-item key="PA6">从 PA6 开始</a-menu-item>
+                  <a-menu-item key="PC">从 PC 开始</a-menu-item>
+                  <a-menu-item key="ABS">从 ABS 开始</a-menu-item>
                   <a-menu-divider />
                   <a-menu-item key="custom">自定义</a-menu-item>
                 </a-menu>
@@ -918,17 +918,17 @@ const continueRuns = computed(() =>
 const hasContinueRun = computed(() => continueRuns.value.length > 0)
 
 const templates = [
-  { name: 'LiCoO2', materialType: 'crystal', formula: 'LiCoO2', icon: markRaw(ExperimentOutlined) },
-  { name: 'LiFePO4', materialType: 'crystal', formula: 'LiFePO4', icon: markRaw(ExperimentOutlined) },
-  { name: 'NMC811', materialType: 'crystal', formula: 'LiNi0.8Mn0.1Co0.1O2', icon: markRaw(ExperimentOutlined) },
-  { name: 'PEO', materialType: 'polymer', target: 'PEO', icon: markRaw(ExperimentOutlined) },
-  { name: 'PVDF', materialType: 'polymer', target: 'PVDF', icon: markRaw(ExperimentOutlined) },
-  { name: '聚合物电解质', materialType: 'polymer', target: 'polymer_electrolyte', icon: markRaw(ExperimentOutlined) },
+  { name: 'PA6', materialType: 'polymer', target: 'PA6', icon: markRaw(ExperimentOutlined) },
+  { name: 'PC', materialType: 'polymer', target: 'PC', icon: markRaw(ExperimentOutlined) },
+  { name: 'ABS', materialType: 'polymer', target: 'ABS', icon: markRaw(ExperimentOutlined) },
+  { name: 'PP', materialType: 'polymer', target: 'PP', icon: markRaw(ExperimentOutlined) },
+  { name: 'PBT', materialType: 'polymer', target: 'PBT', icon: markRaw(ExperimentOutlined) },
+  { name: '阻燃改性', materialType: 'polymer', target: 'flame_retardant_modification', icon: markRaw(ExperimentOutlined) },
 ]
 
 const quickActions = [
   { path: '/research', name: '研发工作台', desc: '统一入口：目标 → 计划 → 执行', icon: markRaw(RocketOutlined) },
-  { path: '/workbench', name: '候选设计', desc: '生成晶体/聚合物候选材料', icon: markRaw(SearchOutlined) },
+  { path: '/workbench', name: '候选设计', desc: '生成高分子/晶体候选材料', icon: markRaw(SearchOutlined) },
   { path: '/ecml', name: '实验闭环迭代', desc: '运行 7 步发现循环', icon: markRaw(SyncOutlined) },
   { path: '/experiments', name: '实验数据', desc: '查看湿实验数据', icon: markRaw(DatabaseOutlined) },
   { path: '/tools', name: 'AI 分析工具', desc: '浏览智能体工具', icon: markRaw(AppstoreOutlined) },
@@ -943,7 +943,7 @@ function tmplRoute(tmpl) {
 }
 
 function tmplDesc(tmpl) {
-  return tmpl.materialType === 'polymer' ? '聚合物电解质发现' : '晶体材料发现'
+  return tmpl.materialType === 'polymer' ? '改性塑料发现' : '晶体材料发现'
 }
 
 function runProgress(run) {
@@ -1218,8 +1218,8 @@ function onStartMenuClick({ key }) {
     router.push('/workbench')
     return
   }
-  if (key === 'PEO') {
-    router.push({ path: '/workbench', query: { target: 'PEO' } })
+  if (key === 'PA6' || key === 'PC' || key === 'ABS') {
+    router.push({ path: '/workbench', query: { target: key } })
     return
   }
   router.push({ path: '/workbench', query: { formula: key } })

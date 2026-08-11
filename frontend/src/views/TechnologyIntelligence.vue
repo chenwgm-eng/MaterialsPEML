@@ -18,7 +18,7 @@
             <a-input-search
               v-model:value="searchQuery"
               aria-label="搜索材料文献"
-              placeholder="输入关键词搜索材料文献（如 固态电解质、多孔材料、钙钛矿）"
+              placeholder="输入关键词搜索材料文献（如 改性塑料、玻纤增强、阻燃）"
               enter-button="搜索"
               size="large"
               :loading="searching"
@@ -329,7 +329,7 @@ const papers = ref([])
 const graphNodes = ref([])
 const graphEdges = ref([])
 
-const hotKeywords = ['固态电解质', '多孔材料', '钙钛矿', '高熵合金', '催化材料', '复合材料']
+const hotKeywords = ['改性塑料', '玻纤增强', '阻燃', '工程塑料', '增韧改性', '复合材料']
 
 function credibilityClass(score) {
   if (score == null || score <= 0) return 'indicator-weak'

@@ -12,6 +12,14 @@ from ..mdm.reference_dict import ReferenceDictStore
 from .models import ReleaseCard
 
 
+# 放行卡状态迁移图（Q10/审查补强）：draft 可提交或直接裁决，decided 为终态
+RELEASE_CARD_TRANSITIONS: dict[str, set[str]] = {
+    "draft": {"pending", "decided"},
+    "pending": {"decided"},
+    "decided": set(),
+}
+
+
 class ReleaseCardStore:
     """放行卡的 PostgreSQL CRUD 存储。"""
 
@@ -82,6 +90,20 @@ class ReleaseCardStore:
 
     def update(self, card: ReleaseCard) -> ReleaseCard:
         self._validate_card(card)
+        # 状态迁移校验（Q10）：读取 DB 当前状态，非法迁移（如 decided→draft）拒绝
+        with self.engine.connect() as conn:
+            cur_row = conn.execute(
+                text("SELECT status FROM release_card.release_cards WHERE card_id = :card_id"),
+                {"card_id": card.card_id},
+            ).fetchone()
+        if cur_row is None:
+            raise ValueError(f"放行卡 {card.card_id} 不存在")
+        current_status = cur_row[0]
+        allowed = RELEASE_CARD_TRANSITIONS.get(current_status, set())
+        if card.status != current_status and card.status not in allowed:
+            raise ValueError(
+                f"放行卡状态迁移非法：{current_status} → {card.status}（允许: {sorted(allowed) or '终态'}）"
+            )
         with self.engine.begin() as conn:
             conn.execute(
                 text("""UPDATE release_card.release_cards

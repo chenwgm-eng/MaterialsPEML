@@ -26,20 +26,22 @@ export const SCOPE_TO_PREDICTION_TYPE = {
 }
 
 // ===== 工业化侧物料分类（预置默认项，支持通过后端 API 扩展） =====
-// 标签与 utils/enumLabels.js 中 ENUM_LABELS.materialCategory 保持一致
+// value 与 DB mdm.classifications(domain=material) 实际播种值严格对齐
+// （mdm 加载失败时回退到本列表；写入 raw_materials.category 有 FK → 必须用 DB 存在的 code）
+// v4.1 改性塑料领域：基材 + 增强/阻燃/改性助剂体系
 export const DEFAULT_INDUSTRIAL_CATEGORIES = [
-  { value: 'BASE_POLYMER', label: '基材聚合物', color: 'blue' },
-  { value: 'LITHIUM_SALT', label: '锂盐', color: 'purple' },
+  { value: 'BASE_POLYMER', label: '基材', color: 'blue' },
+  { value: 'material.plastic_base', label: '塑料基材', color: 'blue' },
+  { value: 'material.reinforcement', label: '增强填料', color: 'cyan' },
+  { value: 'material.flame_retardant', label: '阻燃剂', color: 'volcano' },
+  { value: 'material.impact_modifier', label: '增韧改性剂', color: 'purple' },
   { value: 'FILLER', label: '填料', color: 'cyan' },
-  { value: 'SOLVENT', label: '溶剂', color: 'green' },
   { value: 'ADDITIVE', label: '添加剂', color: 'orange' },
-  { value: 'ELECTROLYTE', label: '电解质', color: 'geekblue' },
-  { value: 'CATHODE', label: '正极材料', color: 'red' },
-  { value: 'ANODE', label: '负极材料', color: 'volcano' },
-  { value: 'SEPARATOR', label: '隔膜', color: 'gold' },
-  { value: 'CURRENT_COLLECTOR', label: '集流体', color: 'lime' },
+  { value: 'SOLVENT', label: '溶剂(配方)', color: 'green' },
   { value: 'BINDER', label: '粘结剂', color: 'magenta' },
-  { value: 'CONDUCTIVE_AGENT', label: '导电剂', color: 'orange' },
+  { value: 'material.raw_chemical', label: '原料化学品', color: 'geekblue' },
+  { value: 'material.hazardous', label: '危险品', color: 'red' },
+  { value: 'material.standard', label: '标准品', color: 'gold' },
 ]
 
 // 工业化侧物料分类的标签/颜色映射工具函数

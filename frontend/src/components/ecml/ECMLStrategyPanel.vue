@@ -42,7 +42,7 @@
 
         <div class="pool-body">
           <a-form-item label="材料体系" extra="已根据当前目标自动识别，如需调整可直接修改">
-            <a-input v-model:value="materialFamily" placeholder="如 argyrodite硫化物基 Li6PS5X" allow-clear @blur="loadStats" />
+            <a-input v-model:value="materialFamily" placeholder="如 玻纤增强聚丙烯改性体系" allow-clear @blur="loadStats" />
           </a-form-item>
           <div class="pool-stats">
             <template v-if="stats">
@@ -220,11 +220,12 @@ const modelLabel = (k) => ({ gp: '高斯过程', gbt: '梯度提升树', mlp: '�
 // 目标属性业务名（用于告警文案）
 const formTargetPropertyLabel = computed(() => {
   const map = {
-    ionic_conductivity: '离子电导率',
-    band_gap: '带隙',
-    formation_energy: '形成能',
-    stability: '稳定性',
-    energy_above_hull: '能量高于凸包',
+    tensile_strength: '拉伸强度',
+    flexural_modulus: '弯曲模量',
+    impact_strength: '冲击强度',
+    heat_deflection_temp: '热变形温度',
+    melt_flow_index: '熔体流动速率',
+    glass_transition_temp: '玻璃化转变温度',
   }
   return map[props.targetProperty] || props.targetProperty || '目标属性'
 })

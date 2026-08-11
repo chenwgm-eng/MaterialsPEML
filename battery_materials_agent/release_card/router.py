@@ -191,11 +191,22 @@ async def review_release_card(card_id: str, req: ReleaseCardReviewRequest):
                 record.data = cand_data
                 candidate_store.save(record, dedup=False)
         except Exception:
-            # 回写失败不影响审批结果，仅记录日志
+            # Q10 补偿：候选回写失败时回滚卡状态到裁决前，避免"卡已 agree 但候选未解锁"
+            # 的不一致窗口；抛 500 让调用方感知
             import logging
-            logging.getLogger(__name__).warning(
-                "放行卡 %s 审批通过后回写候选 %s 失败",
-                card_id, card.candidate_id, exc_info=True,
+            logging.getLogger(__name__).error(
+                "放行卡 %s 审批通过后回写候选 %s 失败，回滚卡状态", card_id, card.candidate_id, exc_info=True,
+            )
+            try:
+                card.human_responsibility = None
+                card.status = "pending"
+                card.updated_at = now
+                store.update(card)
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=500,
+                detail=f"放行卡审批通过但候选回写失败，卡状态已回滚为待审批，请重试",
             )
 
     return card.model_dump(mode="json")

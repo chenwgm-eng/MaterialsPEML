@@ -4,7 +4,7 @@
       <a-row :gutter="16">
         <a-col :xs="24" :sm="12" :md="6">
           <a-form-item label="目标">
-            <a-input v-model:value="form.target" placeholder="例如 LiCoO2" />
+            <a-input v-model:value="form.target" placeholder="例如 PA6" />
             <div class="template-chips">
               <span class="chip-label">模板：</span>
               <a-tag
@@ -74,19 +74,19 @@
           <div v-for="prop in form.multi_objective_props" :key="prop" class="mo-row">
             <span class="mo-col-prop">{{ multiObjectiveLabel(prop) }}</span>
             <span v-if="!hideObjectiveWeights" class="mo-col-weight">
-              <a-input-number v-model:value="multiObjectiveConfig[prop].weight" :min="0" :max="1" :step="0.1" size="small" style="width: 80px" />
+              <a-input-number v-model:value="moCfg(prop).weight" :min="0" :max="1" :step="0.1" size="small" style="width: 80px" />
             </span>
             <span class="mo-col-dir">
-              <a-select v-model:value="multiObjectiveConfig[prop].direction" size="small" style="width: 100px">
+              <a-select v-model:value="moCfg(prop).direction" size="small" style="width: 100px">
                 <a-select-option value="maximize">最大化</a-select-option>
                 <a-select-option value="minimize">最小化</a-select-option>
               </a-select>
             </span>
             <span class="mo-col-min">
-              <a-input-number v-model:value="multiObjectiveConfig[prop].min" size="small" style="width: 100px" placeholder="无" />
+              <a-input-number v-model:value="moCfg(prop).min" size="small" style="width: 100px" placeholder="无" />
             </span>
             <span class="mo-col-max">
-              <a-input-number v-model:value="multiObjectiveConfig[prop].max" size="small" style="width: 100px" placeholder="无" />
+              <a-input-number v-model:value="moCfg(prop).max" size="small" style="width: 100px" placeholder="无" />
             </span>
           </div>
         </div>
@@ -117,11 +117,19 @@ const props = defineProps({
 const emit = defineEmits(['run', 'cancel', 'run-again'])
 
 // 模板列表
-const targetTemplates = ['LiCoO2', 'LiFePO4', 'polymer electrolyte PEO']
+const targetTemplates = ['PA6', 'PC', 'ABS']
 
 function multiObjectiveLabel(key) {
   const opt = props.multiObjectiveOptions.find((o) => o.value === key)
   return opt ? opt.label : key
+}
+
+// 多目标配置访问兜底：历史表单（v4.0 电池期）恢复的旧属性 key 不在配置中时返回默认值，避免 v-model 绑定 undefined
+function moCfg(prop) {
+  if (!props.multiObjectiveConfig[prop]) {
+    props.multiObjectiveConfig[prop] = { weight: 0.2, direction: 'maximize', min: null, max: null }
+  }
+  return props.multiObjectiveConfig[prop]
 }
 
 // 单/多目标切换：显式同步 form.optimize_mode

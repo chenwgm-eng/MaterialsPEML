@@ -85,21 +85,21 @@
           <div class="card-subtitle">{{ getSubtitle(item) }}</div>
           <!-- 关键属性 -->
           <div class="card-metrics">
-            <span v-if="item.band_gap != null" class="metric">
-              <span class="metric-label">带隙</span>
-              <span class="metric-value"><ScientificNotation :value="item.band_gap" :precision="3" :unit="energyUnit" /></span>
+            <span v-if="item.tensile_strength != null" class="metric">
+              <span class="metric-label">拉伸强度</span>
+              <span class="metric-value">{{ Number(item.tensile_strength).toFixed(1) }} MPa</span>
             </span>
-            <span v-if="item.formation_energy != null" class="metric">
-              <span class="metric-label">形成能</span>
-              <span class="metric-value"><ScientificNotation :value="item.formation_energy" :precision="3" :unit="energyPerAtomUnit" /></span>
+            <span v-if="item.flexural_modulus != null" class="metric">
+              <span class="metric-label">弯曲模量</span>
+              <span class="metric-value">{{ Number(item.flexural_modulus).toFixed(0) }} MPa</span>
             </span>
-            <span v-if="item.predicted_ionic_conductivity != null" class="metric">
-              <span class="metric-label">电导率</span>
-              <span class="metric-value"><ScientificNotation :value="item.predicted_ionic_conductivity" :precision="2" :unit="condUnit" /></span>
+            <span v-if="item.impact_strength != null" class="metric">
+              <span class="metric-label">冲击强度</span>
+              <span class="metric-value">{{ Number(item.impact_strength).toFixed(1) }} kJ/m²</span>
             </span>
-            <span v-if="item.ionic_conductivity_estimate != null" class="metric">
-              <span class="metric-label">电导率</span>
-              <span class="metric-value"><ScientificNotation :value="item.ionic_conductivity_estimate" :precision="2" :unit="condUnit" /></span>
+            <span v-if="item.heat_deflection_temp != null" class="metric">
+              <span class="metric-label">热变形温度</span>
+              <span class="metric-value">{{ Number(item.heat_deflection_temp).toFixed(0) }} °C</span>
             </span>
           </div>
           <!-- 需求7：三点状态指示（预测/合成/验证） -->
@@ -166,9 +166,10 @@ const hoveredId = ref('')
 
 const sortOptions = [
   { value: 'score', label: '综合评分' },
-  { value: 'band_gap', label: '带隙' },
-  { value: 'formation_energy', label: '形成能' },
-  { value: 'conductivity', label: '电导率' },
+  { value: 'tensile_strength', label: '拉伸强度' },
+  { value: 'flexural_modulus', label: '弯曲模量' },
+  { value: 'impact_strength', label: '冲击强度' },
+  { value: 'heat_deflection_temp', label: '热变形温度' },
 ]
 
 const thumbKind = computed(() => (props.type === 'polymer' ? 'molecule' : 'crystal'))
@@ -190,23 +191,23 @@ const sortedCandidates = computed(() => {
 
   // 排序
   const getScore = (c) => c.multi_objective_score ?? 0
-  const getBandGap = (c) => c.band_gap ?? -Infinity
-  const getFormE = (c) => c.formation_energy ?? Infinity
-  const getCond = (c) =>
-    c.predicted_ionic_conductivity ?? c.ionic_conductivity_estimate ?? -Infinity
+  const getNum = (c, k) => (c[k] != null ? Number(c[k]) : -Infinity)
 
   switch (sortBy.value) {
     case 'score':
       list.sort((a, b) => getScore(b) - getScore(a))
       break
-    case 'band_gap':
-      list.sort((a, b) => getBandGap(b) - getBandGap(a))
+    case 'tensile_strength':
+      list.sort((a, b) => getNum(b, 'tensile_strength') - getNum(a, 'tensile_strength'))
       break
-    case 'formation_energy':
-      list.sort((a, b) => getFormE(a) - getFormE(b))
+    case 'flexural_modulus':
+      list.sort((a, b) => getNum(b, 'flexural_modulus') - getNum(a, 'flexural_modulus'))
       break
-    case 'conductivity':
-      list.sort((a, b) => getCond(b) - getCond(a))
+    case 'impact_strength':
+      list.sort((a, b) => getNum(b, 'impact_strength') - getNum(a, 'impact_strength'))
+      break
+    case 'heat_deflection_temp':
+      list.sort((a, b) => getNum(b, 'heat_deflection_temp') - getNum(a, 'heat_deflection_temp'))
       break
   }
 

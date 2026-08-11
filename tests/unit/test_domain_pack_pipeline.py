@@ -68,9 +68,10 @@ def test_resolver_builtin_polymer_and_molecule():
         "predict_polymer_properties", "design_formula", "compliance_check",
     ]
     mol = [s.action for s in res.resolve("molecule")]
+    # v4.1：molecule 流水线改用 predict_polymer_properties（晶体预测器对分子无意义）
     assert mol == [
         "route_material", "generate_polymer_candidates",
-        "check_synthesis_feasibility", "predict_crystal_properties", "compliance_check",
+        "check_synthesis_feasibility", "predict_polymer_properties", "compliance_check",
     ]
 
 

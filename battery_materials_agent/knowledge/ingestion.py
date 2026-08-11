@@ -41,40 +41,44 @@ logger = logging.getLogger(__name__)
 # 实体抽取（复用并精简 LiteratureResearcherAgent 的关键词表）
 # ─────────────────────────────────────────────────────────────────────────────
 
-# 常见材料类别 → 关键词集合（含电解质/电极/隔膜等电化学储能领域）
+# 常见材料类别 → 关键词集合（v4.1：全系统切换改性塑料领域）
 MATERIAL_PATTERNS: dict[str, list[str]] = {
-    "固态电解质": [
-        "LLZO", "LLZTO", "LLTO", "LATP", "LAGP", "LPSC", "LGPS",
-        "Li7La3Zr2O12", "Li6PS5Cl", "Li10GeP2S12", "garnet",
-        "sulfide electrolyte", "oxide electrolyte", "polymer electrolyte",
+    "改性塑料基材": [
+        "polypropylene", "PP", "polyamide", "PA6", "PA66", "polycarbonate",
+        "ABS", "PBT", "PET", "POM", "HDPE", "polystyrene", "HIPS",
     ],
-    "正极材料": [
-        "NCM", "NCA", "LFP", "LiFePO4", "LiCoO2", "LCO", "NCM811", "NCM622",
-        "NCM523", "LiNi0.8Co0.1Mn0.1O2", "Li-rich", "LNMO",
+    "工程塑料": [
+        "LCP", "PPS", "PPSU", "PEEK", "liquid crystal polymer",
+        "polyphenylene sulfide", "polyphenylsulfone", "聚醚醚酮",
     ],
-    "负极材料": [
-        "graphite", "silicon", "Si/C", "lithium metal", "Li metal",
-        "hard carbon", "soft carbon", "LTO", "Li4Ti5O12",
+    "生物降解塑料": [
+        "PLA", "PBAT", "PHA", "PCL", "polylactic acid",
+        "poly(butylene adipate-co-terephthalate)", "生物降解",
     ],
-    "隔膜": [
-        "PP", "PE", "polypropylene", "polyethylene", "ceramic separator",
+    "增强改性": [
+        "glass fiber", "carbon fiber", "GF30", "CF20", "talc",
+        "玻纤", "碳纤", "滑石粉", "阻燃", "flame retardant", "UL94",
     ],
-    "电解液": [
-        "LiPF6", "LiFSI", "LiTFSI", "EC", "DEC", "DMC", "EMC", "FEC", "VC",
+    "特种改性体系": [
+        "碳纤维复合材料", "低空经济", "人形机器人", "耐候改性",
+        "无卤阻燃", "增韧改性", "抗UV",
     ],
 }
 
 PROPERTY_KEYWORDS: list[str] = [
-    "ionic conductivity", "ion conductivity", "电导率", "离子电导率",
-    "cycle life", "cycling stability", "循环", "循环寿命",
-    "capacity", "容量", "比容量",
-    "coulombic efficiency", "库伦效率", "CE",
-    "rate capability", "倍率",
-    "energy density", "能量密度",
+    "tensile strength", "拉伸强度",
+    "flexural modulus", "弯曲模量", "弯曲强度",
+    "impact strength", "冲击强度",
+    "heat deflection temperature", "热变形温度", "HDT",
+    "vicat softening", "维卡",
+    "melt flow index", "熔融指数", "MFI",
+    "flame retardancy", "阻燃等级", "UL94",
     "thermal stability", "热稳定性",
-    "dendrite", "枝晶",
-    "interfacial resistance", "界面阻抗",
-    "electrochemical window", "电化学窗口",
+    "elongation at break", "断裂伸长率",
+    "glass transition", "玻璃化转变", "Tg",
+    "crystallinity", "结晶度",
+    "biodegradation", "生物降解",
+    "老化", "aging", "耐候", "weathering",
 ]
 
 METHOD_KEYWORDS: list[str] = [

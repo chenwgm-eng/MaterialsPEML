@@ -76,12 +76,14 @@ class TestPolymerPropertyPredictor:
     def setup_method(self):
         self.predictor = PolymerPropertyPredictor(model_type="polymernn")
 
-    def test_predict_ionic_conductivity(self):
-        result = self.predictor.predict({"psmiles": "Polymer([*]CCO[*])"}, "ionic_conductivity")
+    def test_predict_tensile_strength(self):
+        result = self.predictor.predict({"psmiles": "Polymer([*]CC(C)[*])"}, "tensile_strength")
         assert isinstance(result, PolymerPredictionResult)
-        assert result.property_name == "ionic_conductivity"
-        # v4.0: 实际模型可能回退到 descriptor_linear
-        assert result.model in ("polymernn", "descriptor_linear", "mattersim")
+        assert result.property_name == "tensile_strength"
+        assert result.unit == "MPa"
+        # v4.1（ADR-0001）：启发式路径统一标注 descriptor_heuristic，confidence 有上限
+        assert result.model in ("polymernn", "descriptor_heuristic", "mattersim")
+        assert result.confidence <= 0.5
 
     def test_predict_glass_transition(self):
         result = self.predictor.predict({"psmiles": "Polymer([*]CCO[*])"}, "glass_transition_temp")
@@ -90,31 +92,34 @@ class TestPolymerPropertyPredictor:
     def test_predict_unsupported(self):
         with pytest.raises(ValueError):
             self.predictor.predict({}, "unsupported_property")
+        # v4.1：电池时代属性（离子电导率）已从高分子预测能力移除
+        with pytest.raises(ValueError):
+            self.predictor.predict({"psmiles": "Polymer([*]CCO[*])"}, "ionic_conductivity")
 
     def test_predict_batch(self):
         features_list = [{"psmiles": "p1"}, {"psmiles": "p2"}]
-        results = self.predictor.predict_batch(features_list, "ionic_conductivity")
+        results = self.predictor.predict_batch(features_list, "tensile_strength")
         assert len(results) == 2
 
     def test_top_k(self):
         results = [
-            PolymerPredictionResult(property_name="ionic_conductivity", value=3.0),
-            PolymerPredictionResult(property_name="ionic_conductivity", value=1.0),
+            PolymerPredictionResult(property_name="tensile_strength", value=3.0),
+            PolymerPredictionResult(property_name="tensile_strength", value=1.0),
         ]
         top = self.predictor.top_k(results, k=1)
         assert len(top) == 1
 
     def test_descriptor_model(self):
         predictor = PolymerPropertyPredictor(model_type="descriptor")
-        result = predictor.predict({}, "ionic_conductivity")
-        # v4.0: 描述符路径返回 descriptor_linear
-        assert result.model in ("descriptor", "descriptor_linear")
+        result = predictor.predict({}, "tensile_strength")
+        # v4.1（ADR-0001）：描述符路径统一为 descriptor_heuristic
+        assert result.model in ("descriptor", "descriptor_heuristic")
 
     def test_mattersim_model(self):
         predictor = PolymerPropertyPredictor(model_type="mattersim")
-        result = predictor.predict({}, "ionic_conductivity")
-        # v4.0: mattersim 不可用时回退到 descriptor_linear
-        assert result.model in ("mattersim", "descriptor_linear")
+        result = predictor.predict({}, "tensile_strength")
+        # v4.1（ADR-0001）：mattersim 不可用时回退到 descriptor_heuristic
+        assert result.model in ("mattersim", "descriptor_heuristic")
 
     def test_invalid_model(self):
         predictor = PolymerPropertyPredictor(model_type="invalid")

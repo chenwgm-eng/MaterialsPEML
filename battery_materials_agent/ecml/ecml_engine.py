@@ -620,7 +620,8 @@ class ECMLEngine:
                  committee_coordinator=None,
                  run_manager=None,
                  tool_gateway=None,
-                 candidate_store=None):
+                 candidate_store=None,
+                 domain_thresholds: dict | None = None):
         self.router = router
         self.generator = generator  # 晶体生成器
         self.polymer_generator = polymer_generator  # 聚合物生成器
@@ -636,6 +637,8 @@ class ECMLEngine:
         self.compliance_node = compliance_node
         self.feasibility_screener = feasibility_screener
         self.approval_engine = approval_engine
+        # v4.1：领域包覆盖的达标阈值（ADR-0003 配套，企业可按自家规格覆盖默认值）
+        self._domain_thresholds: dict = dict(domain_thresholds or {})
         self._llm_provider = llm_provider
         self._committee_coordinator = committee_coordinator  # lazy-init if None
         # Mirror attribute (without underscore) used by steps 3/4/5/7 trigger checks.
@@ -712,8 +715,9 @@ class ECMLEngine:
         决策 7-A：通过 AgentProxy 解析绑定关系（注入时），未注入时回退到 _STEP_AGENT_MAP。
         """
         started = time.monotonic()
-        # 决策 3-C：解析本次步骤的智能体+工具绑定
-        agent_binding_info = self._resolve_agent_binding_for_step(step_name)
+        # 决策 3-C：解析本次步骤的智能体+工具绑定（v4.1 按材料分支修正工具展示名）
+        agent_binding_info = self._resolve_agent_binding_for_step(
+            step_name, getattr(state, "material_branch", "") or "")
         try:
             new_state = fn(state, *args)
         except Exception:
@@ -743,15 +747,28 @@ class ECMLEngine:
                 last_step["agent_binding"] = agent_binding_info
         return new_state
 
-    def _resolve_agent_binding_for_step(self, step_name: str) -> dict:
+    def _resolve_agent_binding_for_step(self, step_name: str,
+                                        branch: str = "") -> dict:
         """决策 3-C：解析步骤的智能体+工具绑定信息。
 
         通过 AgentProxy 查询 activity_id 对应的智能体和主工具绑定。
+        v4.1：polymer 分支下 generate/predict 步骤按实际执行工具展示
+        （generate_polymer_candidates / predict_polymer_properties），
+        避免事件日志显示晶体工具名与实际执行不一致。
         """
         mapping = self._STEP_AGENT_MAP.get(step_name)
         if not mapping:
             return {}
         agent_id, agent_name, activity_id = mapping
+
+        # 按分支修正工具 id：DB 绑定表仅配置了晶体工具（历史遗留），
+        # polymer 分支实际执行聚合物工具，展示需与执行一致
+        is_polymer = "polymer" in (branch or "").lower()
+        _BRANCH_TOOL_OVERRIDE = {
+            ("step2_generate", True): ("generate_polymer_candidates", "聚合物候选生成"),
+            ("step4_predict", True): ("predict_polymer_properties", "聚合物性质预测"),
+        }
+        override = _BRANCH_TOOL_OVERRIDE.get((step_name, is_polymer))
 
         binding_info = {
             "agent_id": agent_id,
@@ -762,6 +779,12 @@ class ECMLEngine:
             "capability": "",
             "used_fallback": False,
         }
+
+        if override:
+            binding_info["tool_id"] = override[0]
+            binding_info["tool_name"] = override[1]
+            binding_info["used_fallback"] = True
+            return binding_info
 
         if self._agent_proxy is None:
             return binding_info
@@ -786,7 +809,7 @@ class ECMLEngine:
 
         return binding_info
 
-    def run(self, target: str, target_property: str = "ionic_conductivity",
+    def run(self, target: str, target_property: str = "tensile_strength",
             max_iterations: int = 3, run_id: str = "",
             target_properties: list[dict] | None = None,
             parent_run_id: str = "",
@@ -1112,13 +1135,16 @@ class ECMLEngine:
                     poly_props: dict | list = state.target_properties
                 else:
                     poly_props = {"target_property": state.target_property}
+                # v4.1：把目标/体系名透传给生成器，触发工程塑料模式（否则回退电池电解质候选）
+                material_system = state.target or "改性塑料"
                 candidates = self.polymer_generator.generate(
                     target_properties=poly_props,
                     num_candidates=num_candidates,
+                    material_system=material_system,
                 )
                 state.candidates = [c.model_dump() for c in candidates]
             except Exception as e:
-                state.candidates = [{"name": "PEO", "psmiles": "[*]CCO[*]", "source": "demo", "error": str(e)}]
+                state.candidates = [{"name": "PA6", "psmiles": "[*]CCCCC(=O)N[*]", "source": "demo", "error": str(e)}]
         elif self.generator is not None:
             try:
                 # 多目标优先：target_properties 非空时传 list 触发加权评分
@@ -1137,7 +1163,7 @@ class ECMLEngine:
                 state.candidates = [c.model_dump() for c in candidates]
             except Exception as e:
                 logger.warning("ECML _step2_generate: generator 调用异常: %s", e)
-                state.candidates = [{"formula": "LiCoO2", "source": "demo", "error": str(e)}]
+                state.candidates = [{"formula": "NaCl", "source": "demo", "error": str(e)}]
 
             # 降级：generator 返回空列表时（MP/GNoME 不可用或无匹配），调用 InternLM 生成候选
             if not state.candidates:
@@ -1149,7 +1175,7 @@ class ECMLEngine:
                 else:
                     logger.warning("ECML _step2_generate: InternLM 降级生成也失败，候选为空")
         else:
-            state.candidates = [{"formula": "LiCoO2", "source": "demo"}]
+            state.candidates = [{"formula": "NaCl", "source": "demo"}]
 
         # P0-4：把 formula_validator.assess_candidate_quality 提前到入口
         # 对每个候选做化学式/SMILES 合法性 + 元素约束校验，剔除 invalid 候选
@@ -1251,8 +1277,8 @@ class ECMLEngine:
             return []
 
         # 构建 prompt：基于研发目标和约束让 LLM 推荐候选材料
-        target_desc = state.target or "高离子电导率固态电解质"
-        prop_desc = state.target_property or "ionic_conductivity"
+        target_desc = state.target or "高冲击强度玻纤增强PA6"
+        prop_desc = state.target_property or "tensile_strength"
 
         parts = [f"研发目标：{target_desc}"]
         parts.append(f"目标属性：{prop_desc}（需最大化）")
@@ -1878,9 +1904,9 @@ class ECMLEngine:
                             "psmiles": c.get("psmiles", ""),
                             "formula": c.get("name") or c.get("formula", ""),
                         })
-                    # 聚合物预测器支持的属性集合，避免 ValueError
+                    # 聚合物预测器支持的属性集合，避免 ValueError（v4.1 默认回退高分子属性）
                     poly_supported = getattr(self.polymer_predictor, "PREDICTABLE_PROPERTIES", None)
-                    poly_prop = state.target_property if (not poly_supported or state.target_property in poly_supported) else "ionic_conductivity"
+                    poly_prop = state.target_property if (not poly_supported or state.target_property in poly_supported) else "tensile_strength"
                     results = self.polymer_predictor.predict_batch(features_list, poly_prop)
                 except Exception as e:
                     state.status = "degraded"
@@ -2055,13 +2081,14 @@ class ECMLEngine:
                         logger.debug("descriptor extraction failed for %s: %s", monomer_smiles, e)
 
                 prompt = (
-                    f"You are a battery materials expert. Predict the {target_property} "
+                    f"You are a polymer materials expert. Predict the {target_property} "
                     f"for the following polymer material.\n"
                     f"PSMILES/SMILES: {identifier}\n"
                     f"Monomer SMILES: {monomer_smiles}{descriptor_text}\n\n"
-                    f"Context: This is for a battery R&D project. {target_property} should be "
-                    f"a physically reasonable value (e.g., ionic_conductivity typically "
-                    f"ranges 1e-6 to 1e-3 S/cm for solid electrolytes; band_gap 0.5-8 eV).\n"
+                    f"Context: This is for an engineering plastics R&D project. {target_property} should be "
+                    f"a physically reasonable value (e.g., tensile_strength typically 20-300 MPa, "
+                    f"flexural_modulus 1500-20000 MPa, impact_strength 2-80 kJ/m2, "
+                    f"heat_deflection_temp 60-300 C).\n"
                     f"Return ONLY a JSON object: {{\"value\": float, \"unit\": str, "
                     f"\"confidence\": float, \"reasoning\": str}}. No other text."
                 )
@@ -2082,11 +2109,10 @@ class ECMLEngine:
                 context_text = "\n".join(context_parts)
 
                 prompt = (
-                    f"You are a battery materials expert. Predict the {target_property} "
+                    f"You are a polymer materials expert. Predict the {target_property} "
                     f"for the following crystal material.\n{context_text}\n\n"
-                    f"Context: This is for a battery R&D project. {target_property} should be "
-                    f"a physically reasonable value (e.g., ionic_conductivity typically "
-                    f"ranges 1e-6 to 1e-3 S/cm for solid electrolytes; band_gap 0.5-8 eV; "
+                    f"Context: This is for a crystal materials R&D project. {target_property} should be "
+                    f"a physically reasonable value (e.g., band_gap 0.5-8 eV; "
                     f"formation_energy -5 to 2 eV/atom).\n"
                     f"Return ONLY a JSON object: {{\"value\": float, \"unit\": str, "
                     f"\"confidence\": float, \"reasoning\": str}}. No other text."
@@ -2192,19 +2218,26 @@ class ECMLEngine:
         return results
 
     def _step5_verify(self, state: ECMLState) -> ECMLState:
-        """按材料类型分发验证：聚合物走 DFT，晶体跳过（DFTVerifier 基于 RDKit 不适用无机）。"""
+        """按材料类型分发验证：DFT 验证基于 RDKit，仅对有机分子适用。
+
+        v4.1：聚合物（含工程塑料）候选不做 DFT 单点验证（DFTVerifier 面向分子，
+        对高分子无意义且 target_property 不被支持），直接保留预测值。
+        """
         state.current_step = ECMLStep.STEP5_VERIFY
         if not state.predictions:
             state.verified = []
             state.history.append({"step": "verify", "count": 0})
             return state
 
+        branch = state.material_branch or "crystal_branch"
+        is_polymer = "polymer" in branch.lower()
         verified: list[dict] = []
         for pred in state.predictions[:3]:
             material_type = pred.get("material_type", "crystal")
             smiles = pred.get("smiles", "")
-            # 仅对带 SMILES 的（聚合物或有机分子）调用 DFT 验证
-            if self.verifier is not None and material_type == "polymer" and smiles:
+            # 仅对非 polymer 分支且带 SMILES 的（有机分子）调用 DFT 验证
+            if (self.verifier is not None and not is_polymer
+                    and material_type == "polymer" and smiles):
                 try:
                     result = self.verifier.verify_single_point(smiles, state.target_property or "total_energy")
                     verified_item = dict(pred)
@@ -2217,7 +2250,7 @@ class ECMLEngine:
                     continue
                 except Exception as e:
                     state.history.append({"step": "verify_warning", "error": str(e)})
-            # 晶体或 DFT 失败：保留预测值，标记为 predicted_only
+            # 晶体/聚合物或 DFT 失败：保留预测值，标记为 predicted_only
             verified_item = dict(pred)
             verified_item["verification_method"] = "predicted_only"
             verified_item["verification_value"] = pred.get("value", 0.0)
@@ -2263,7 +2296,7 @@ class ECMLEngine:
         if self.experiment_controller is not None and state.verified:
             try:
                 from ..experiment.experiment_controller import (
-                    ExperimentType, ExperimentOrder,
+                    ExperimentOrder,
                 )
                 for candidate in state.verified[:2]:
                     formula = candidate.get("formula") or candidate.get("smiles", "")
@@ -2290,7 +2323,7 @@ class ECMLEngine:
 
                     result = self.experiment_controller.execute_experiment(
                         {"formula": formula, "candidate_id": candidate_id, "order_id": order_id},
-                        ExperimentType.IONIC_CONDUCTIVITY,
+                        self._experiment_type_for_branch(state.material_branch or ""),
                     )
                     result_dict = result.model_dump() if hasattr(result, "model_dump") else result
                     result_dict["candidate_id"] = candidate_id
@@ -2312,13 +2345,18 @@ class ECMLEngine:
                     state.experiment_results.append(result_dict)
 
                     # Attach provenance to experiment results
-                    # Task 16：实验测量值 evidence_level="measured"，source_type="local_db"
+                    # ADR-0002：模拟值（demo 模式）evidence_level="simulated"，不得标 measured
+                    is_sim_run = (
+                        self.experiment_controller is not None
+                        and self.experiment_controller.run_mode != "production"
+                    )
                     if "provenance" not in result_dict:
                         result_dict["provenance"] = [{
-                            "source_type": "local_db",
-                            "provider": "local_db",
-                            "model_or_tool": "experiment_controller",
-                            "evidence_level": "measured",
+                            "source_type": "simulation" if is_sim_run else "local_db",
+                            "provider": "simulation_engine" if is_sim_run else "local_db",
+                            "model_or_tool": "ecml_experiment_controller" if is_sim_run else "experiment_controller",
+                            "evidence_level": "simulated" if is_sim_run else "measured",
+                            "note": "ECML 闭环确定性伪随机模拟值" if is_sim_run else "",
                         }]
 
                     # 写入 experiment.experiment_result_records（替代 middleware.ingest_record）。
@@ -2354,6 +2392,13 @@ class ECMLEngine:
         state.history.append({"step": "experiment", "count": len(state.experiment_results)})
         return state
 
+    def _experiment_type_for_branch(self, branch: str):
+        """按材料分支选择模拟实验类型（v4.1 高分子分支走力学/热学测试）。"""
+        from ..experiment.experiment_controller import ExperimentType
+        if "polymer" in (branch or "").lower():
+            return ExperimentType.TENSILE
+        return ExperimentType.IONIC_CONDUCTIVITY
+
     def _save_ecml_result_records(
         self,
         result_dict: dict,
@@ -2375,6 +2420,21 @@ class ECMLEngine:
         measured = result_dict.get("measured_values", {}) or {}
         units = result_dict.get("units", {}) or {}
         experiment_type = result_dict.get("experiment_type", "ionic_conductivity")
+        # v4.1：模拟实验类型 → 标准检测方法（test_method 列 FK → mdm.test_methods）
+        _EXP_TYPE_TO_METHOD = {
+            "tensile": "method.gbt_1040",
+            "flexural": "method.gbt_9341",
+            "impact": "method.gbt_1843",
+            "hdt": "method.gbt_1634",
+            "mfi": "method.gbt_3682",
+            "dsc": "method.dsc",
+            "tga": "method.tga",
+            "xrd": "method.xrd",
+            "sem": "method.sem",
+            "eis": "method.eis",
+            "ionic_conductivity": "method.eis",
+        }
+        test_method = _EXP_TYPE_TO_METHOD.get(experiment_type, "") or ""
         uploaded_at = datetime.now(timezone.utc).isoformat()
         run_id_suffix = (result_dict.get("run_id") or "")[:8]
         for prop_name, value in measured.items():
@@ -2384,6 +2444,20 @@ class ECMLEngine:
                 value_float = float(value)
             except (TypeError, ValueError):
                 continue
+            # v4.1：模拟测量值 key 带单位后缀（如 tensile_strength_MPa），
+            # property_name 列有 FK → mdm.properties.property_id，先剥离后缀映射到 prop.*；
+            # 无对应主数据时跳过该条（避免 FK 500 静默失败污染历史）
+            from ..api import _PROPERTY_ALIASES
+            canonical = prop_name
+            for suffix in ("_MPa", "_pct", "_percent", "_C", "_g_10min", "_kJ_m2", "_ohm", "_V", "_eV", "_K", "_m2_g", "_nm", "_deg", "_J_g"):
+                if canonical.endswith(suffix):
+                    canonical = canonical[: -len(suffix)]
+                    break
+            if not canonical.startswith("prop.") and canonical not in _PROPERTY_ALIASES:
+                logger.debug("跳过无 MDM 主数据的模拟测量值: %s", prop_name)
+                continue
+            # ADR-0002：demo 模拟值以 simulated 身份落库——不进学习池、不得标 measured
+            is_simulation = self.experiment_controller is not None and self.experiment_controller.run_mode != "production"
             record = ExperimentResultRecord(
                 result_id=f"REC-ECML-{run_id_suffix}-{iteration}-{prop_name}",
                 experiment_order_id=order_id,
@@ -2393,10 +2467,10 @@ class ECMLEngine:
                 source_system=source_system,
                 uploaded_by=uploaded_by,
                 uploaded_at=uploaded_at,
-                property_name=prop_name,
+                property_name=canonical,
                 value=value_float,
                 unit=units.get(prop_name, ""),
-                test_method=experiment_type,
+                test_method=test_method,
                 test_conditions={"iteration": iteration, "target_property": target_property},
                 instrument_id="",
                 raw_file_uri="",
@@ -2404,8 +2478,16 @@ class ECMLEngine:
                 qc_issues=[],
                 reviewed_by=uploaded_by,
                 reviewed_at=uploaded_at,
-                learning_eligible=True,
+                learning_eligible=not is_simulation,
                 scenario_id=scenario_id,
+                data_quality="simulated" if is_simulation else "verified",
+                provenance=[{
+                    "source_type": "simulation" if is_simulation else "measured",
+                    "provider": "simulation_engine" if is_simulation else "local_db",
+                    "model_or_tool": "ecml_experiment_controller" if is_simulation else "experiment_controller",
+                    "evidence_level": "simulated" if is_simulation else "measured",
+                    "note": "ECML 闭环确定性伪随机模拟值，未经验证" if is_simulation else "ECML 闭环实测录入",
+                }],
             )
             store.save_result_record(record)
 
@@ -2578,15 +2660,31 @@ class ECMLEngine:
         return state
 
     def _get_target_threshold(self, target_property: str) -> float:
-        """各属性的目标阈值（用于判断是否需要扩大搜索）。"""
+        """各属性的目标阈值（用于判断是否需要扩大搜索）。
+
+        来源：工程塑料常见规格参考区间（CAMPUS 塑料数据库 / GB-T 1040、9341、1843、1634）；
+        领域包 `target_thresholds` 可覆盖（企业按自家规格调整）。
+        """
         thresholds = {
+            # 电池时代属性（crystal 分支兼容）
             "ionic_conductivity": 1e-3,  # S/cm
             "band_gap": 1.0,  # eV
             "formation_energy": -0.5,  # eV/atom
             "electrochemical_window": 4.0,  # V
             "theoretical_capacity": 150.0,  # mAh/g
             "operating_voltage": 3.0,  # V
+            # v4.1 改性塑料：高分子工程性能阈值（工程塑料常见规格）
+            "tensile_strength": 100.0,  # MPa（玻纤增强工程塑料典型下限）
+            "flexural_modulus": 6000.0,  # MPa（GF 增强典型下限）
+            "impact_strength": 15.0,  # kJ/m2（缺口冲击，汽车件典型）
+            "heat_deflection_temp": 130.0,  # C（HDT/A 载荷，耐热件典型）
+            "melt_flow_index": 15.0,  # g/10min（注塑级典型）
+            "elongation_at_break": 50.0,  # %（韧性材料典型）
+            "thermal_stability": 300.0,  # C（TGA 5% 失重）
+            "glass_transition_temp": 120.0,  # C（非晶工程塑料典型）
         }
+        if target_property in self._domain_thresholds:
+            return float(self._domain_thresholds[target_property])
         return thresholds.get(target_property, 0.5)
 
     def _maybe_trigger_external_evidence_committee(self, state, report, candidates):

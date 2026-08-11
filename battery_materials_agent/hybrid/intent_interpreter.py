@@ -24,10 +24,14 @@ class RiskAssessment(BaseModel):
 
 # 关键词 → material_type 映射（按优先级排序：先匹配 crystal/polymer，再匹配 molecule）
 # 固态电解质/硫化物/氧化物/卤化物等无机晶体体系均归为 crystal，避免误判为聚合物。
+# v4.1 改性塑料：工程塑料缩写/体系名/改性词归为 polymer
 _MATERIAL_KEYWORDS: list[tuple[list[str], str]] = [
     (["硫化物", "sulfide", "固态电解质", "solid electrolyte", "氧化物", "oxide",
       "卤化物", "halide", "晶体", "crystal", "陶瓷", "ceramic"], "crystal"),
-    (["聚合物", "polymer"], "polymer"),
+    (["聚合物", "polymer", "塑料", "树脂", "pa6", "pa66", "尼龙", "聚酰胺",
+      "聚碳酸酯", "聚丙烯", "聚乙烯", "聚苯乙烯", "聚酯", "abs", "pc",
+      "pp", "pbt", "pet", "pom", "pps", "peek", "tpu", "eva", "pla",
+      "pbat", "玻纤", "碳纤", "玻璃纤维", "碳纤维", "阻燃", "增韧", "改性"], "polymer"),
     (["电解液", "electrolyte", "分子", "molecule"], "molecule"),
 ]
 
@@ -44,7 +48,26 @@ _ELEMENT_CN_TO_SYMBOL: dict[str, str] = {
 }
 
 # 属性名（中文/英文）→ 内部属性 key 映射
+# v4.1 改性塑料领域：高分子工程性能优先，电池属性保留兼容历史任务描述
 _PROPERTY_ALIAS_TO_KEY: dict[str, str] = {
+    "拉伸强度": "tensile_strength",
+    "tensile_strength": "tensile_strength",
+    "弯曲模量": "flexural_modulus",
+    "flexural_modulus": "flexural_modulus",
+    "冲击强度": "impact_strength",
+    "impact_strength": "impact_strength",
+    "热变形温度": "heat_deflection_temp",
+    "heat_deflection_temp": "heat_deflection_temp",
+    "熔体流动速率": "melt_flow_index",
+    "melt_flow_index": "melt_flow_index",
+    "断裂伸长率": "elongation_at_break",
+    "elongation_at_break": "elongation_at_break",
+    "热稳定": "thermal_stability",
+    "thermal_stability": "thermal_stability",
+    "结晶度": "crystallinity",
+    "crystallinity": "crystallinity",
+    "玻璃化转变温度": "glass_transition_temp",
+    "glass_transition_temp": "glass_transition_temp",
     "离子电导率": "ionic_conductivity",
     "ionic_conductivity": "ionic_conductivity",
     "电子电导率": "electronic_conductivity",
@@ -63,6 +86,15 @@ _PROPERTY_ALIAS_TO_KEY: dict[str, str] = {
 
 # 属性默认方向
 _PROPERTY_DEFAULT_DIRECTION: dict[str, str] = {
+    "tensile_strength": "maximize",
+    "flexural_modulus": "maximize",
+    "impact_strength": "maximize",
+    "heat_deflection_temp": "maximize",
+    "melt_flow_index": "maximize",
+    "elongation_at_break": "maximize",
+    "thermal_stability": "maximize",
+    "crystallinity": "maximize",
+    "glass_transition_temp": "maximize",
     "ionic_conductivity": "maximize",
     "electronic_conductivity": "maximize",
     "band_gap": "maximize",
@@ -91,12 +123,16 @@ _RE_REQUIRE_ELEMENTS = re.compile(
     r"(?<!不)(?:含|包含|含有|需要)\s*(" + _ELEMENT_PATTERN + r"(?:[、,，\s]+" + _ELEMENT_PATTERN + r")*)"
 )
 
-# 匹配 "离子电导率>1e-3" / "离子电导率≥1e-3" / "ionic_conductivity > 1e-3"
+# 匹配 "拉伸强度>80MPa" / "离子电导率>1e-3" / "ionic_conductivity > 1e-3"
 # 属性名 + 比较符 + 数值（支持科学计数法）
+# v4.1：高分子工程性能 + 电池属性（兼容历史任务描述）
 _RE_PROPERTY_COMPARISON = re.compile(
-    r"(离子电导率|电子电导率|带隙|禁带宽度|形成能|稳定性|能量凸包|"
-    r"ionic_conductivity|electronic_conductivity|band_gap|formation_energy|stability|energy_above_hull|"
-    r"电导率)"
+    r"(拉伸强度|弯曲模量|冲击强度|热变形温度|熔体流动速率|断裂伸长率|热稳定|结晶度|"
+    r"玻璃化转变温度|离子电导率|电子电导率|带隙|禁带宽度|形成能|稳定性|能量凸包|"
+    r"tensile_strength|flexural_modulus|impact_strength|heat_deflection_temp|"
+    r"melt_flow_index|elongation_at_break|thermal_stability|crystallinity|"
+    r"glass_transition_temp|ionic_conductivity|electronic_conductivity|"
+    r"band_gap|formation_energy|stability|energy_above_hull|电导率)"
     r"\s*(>=|≤|<=|≥|>|<|≤)\s*"
     r"(\d+(?:\.\d+)?[eE][+-]?\d+|\d+(?:\.\d+)?|\.\d+)"
     r"\s*(?:[Ss]/[cC][mM]|\S)?"
@@ -229,14 +265,17 @@ def _infer_lithium_context(
     if exclude_elements and "Li" in exclude_elements:
         return require_elements
     goal_lower = goal.lower()
-    lithium_keywords = ["锂", "lithium", "li"]
+    # v4.1 修复：裸 "li" 子串会误命中 stability/flexibility/applicability 等
+    # 含 "li" 的英文高分子目标词 → 必须词边界匹配，避免改性塑料目标被强制要求含锂
+    lithium_keywords = ["锂", "lithium"]
     lithium_context_keywords = [
         "固态电解质", "锂电解质", "锂电池", "锂离子", "锂电", "lithium battery",
-        "lithium ion", "li-ion", "li battery",
+        "lithium ion", "li-ion", "li battery", "li battery",
     ]
     has_lithium_keyword = any(kw in goal or kw in goal_lower for kw in lithium_keywords)
     has_context_keyword = any(kw in goal or kw in goal_lower for kw in lithium_context_keywords)
-    if has_lithium_keyword or has_context_keyword:
+    has_li_token = bool(re.search(r"\bli\b|\bli-ion\b", goal_lower))
+    if has_lithium_keyword or has_context_keyword or has_li_token:
         return ["Li"]
     return require_elements
 

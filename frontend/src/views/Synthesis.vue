@@ -38,12 +38,17 @@
           row-key="candidate_id"
           size="small"
           :custom-row="pipelineRowProps"
-          @row-click="selectCandidate"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
               <div class="cand-name">{{ record.name || record.candidate_id }}</div>
               <div class="cand-sub">{{ record.source || record.candidate_type || '' }}</div>
+            </template>
+            <template v-else-if="column.key === 'score'">
+              <span v-if="record.multi_objective_score" class="num score-num">
+                {{ (record.multi_objective_score * 100).toFixed(0) }}%
+              </span>
+              <span v-else class="muted">—</span>
             </template>
             <template v-else-if="column.key === 'status'">
               <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
@@ -58,6 +63,9 @@
               <span v-else class="muted">—</span>
               <div v-if="record.assigned_role" class="role-hint">{{ roleLabel(record.assigned_role) }}</div>
             </template>
+            <template v-else-if="column.key === 'updated'">
+              <span class="muted">{{ formatUpdated(record) }}</span>
+            </template>
             <template v-else-if="column.key === 'action'">
               <a-button
                 type="link"
@@ -67,6 +75,31 @@
               >
                 深化 / 查看
               </a-button>
+              <a-tooltip
+                :title="['ready_for_experiment', 'rejected'].includes(record.status) ? '当前状态不可归档（终态/已淘汰）' : '淘汰该候选（归档）'"
+              >
+                <a-button
+                  type="link"
+                  size="small"
+                  class="action-link"
+                  :disabled="['ready_for_experiment', 'rejected'].includes(record.status)"
+                  @click.stop="onArchiveCandidate(record)"
+                >归档</a-button>
+              </a-tooltip>
+              <a-popconfirm
+                title="确认删除该候选？若已被实验任务/工艺方案/配方/样品引用将无法删除，建议改用归档。"
+                ok-text="删除"
+                cancel-text="取消"
+                @confirm.stop="onDeleteCandidate(record)"
+              >
+                <a-button
+                  type="link"
+                  size="small"
+                  danger
+                  class="action-link"
+                  @click.stop
+                >删除</a-button>
+              </a-popconfirm>
             </template>
           </template>
           <template #emptyText>
@@ -85,17 +118,52 @@
           <!-- 候选信息 -->
           <div class="candidate-info">
             <div class="cand-head">
-              <div class="cand-icon"><MoleculeView :smiles="selected.smiles" :size="96" /></div>
-              <div class="cand-meta">
-                <div class="cand-title">{{ selected.name || selected.candidate_id }}</div>
-                <div class="cand-tags">
-                  <a-tag color="orange">{{ typeLabel(selected.candidate_type) }}</a-tag>
-                  <a-tag :color="statusColor(selected.status)">{{ statusLabel(selected.status) }}</a-tag>
-                  <a-tag v-if="selected.owner" color="blue">责任人 {{ selected.owner }}</a-tag>
+              <div class="cand-main">
+                <div class="cand-icon"><MoleculeView :smiles="selected.smiles" :size="96" /></div>
+                <div class="cand-meta">
+                  <div class="cand-title">{{ selected.name || selected.candidate_id }}</div>
+                  <div class="cand-tags">
+                    <a-tag color="orange">{{ typeLabel(selected.candidate_type) }}</a-tag>
+                    <a-tag :color="statusColor(selected.status)">{{ statusLabel(selected.status) }}</a-tag>
+                    <a-tag v-if="selected.owner" color="blue">责任人 {{ selected.owner }}</a-tag>
+                  </div>
+                  <div v-if="selected.smiles" class="cand-smiles">
+                    <span class="muted">SMILES：</span><code>{{ selected.smiles }}</code>
+                  </div>
+                  <div v-else-if="selected.data?.formula || selected.name" class="cand-smiles">
+                    <span class="muted">化学式：</span><code>{{ selected.data?.formula || selected.name }}</code>
+                    <a-tag v-if="selected.data?.space_group" size="small" class="cand-spacegroup">空间群 {{ selected.data.space_group }}</a-tag>
+                  </div>
+                  <div class="cand-score">
+                    <span class="muted">综合评分：</span>
+                    <span v-if="selected.multi_objective_score" class="num score-num">
+                      {{ (selected.multi_objective_score * 100).toFixed(1) }}%
+                    </span>
+                    <span v-else class="muted">暂无评分</span>
+                  </div>
                 </div>
-                <div v-if="selected.smiles" class="cand-smiles">
-                  <span class="muted">SMILES：</span><code>{{ selected.smiles }}</code>
+              </div>
+
+              <!-- 执行智能体信息卡（AI 透明性：与临时规划面板一致） -->
+              <div v-if="selectedAgent" class="workspace-agent">
+                <div class="agent-panel-title">执行智能体</div>
+                <div class="agent-head">
+                  <div class="agent-avatar">
+                    <component :is="selectedAgentIcon" aria-hidden="true" />
+                  </div>
+                  <div class="agent-info">
+                    <div class="agent-name">{{ selectedAgent.name || '合成规划' }}</div>
+                    <div class="agent-tags">
+                      <a-tag color="orange" size="small">合成规划</a-tag>
+                      <a-tag v-if="selectedAgent.is_builtin" size="small">内置</a-tag>
+                    </div>
+                  </div>
                 </div>
+                <div class="agent-desc">{{ selectedAgent.description || '基于 ASKCOS 逆合成规划的多路径并行探索与机理分析' }}</div>
+                <div v-if="selectedAgent.expertise?.length" class="agent-expertise">
+                  <a-tag v-for="e in selectedAgent.expertise" :key="e" size="small" class="agent-tag">{{ e }}</a-tag>
+                </div>
+                <div class="agent-hint muted">执行方式：SCP 优先 + 本地回退，能力来源见各方案「能力来源」</div>
               </div>
             </div>
 
@@ -110,7 +178,7 @@
                 <ThunderboltOutlined /> 执行工艺深化
               </a-button>
               <a-button
-                v-if="!schemes.some((s) => s.status === 'confirmed') && schemes.length"
+                v-if="!schemes.some((s) => s.status === 'confirmed') && schemes.length && selected.status === 'process_planning'"
                 type="primary"
                 :loading="confirmingScheme"
                 @click="confirmProcessScheme"
@@ -152,20 +220,34 @@
                 <div class="scheme-meta">
                   <span v-if="scheme.owner" class="muted">负责人 {{ scheme.owner }}</span>
                   <span v-if="scheme.routes?.length" class="muted num">{{ scheme.routes.length }} 条路线</span>
+                  <a-button
+                    type="text"
+                    size="small"
+                    danger
+                    class="scheme-delete-btn"
+                    :loading="deletingSchemeId === scheme.process_id"
+                    @click="onDeleteScheme(scheme)"
+                  >
+                    <DeleteOutlined /> 删除
+                  </a-button>
                 </div>
               </div>
 
-              <!-- 路线比选 -->
-              <div v-if="scheme.routes?.length" class="scheme-routes">
-                <a-row :gutter="12">
-                  <a-col v-for="route in scheme.routes" :key="route.route_id" :xs="24" :md="12" :lg="8">
-                    <div class="scheme-route">
-                      <div class="route-head">
-                        <span class="route-name">路线 {{ route.route_id }}</span>
-                        <a-tag :color="route.feasibility_score > 0.3 ? 'green' : 'orange'">
-                          {{ route.is_feasible ? '可合成' : '需评估' }}
-                        </a-tag>
-                      </div>
+              <!-- 路线比选 + 工艺步骤流程图（1:1 双栏） -->
+              <div v-if="scheme.routes?.length" class="scheme-body">
+                <div class="scheme-routes">
+                  <a-row :gutter="12">
+                    <a-col v-for="route in scheme.routes" :key="route.route_id" :xs="24" :md="12" :lg="24">
+                      <div class="scheme-route">
+                        <div class="route-head">
+                          <span class="route-name">路线 {{ route.route_id }}</span>
+                          <a-tag v-if="route.source" :color="routeSourceColor(route.source)" size="small">
+                            {{ routeSourceLabel(route.source) }}
+                          </a-tag>
+                          <a-tag :color="route.feasibility_score > 0.3 ? 'green' : 'orange'">
+                            {{ route.is_feasible ? '可合成' : '需评估' }}
+                          </a-tag>
+                        </div>
                       <div class="route-stats">
                         <div class="stat"><span class="muted">步骤</span><span class="num">{{ route.step_count || 0 }}</span></div>
                         <div class="stat"><span class="muted">可行性</span><span class="num">{{ ((route.feasibility_score || 0) * 100).toFixed(0) }}%</span></div>
@@ -202,22 +284,38 @@
                   </a-col>
                 </a-row>
               </div>
+
+              <!-- 工艺步骤流程图（图形展示首选路线） -->
+              <div class="scheme-flow">
+                <div class="flow-title"><BranchesOutlined /> 工艺步骤流程 <span v-if="scheme.routes[0]" class="flow-sub muted">路线 {{ scheme.routes[0].route_id }}</span></div>
+                <ProcessFlowGraph :steps="scheme.routes[0]?.steps || []" :target="selected?.smiles || scheme.routes[0]?.target_smiles" />
+              </div>
+              </div>
               <div v-else class="scheme-empty-hint muted">该方案暂无候选路线，请执行工艺深化</div>
 
-              <!-- 能力来源（AI 透明性） -->
-              <div v-if="scheme.evidence_refs?.length" class="evidence-block">
-                <div class="evidence-title"><SafetyCertificateOutlined /> 能力来源</div>
-                <div class="evidence-list">
-                  <div v-for="(ev, i) in scheme.evidence_refs" :key="i" class="evidence-item">
-                    <a-tag :color="ev.status === 'success' ? 'green' : 'red'" size="small">
-                      {{ ev.source === 'scp' ? 'SCP' : '本地' }}
-                    </a-tag>
-                    <span class="ev-cap">{{ ev.capability }}</span>
-                    <span v-if="ev.tool" class="ev-tool muted">{{ ev.tool }}</span>
-                    <span class="ev-detail muted">{{ ev.detail }}</span>
+              <!-- 能力来源（AI 透明性，默认折叠） -->
+              <a-collapse
+                v-if="scheme.evidence_refs?.length"
+                :bordered="false"
+                class="evidence-collapse"
+                default-active-key="[]"
+              >
+                <a-collapse-panel key="evidence">
+                  <template #header>
+                    <span class="evidence-title"><SafetyCertificateOutlined /> 能力来源（{{ scheme.evidence_refs.length }}）</span>
+                  </template>
+                  <div class="evidence-list">
+                    <div v-for="(ev, i) in scheme.evidence_refs" :key="i" class="evidence-item">
+                      <a-tag :color="ev.status === 'success' ? 'green' : 'red'" size="small">
+                        {{ ev.source === 'scp' ? 'SCP' : '本地' }}
+                      </a-tag>
+                      <span class="ev-cap">{{ ev.capability }}</span>
+                      <span v-if="ev.tool" class="ev-tool muted">{{ ev.tool }}</span>
+                      <span class="ev-detail muted">{{ ev.detail }}</span>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </a-collapse-panel>
+              </a-collapse>
             </div>
           </div>
           <div v-else class="scheme-empty-hint">
@@ -474,8 +572,9 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
+import client from '@/api/client'
 import * as echarts from 'echarts'
 import {
   BranchesOutlined,
@@ -494,17 +593,20 @@ import {
   CheckCircleOutlined,
   ArrowRightOutlined,
   FileTextOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons-vue'
 import { getReactionNetwork, verifyRouteWithDFT } from '@/api/experiments'
 import { planSynthesisAsync, getSynthesisTask, createManualRoute } from '@/api/synthesis'
-import { getProcessEngineerWorkbench, runProcessDeepening, updateCandidateStatus, updateProcessSchemeStatus, createBomFromProcess } from '@/api/candidates'
+import { getProcessEngineerWorkbench, runProcessDeepening, updateCandidateStatus, updateProcessSchemeStatus, deleteProcessScheme, createBomFromProcess } from '@/api/candidates'
 import { listAgents } from '@/api/agents'
 import { useMdmDict } from '@/utils/mdmDict'
 import { getUserId } from '@/api/client'
 import MoleculeView from '@/components/MoleculeView.vue'
 import ReactionNetwork from '@/components/ReactionNetwork.vue'
+import ProcessFlowGraph from '@/components/ProcessFlowGraph.vue'
 import ResearchContextBanner from '@/components/ResearchContextBanner.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import { resolveAgentIcon } from '@/utils/agentAvatar'
 
 const currentRoute = useRoute()
 const router = useRouter()
@@ -558,6 +660,16 @@ const SCHEME_STATUS_META = {
 const schemeStatusLabel = (s) => SCHEME_STATUS_META[s]?.label || s || '—'
 const schemeStatusColor = (s) => SCHEME_STATUS_META[s]?.color || 'default'
 
+// 路线来源（AI 透明性：ASKCOS / InternLM / 本地模板 / SCP）
+const ROUTE_SOURCE_META = {
+  askcos: { label: 'ASKCOS 逆合成', color: 'blue' },
+  internlm: { label: 'InternLM 大模型', color: 'purple' },
+  local_template: { label: '本地模板路线', color: 'orange' },
+  scp: { label: 'SCP 远端服务', color: 'cyan' },
+}
+const routeSourceLabel = (s) => ROUTE_SOURCE_META[s]?.label || s || ''
+const routeSourceColor = (s) => ROUTE_SOURCE_META[s]?.color || 'default'
+
 const pipelineColumns = [
   { title: '候选', key: 'name' },
   { title: '状态', key: 'status', width: 110 },
@@ -567,7 +679,10 @@ const pipelineColumns = [
 ]
 
 function pipelineRowProps(record) {
-  return { style: { cursor: 'pointer' } }
+  return {
+    style: { cursor: 'pointer' },
+    onClick: () => selectCandidate(record),
+  }
 }
 
 async function loadWorkbench() {
@@ -611,9 +726,34 @@ function onFilterChange() {
 }
 
 function selectCandidate(record) {
-  selected.value = record.candidate
+  selected.value = record
   selectedItem.value = record
   schemes.value = record.process_schemes || []
+}
+
+// 删除工艺方案（被配方 BOM 引用的方案后端会 409 拒绝，提示改为「已放弃」归档）
+const deletingSchemeId = ref('')
+async function onDeleteScheme(scheme) {
+  Modal.confirm({
+    title: '删除工艺方案',
+    content: `确定删除工艺方案「${scheme.process_id}」吗？删除后不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      deletingSchemeId.value = scheme.process_id
+      try {
+        await deleteProcessScheme(scheme.process_id)
+        message.success('工艺方案已删除')
+        schemes.value = schemes.value.filter((s) => s.process_id !== scheme.process_id)
+        await loadWorkbench()
+      } catch {
+        // 错误（含引用 409）由拦截器统一提示
+      } finally {
+        deletingSchemeId.value = ''
+      }
+    },
+  })
 }
 
 async function runDeepening() {
@@ -741,6 +881,8 @@ const agentLoading = ref(false)
 const selectedAgent = computed(() =>
   capableAgents.value.find((a) => a.id === selectedAgentId.value) || capableAgents.value[0] || null
 )
+
+const selectedAgentIcon = computed(() => resolveAgentIcon(selectedAgent.value?.avatar))
 
 async function loadCapableAgents() {
   agentLoading.value = true
@@ -1280,13 +1422,16 @@ watch(
 
 .workspace-card :deep(.ant-card-body) { padding-top: 16px; }
 .candidate-info { padding-bottom: 16px; border-bottom: 1px solid var(--border-light); margin-bottom: 16px; }
-.cand-head { display: flex; gap: 16px; align-items: flex-start; }
+.cand-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; }
 .cand-icon { flex-shrink: 0; }
 .cand-meta { flex: 1; min-width: 0; }
 .cand-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
 .cand-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 .cand-tags :deep(.ant-tag) { margin: 0; }
-.cand-smiles { font-size: 13px; color: var(--text-primary); word-break: break-all; }
+.cand-smiles { font-size: 13px; color: var(--text-primary); word-break: break-all; margin-bottom: 6px; }
+.cand-smiles code { font-family: 'JetBrains Mono', monospace; background: var(--light-bg); padding: 2px 6px; border-radius: 4px; }
+.cand-spacegroup { margin-left: 8px; }
+.cand-score { font-size: 13px; }
 .cand-smiles code { font-family: 'JetBrains Mono', monospace; background: var(--light-bg); padding: 2px 6px; border-radius: 4px; }
 .deepen-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
 .action-hint { font-size: 12px; color: var(--text-muted); }
@@ -1298,7 +1443,37 @@ watch(
 .scheme-id code { font-family: 'JetBrains Mono', monospace; background: var(--light-bg); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
 .scheme-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .scheme-meta { display: flex; gap: 12px; font-size: 12px; }
-.scheme-routes { margin-bottom: 8px; }
+.scheme-body {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.scheme-routes {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.scheme-flow {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md, 6px);
+  padding: 12px;
+  background: var(--light-bg);
+}
+.flow-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.flow-sub {
+  font-size: 12px;
+  font-weight: 400;
+}
 .scheme-route { border: 1px solid var(--border-light); border-radius: var(--radius-md, 6px); padding: 12px; margin-bottom: 12px; }
 .route-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .route-stats { display: flex; gap: 16px; margin-bottom: 8px; }
@@ -1308,7 +1483,14 @@ watch(
 .route-steps :deep(.ant-collapse-header) { padding: 6px 0 !important; font-size: 12px; }
 .scheme-empty-hint { font-size: 13px; color: var(--text-muted); padding: 8px 0; }
 
-.evidence-block { margin-top: 8px; border-top: 1px dashed var(--border-light); padding-top: 12px; }
+.evidence-collapse {
+  margin-top: 8px;
+  border-top: 1px dashed var(--border-light);
+  background: transparent;
+}
+.evidence-collapse :deep(.ant-collapse-header) {
+  padding: 12px 0 4px !important;
+}
 .evidence-title { font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
 .evidence-list { display: flex; flex-direction: column; gap: 6px; }
 .evidence-item { display: flex; align-items: center; gap: 8px; font-size: 12px; flex-wrap: wrap; }
@@ -1316,6 +1498,52 @@ watch(
 .ev-cap { font-weight: 600; color: var(--text-primary); }
 .ev-tool { font-family: 'JetBrains Mono', monospace; }
 .ev-detail { font-size: 11px; }
+
+/* 执行智能体信息卡（工作区，AI 透明性） */
+.cand-main { display: flex; gap: 16px; align-items: flex-start; flex: 1; min-width: 0; }
+.workspace-agent {
+  flex-shrink: 0;
+  width: 300px;
+  background: var(--light-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.agent-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted, #8c8c8c);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+.agent-head { display: flex; gap: 10px; align-items: center; }
+.agent-avatar {
+  width: 40px; height: 40px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--primary-bg, #fff7e6);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0; line-height: 1;
+}
+.agent-info { flex: 1; min-width: 0; }
+.agent-name { font-size: 13px; font-weight: 700; color: var(--text-primary, #1a1a2e); margin-bottom: 2px; }
+.agent-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.agent-tags :deep(.ant-tag) { margin: 0; }
+.agent-desc { font-size: 12px; color: var(--text-primary, #1a1a2e); line-height: 1.6; }
+.agent-expertise { display: flex; flex-wrap: wrap; gap: 4px; }
+.agent-tag { margin: 0; font-size: 11px; line-height: 18px; padding: 0 6px; }
+.agent-hint { font-size: 11px; line-height: 1.5; }
+
+@media (max-width: 900px) {
+  .scheme-body { flex-direction: column; }
+  .scheme-flow { width: 100%; }
+  .cand-head { flex-direction: column; }
+  .workspace-agent { width: 100%; }
+}
 
 @media (max-width: 1100px) {
   .synthesis-layout { flex-direction: column; }

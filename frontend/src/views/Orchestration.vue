@@ -45,12 +45,12 @@
             </div>
           </div>
           <div class="task-input-row">
-            <a-textarea
-              v-model:value="target"
-              class="task-input-large"
+            <!-- Q12 智能目标框：一句话目标 + 模板 + 解析回填 -->
+            <GoalIntentInput
+              v-model="target"
               :rows="4"
-              placeholder="例如：找到高离子电导率的固态电解质材料"
-              :disabled="orchestrationStore.loading"
+              placeholder="例如：开发冲击强度 ≥ 8 kJ/m² 的玻纤增强 PA6"
+              @parsed="onGoalParsed"
             />
             <div class="task-input-action">
               <a-tooltip :title="!target.trim() ? '请输入任务目标或选择模板' : ''">
@@ -370,6 +370,7 @@ import AgentLogPanel from '@/components/AgentLogPanel.vue'
 import AgentCard from '@/components/AgentCard.vue'
 import ExecutionResultPanel from '@/components/ExecutionResultPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import GoalIntentInput from '@/components/GoalIntentInput.vue'
 
 const orchestrationStore = useOrchestrationStore()
 
@@ -377,6 +378,12 @@ const phase = ref('input')
 const target = ref('')
 const allAgents = ref([])
 const teamAgents = ref([])
+
+// Q12：智能解析回填——解析结果存入 context 供编排执行使用
+const goalContext = ref(null)
+function onGoalParsed(parsed) {
+  goalContext.value = parsed
+}
 // 注意：selectedAgentIds 用 ref 包装 Set，必须通过整体替换（new Set(...)）修改才能触发响应式
 // 不要直接调用 .add()/.delete()，否则模板中的 .size 等不会更新
 const selectedAgentIds = ref(new Set())
@@ -389,9 +396,9 @@ const error = ref('')
 const showAgentConfirm = ref(false)
 
 const examples = [
-  '设计高离子电导率的固态电解质',
-  '筛选锂金属负极保护层材料',
-  '优化聚合物电解质机械强度',
+  '开发高冲击强度的玻纤增强 PA6 改性料',
+  '设计高弯曲模量的碳纤增强 PC 配方',
+  '优化阻燃 ABS 的热变形温度与流动性平衡',
 ]
 
 const ROLE_LABEL_FALLBACK = {

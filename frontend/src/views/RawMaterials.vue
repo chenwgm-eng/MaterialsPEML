@@ -1,8 +1,8 @@
-<template>
+﻿<template>
   <div class="raw-materials">
     <div class="page-header">
       <h1 class="page-title">物料规格库</h1>
-      <p class="page-subtitle">工业化配方验证层的数据基座 — 基材、锂盐、填料等企业级物料库存与合规信息</p>
+      <p class="page-subtitle">工业化配方验证层的数据基座 — 基材、玻纤、阻燃剂等企业级物料库存与合规信息</p>
     </div>
 
     <!-- 筛选 -->
@@ -180,7 +180,7 @@
           </a-col>
           <a-col :span="8">
             <a-form-item label="名称" name="name" required>
-              <a-input v-model:value="form.name" name="name" autocomplete="off" placeholder="如 PEO…" />
+              <a-input v-model:value="form.name" name="name" autocomplete="off" placeholder="如 PA6 基材…" />
             </a-form-item>
           </a-col>
           <a-col :span="8">
@@ -566,7 +566,7 @@
           </a-col>
           <a-col :span="8">
             <a-form-item label="名称" required>
-              <a-input v-model:value="requestForm.name" name="name" autocomplete="off" placeholder="如 PEO…" />
+              <a-input v-model:value="requestForm.name" name="name" autocomplete="off" placeholder="如 PA6 基材…" />
             </a-form-item>
           </a-col>
           <a-col :span="8">

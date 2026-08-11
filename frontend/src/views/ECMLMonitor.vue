@@ -568,6 +568,9 @@
           <template v-else-if="column.key === 'identifier'">
             {{ record.smiles || record.psmiles || record.formula || '-' }}
           </template>
+          <template v-else-if="column.key === 'action'">
+            <a-button size="small" type="primary" ghost @click="sendToCandidateDesign(record)">发送候选设计</a-button>
+          </template>
         </template>
       </a-table>
     </a-card>
@@ -876,8 +879,8 @@ async function loadExperimentDataCount() {
 }
 
 const form = reactive({
-  target: 'LiCoO2',
-  target_property: 'ionic_conductivity',
+  target: 'PA6',
+  target_property: 'tensile_strength',
   max_iterations: 3,
   optimize_mode: 'single', // 'single' | 'multi'
   multi_objective_props: [], // 多目标模式下选中的属性 key 列表
@@ -964,9 +967,11 @@ onMounted(async () => {
   } catch (e) {
     if (e.name === 'AbortError' || e.code === 'ERR_CANCELED' || e.message === 'canceled') return
     propertyOptions.value = [
-      { label: '离子电导率', value: 'ionic_conductivity' },
-      { label: '带隙', value: 'band_gap' },
-      { label: '形成能', value: 'formation_energy' },
+      { label: '拉伸强度', value: 'tensile_strength' },
+      { label: '弯曲模量', value: 'flexural_modulus' },
+      { label: '冲击强度', value: 'impact_strength' },
+      { label: '热变形温度', value: 'heat_deflection_temp' },
+      { label: '熔体流动速率', value: 'melt_flow_index' },
     ]
   }
 
@@ -1232,11 +1237,12 @@ async function onRoundConfirmed(result) {
 
 // 属性 key → 候选字段映射
 const ECML_FIELD_MAP = {
-  ionic_conductivity: 'predicted_ionic_conductivity',
-  band_gap: 'band_gap',
-  formation_energy: 'formation_energy',
-  stability: 'stability_score',
-  energy_above_hull: 'energy_above_hull',
+  tensile_strength: 'tensile_strength',
+  flexural_modulus: 'flexural_modulus',
+  impact_strength: 'impact_strength',
+  heat_deflection_temp: 'heat_deflection_temp',
+  melt_flow_index: 'melt_flow_index',
+  glass_transition_temp: 'glass_transition_temp',
 }
 
 const hasMultiObjective = computed(() => {
@@ -1361,7 +1367,9 @@ const candidateColumns = computed(() => {
     { title: 'SMILES', dataIndex: 'smiles', key: 'smiles', ellipsis: true },
     { title: '来源', dataIndex: 'source', key: 'source', width: 120, ellipsis: true },
     { title: '证据标签', key: 'provenance', width: 130, align: 'center' },
-    { title: `预测电导率 (${condUnit.value})`, dataIndex: 'predicted_ionic_conductivity', key: 'cond', width: 160, align: 'right', className: 'num-cell', customRender: ({ text }) => h(ScientificNotation, { value: text, property: 'predicted_ionic_conductivity' }) },
+    { title: '拉伸强度 (MPa)', dataIndex: 'tensile_strength', key: 'tensile_strength', width: 120, align: 'right', className: 'num-cell' },
+    { title: '弯曲模量 (MPa)', dataIndex: 'flexural_modulus', key: 'flexural_modulus', width: 130, align: 'right', className: 'num-cell' },
+    { title: '冲击强度 (kJ/m²)', dataIndex: 'impact_strength', key: 'impact_strength', width: 130, align: 'right', className: 'num-cell' },
     { title: '工业化', key: 'industrial', width: 120, align: 'center' },
   ]
   if (hasMultiObjective.value) {
@@ -1566,22 +1574,11 @@ async function fetchNextRoundSuggestions(runId) {
 }
 
 async function viewIteration(record) {
+  // 只 push 路由：onMounted 的 run_id 恢复逻辑（restoreRun + 轮询/下一轮建议）会自动执行，
+  // 手动再调 restoreRun 会导致同一运行被恢复两次（双请求/双轮询）
   const query = { run_id: record.run_id }
   if (currentScenarioId.value) query.scenario_id = currentScenarioId.value
   router.push({ path: '/ecml', query })
-  try {
-    const res = await ecmlStore.restoreRun(record.run_id)
-    if (res?.target) form.target = res.target
-    if (res?.target_property) form.target_property = res.target_property
-    if (res?.is_complete) {
-      fetchNextRoundSuggestions(record.run_id)
-    } else if (res?.run_id) {
-      pollingActive.value = true
-      ecmlStore.startPolling(res.run_id)
-    }
-  } catch {
-    message.error('恢复 ECML 运行状态失败')
-  }
 }
 
 async function onStartNextRound() {

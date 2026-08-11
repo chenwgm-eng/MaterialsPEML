@@ -469,10 +469,10 @@ const compareTableData = computed(() => {
     { metric: '化学式', key: 'formula' },
     { metric: 'SMILES', key: 'smiles' },
     { metric: '空间群', key: 'space_group' },
-    { metric: `带隙 (${energyUnit.value})`, key: 'band_gap' },
-    { metric: `形成能 (${energyPerAtomUnit.value})`, key: 'formation_energy' },
-    { metric: `电导率 (${condUnit.value})`, key: 'ionic_conductivity_estimate' },
-    { metric: '稳定性', key: 'stability_score' },
+    { metric: '拉伸强度 (MPa)', key: 'tensile_strength' },
+    { metric: '弯曲模量 (MPa)', key: 'flexural_modulus' },
+    { metric: '冲击强度 (kJ/m²)', key: 'impact_strength' },
+    { metric: '热变形温度 (°C)', key: 'heat_deflection_temp' },
     { metric: '综合评分', key: 'multi_objective_score' },
     { metric: '来源', key: 'source' },
   ]
@@ -491,10 +491,10 @@ const compareTableData = computed(() => {
 
 // 对比雷达图所需的预测目标（对齐 ECML / 临时预测的 objectives 结构）
 const COMPARE_OBJECTIVES = [
-  { key: 'stability_score', name: '稳定性', direction: 'maximize' },
-  { key: 'band_gap', name: '带隙', direction: 'minimize' },
-  { key: 'formation_energy', name: '形成能', direction: 'minimize' },
-  { key: 'ionic_conductivity_estimate', name: '电导率', direction: 'maximize' },
+  { key: 'tensile_strength', name: '拉伸强度', direction: 'maximize' },
+  { key: 'flexural_modulus', name: '弯曲模量', direction: 'maximize' },
+  { key: 'impact_strength', name: '冲击强度', direction: 'maximize' },
+  { key: 'heat_deflection_temp', name: '热变形温度', direction: 'maximize' },
   { key: 'multi_objective_score', name: '综合评分', direction: 'maximize' },
 ]
 
@@ -917,8 +917,10 @@ async function saveToLibrary() {
       smiles: selectedCandidate.value.smiles || '',
       properties: {
         formula: selectedCandidate.value.formula,
-        band_gap: selectedCandidate.value.band_gap,
-        ionic_conductivity: selectedCandidate.value.ionic_conductivity_estimate,
+        tensile_strength: selectedCandidate.value.tensile_strength,
+        flexural_modulus: selectedCandidate.value.flexural_modulus,
+        impact_strength: selectedCandidate.value.impact_strength,
+        heat_deflection_temp: selectedCandidate.value.heat_deflection_temp,
       },
       data_source: 'predicted',
       update_reason: '候选材料收藏入库',

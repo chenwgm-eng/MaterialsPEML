@@ -586,7 +586,7 @@
           <a-textarea
             v-model:value="changeSummary"
             :rows="3"
-            placeholder="如：调整锂盐比例以提升离子电导率…"
+            placeholder="如：调整玻纤比例以提升弯曲模量…"
           />
         </a-form-item>
         <a-alert
@@ -1107,7 +1107,7 @@ async function onDesign() {
   }
   loading.value = true
   try {
-    const targetArg = { candidate: target.value, target_property: 'ionic_conductivity' }
+    const targetArg = { candidate: target.value, target_property: 'tensile_strength' }
     result.value = await client.post('/mcp/tools/design_formula/call', {
       arguments: { target_material: targetArg, quantity_kg: quantity.value },
     }, { timeout: 30000 })

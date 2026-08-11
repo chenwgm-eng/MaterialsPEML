@@ -240,20 +240,30 @@ class HybridOrchestrator:
         kwargs: dict = {}
         if action == "route_material":
             kwargs["material_input"] = {"name": target or "材料", "formula": target or ""}
-        elif action in ("generate_polymer_candidates", "generate_crystal_candidates"):
+        elif action == "generate_polymer_candidates":
             kwargs["target_properties"] = {}
             kwargs["num_candidates"] = 8
             # 材料体系透传：工程塑料/改性体系走工程塑料生成模式
             kwargs["material_system"] = material_system
+        elif action == "generate_crystal_candidates":
+            # 晶体生成器无 material_system 参数，仅透传数量（避免 TypeError）
+            kwargs["elements"] = []
+            kwargs["num_candidates"] = 8
+        elif action == "predict_polymer_properties":
+            kwargs["features"] = {"smiles": target or "[*]CC[*]", "psmiles": target or "[*]CC[*]"}
+            kwargs["property_name"] = ctx.get("target_property") or "tensile_strength"
+        elif action == "predict_crystal_properties":
+            kwargs["features"] = {"formula": target or "LiCoO2"}
+            kwargs["property_name"] = ctx.get("target_property") or "band_gap"
         elif action == "design_formula":
             kwargs["target_material"] = {
-                "target_property": "tensile_strength",
+                "target_property": ctx.get("target_property") or "tensile_strength",
                 "candidate": material_system or target,
             }
             # 材料体系透传：工程塑料体系走改性配方通道
             kwargs["material_system"] = material_system
         elif action == "compliance_check":
-            kwargs["smiles"] = "CCO"
+            kwargs["smiles"] = "[*]CC[*]"
         return kwargs
 
     def register_stage_executor(self, kind: str, executor) -> None:
@@ -396,11 +406,11 @@ class HybridOrchestrator:
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
 
-            step.status = "completed"
+            step.status = "completed" if result.get("status") != "error" else "failed"
             yield {
                 "event_type": "step_complete",
                 "step_id": step.step_id,
-                "status": "completed",
+                "status": step.status,
                 "executor_kind": step.executor_kind,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }

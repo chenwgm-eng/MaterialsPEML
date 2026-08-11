@@ -186,6 +186,82 @@ class PolymerPropertyModel:
             "unit": "eV/atom",
             "scale": 1.0,
         },
+        # ── v4.1 改性塑料领域：高分子工程性能启发式模型 ──
+        # 基于骨架化学特征的工程估算（刚性/极性/链柔顺性 → 力学与热学性能）
+        "tensile_strength": {
+            "weights": {
+                "num_rings": 8.0, "num_rotatable_bonds": -2.0,
+                "fraction_csp3": -18.0, "tpsa": 0.4, "num_hba": -0.6,
+                "bertz_ct": 0.003, "molecular_weight": 0.002,
+            },
+            "intercept": 32.0,
+            "unit": "MPa",
+            "scale": 1.0,
+        },
+        "flexural_modulus": {
+            "weights": {
+                "num_rings": 180.0, "num_rotatable_bonds": -40.0,
+                "fraction_csp3": -350.0, "bertz_ct": 0.05,
+                "molecular_weight": 0.05,
+            },
+            "intercept": 1800.0,
+            "unit": "MPa",
+            "scale": 1.0,
+        },
+        "impact_strength": {
+            "weights": {
+                "num_rotatable_bonds": 3.0, "fraction_csp3": 12.0,
+                "num_rings": -4.0, "tpsa": -0.2, "molecular_weight": 0.001,
+            },
+            "intercept": 8.0,
+            "unit": "kJ/m2",
+            "scale": 1.0,
+        },        "heat_deflection_temp": {
+            "weights": {
+                "num_rings": 15.0, "num_rotatable_bonds": -5.0,
+                "fraction_csp3": -22.0, "bertz_ct": 0.005,
+                "molecular_weight": 0.01,
+            },
+            "intercept": 90.0,
+            "unit": "C",
+            "scale": 1.0,
+        },
+        "melt_flow_index": {
+            "weights": {
+                "num_rotatable_bonds": 8.0, "fraction_csp3": 15.0,
+                "molecular_weight": -0.006, "num_rings": -6.0,
+            },
+            "intercept": 12.0,
+            "unit": "g/10min",
+            "scale": 1.0,
+        },
+        "elongation_at_break": {
+            "weights": {
+                "num_rotatable_bonds": 8.0, "fraction_csp3": 18.0,
+                "num_rings": -5.0, "tpsa": -0.3,
+            },
+            "intercept": 30.0,
+            "unit": "%",
+            "scale": 1.0,
+        },
+        "thermal_stability": {
+            "weights": {
+                "num_rings": 22.0, "bertz_ct": 0.01,
+                "molecular_weight": 0.05, "num_rotatable_bonds": -6.0,
+            },
+            "intercept": 320.0,
+            "unit": "C",
+            "scale": 1.0,
+        },
+        "crystallinity": {
+            "weights": {
+                "fraction_csp3": 40.0, "num_rotatable_bonds": -6.0,
+                "num_rings": -8.0,
+            },
+            "intercept": 25.0,
+            "unit": "%",
+            "scale": 1.0,
+        },
     }
 
     def predict(self, descriptors: dict, property_name: str) -> tuple[float, float]:
@@ -199,28 +275,40 @@ class PolymerPropertyModel:
             value += weight * desc_val
 
         value = value * model["scale"]
+        if property_name == "crystallinity":
+            value = max(0.0, min(100.0, value))
+        if property_name == "elongation_at_break":
+            value = max(0.0, value)
         confidence = self._estimate_confidence(descriptors, property_name)
         return value, confidence
 
     def _estimate_confidence(self, descriptors: dict, property_name: str) -> float:
-        base_confidence = 0.65
+        """启发式估算的置信度（ADR-0001）：仅反映描述符覆盖度，与模型精度无关。
+
+        上限 0.5，杜绝触发 `simulated`/高置信语义——"工程估算"不得声称高把握。
+        有真实权重的属性（Tg/介电常数）置信度由 GNN 路径给出，不走此函数。
+        """
+        base_confidence = 0.3
         num_valid = sum(1 for v in descriptors.values() if v != 0.0)
         data_quality = min(1.0, num_valid / 10.0)
-        return min(0.92, base_confidence + data_quality * 0.25)
+        return min(0.5, base_confidence + data_quality * 0.2)
 
 
 class PolymerPropertyPredictor:
     """Predict polymer properties using RDKit descriptors and learned correlations."""
 
     PREDICTABLE_PROPERTIES = [
-        "ionic_conductivity",
+        # v4.1 改性塑料领域：高分子工程性能
+        "tensile_strength",
+        "flexural_modulus",
+        "impact_strength",
+        "heat_deflection_temp",
+        "melt_flow_index",
+        "elongation_at_break",
+        "thermal_stability",
+        "crystallinity",
         "glass_transition_temp",
         "dielectric_constant",
-        "elastic_modulus",
-        "thermal_conductivity",
-        "decomposition_temp",
-        "total_energy",
-        "formation_energy",
     ]
 
     SUPPORTED_MODELS = ["polymernn", "descriptor", "mattersim"]
@@ -311,7 +399,7 @@ class PolymerPropertyPredictor:
             except Exception:
                 pass  # 回退到描述符路径
 
-        # 描述符线性模型路径
+        # 描述符线性模型路径（v4.1 术语分层：启发式产出称"工程估算"，不得声称"预测"）
         if smiles:
             desc = self._calc.calculate_descriptors(smiles)
             degraded = False
@@ -327,13 +415,20 @@ class PolymerPropertyPredictor:
             value=value,
             unit=self._model.PROPERTY_MODELS[property_name]["unit"],
             confidence=confidence,
-            model="descriptor_linear",
+            model="descriptor_heuristic",
             psmiles=psmiles,
             smiles=smiles,
             formula=features.get("formula", ""),
             material_type="polymer",
-            data_quality="estimated",  # T-029：描述符线性模型 ML 预测结果
+            data_quality="estimated",  # ADR-0001：启发式骨架估算，非模型预测
             degraded=degraded,
+            provenance=[{
+                "source_type": "algorithm_estimate",
+                "provider": "descriptor_heuristic",
+                "model_or_tool": "descriptor_heuristic",
+                "evidence_level": "estimated",
+                "note": "基于骨架结构启发式系数，量级估算，未经验证",
+            }],
         )
 
     def _predict_with_ase(self, smiles: str, property_name: str) -> tuple[float, float, str]:

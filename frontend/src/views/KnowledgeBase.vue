@@ -256,7 +256,7 @@
           <a-textarea
             v-model:value="newClaim.claim_text"
             :rows="3"
-            placeholder="如：LLZO 在 25°C 下离子电导率达到 1.5×10⁻⁴ S/cm"
+            placeholder="如：PA6 添加 30% 玻纤后拉伸强度可达 160 MPa"
           />
         </a-form-item>
         <a-row :gutter="12">
@@ -348,7 +348,7 @@ function goToTechIntelligence() {
   router.push('/technology-intelligence')
 }
 
-const categories = ['固态电解质', '正极材料', '负极材料', '隔膜', '电解液', '其他']
+const categories = ['工程塑料', '改性助剂', '玻纤增强', '阻燃体系', '填料', '其他']
 
 const showCreateMaterial = ref(false)
 const showAddClaim = ref(false)

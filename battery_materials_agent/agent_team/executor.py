@@ -472,10 +472,19 @@ class AgenticExecutor:
     def _extract_target_property(self, target: str) -> str:
         """从任务目标文本中提取目标属性关键词，映射到标准属性 key。"""
         if not target:
-            return "ionic_conductivity"
+            return "tensile_strength"
         t = target.lower()
-        # 关键词到标准属性 key 的映射
+        # 关键词到标准属性 key 的映射（v4.1：高分子工程性能优先，电池关键词兼容）
         keyword_map = [
+            (["拉伸强度", "tensile strength", "tensile_strength", "拉伸"], "tensile_strength"),
+            (["弯曲模量", "弯曲强度", "flexural", "bending", "弯曲"], "flexural_modulus"),
+            (["冲击强度", "冲击韧性", "impact strength", "impact_strength", "冲击"], "impact_strength"),
+            (["热变形温度", "heat deflection", "hdt", "热变形"], "heat_deflection_temp"),
+            (["熔体流动", "熔融指数", "melt flow", "mfi", "mfr", "熔指"], "melt_flow_index"),
+            (["断裂伸长率", "elongation", "伸长率"], "elongation_at_break"),
+            (["热稳定", "thermal stability", "thermal_stability", "热分解"], "thermal_stability"),
+            (["玻璃化转变", "glass transition", "tg"], "glass_transition_temp"),
+            (["结晶度", "crystallinity"], "crystallinity"),
             (["离子电导率", "ionic conductivity", "电导率", "conductivity"], "ionic_conductivity"),
             (["带隙", "band gap", "bandgap", "禁带"], "band_gap"),
             (["形成能", "formation energy", "formation_energy"], "formation_energy"),
@@ -488,7 +497,7 @@ class AgenticExecutor:
             for kw in keywords:
                 if kw in t:
                     return prop_key
-        return "ionic_conductivity"
+        return "tensile_strength"
 
     # ── 策略检查方法 ──────────────────────────────────────
 
@@ -752,15 +761,15 @@ class AgenticExecutor:
         if tool_name == "generate_crystal_candidates":
             return {"elements": [], "num_candidates": 5}
         if tool_name == "generate_polymer_candidates":
-            target_prop = getattr(self, "_current_target_property", None) or "ionic_conductivity"
+            target_prop = getattr(self, "_current_target_property", None) or "tensile_strength"
             return {"target_properties": {"target_property": target_prop}, "num_candidates": 5}
         if tool_name == "predict_crystal_properties":
             formula = material_id or "LiCoO2"
-            prop = getattr(self, "_current_target_property", None) or "ionic_conductivity"
+            prop = getattr(self, "_current_target_property", None) or "band_gap"
             return {"features": {"formula": formula}, "property_name": prop}
         if tool_name == "predict_polymer_properties":
-            psmiles = material_id or "CCO"
-            return {"features": {"psmiles": psmiles, "smiles": psmiles}, "property_name": "ionic_conductivity"}
+            psmiles = material_id or "[*]CC[*]"
+            return {"features": {"psmiles": psmiles, "smiles": psmiles}, "property_name": "tensile_strength"}
         if tool_name == "check_synthesis_feasibility":
             smiles = material_id or "CC(=O)O"
             return {"smiles": smiles}
@@ -768,14 +777,14 @@ class AgenticExecutor:
             smiles = material_id or "CCO"
             return {"smiles": smiles, "property_name": "total_energy"}
         if tool_name == "get_experiment_results":
-            formula = material_id or "LiCoO2"
+            formula = material_id or "PA6"
             return {"formula": formula, "experiment_type": ""}
         if tool_name == "subscribe_experiment_updates":
             return {"callback_url": ""}
         if tool_name == "route_material":
-            return {"material_input": {"name": target, "formula": material_id or "LiCoO2"}}
+            return {"material_input": {"name": target, "formula": material_id or "PA6"}}
         if tool_name == "design_formula":
-            return {"target_material": {"target_property": "ionic_conductivity", "candidate": material_id or target}}
+            return {"target_material": {"target_property": "tensile_strength", "candidate": material_id or target}}
         if tool_name == "search_literature":
             # 以任务描述为检索词（文献调研），退回 target 文本
             return {"query": task or target, "limit": 10}
@@ -784,15 +793,20 @@ class AgenticExecutor:
         return {}
 
     def _default_material_from_keywords(self, target: str) -> str:
-        """target 非化学式/SMILES 时，根据关键词推断默认材料标识符。"""
+        """target 非化学式/SMILES 时，根据关键词推断默认材料标识符。
+
+        v4.1 改性塑料领域：高分子任务默认 PE 骨架 PSMILES，电池关键词兼容历史任务。
+        """
         t = (target or "").lower()
+        if any(kw in t for kw in ["尼龙", "聚酰胺", "pa6", "pa66", "聚碳酸酯", "abs", "工程塑料", "玻纤", "碳纤", "阻燃"]):
+            return "[*]CC[*]"
+        if any(kw in t for kw in ["聚合", "polymer", "peo", "pvdf", "聚烯烃", "聚酯"]):
+            return "[*]CC[*]"
         if any(kw in t for kw in ["锂", "li", "负极", "anode", "金属锂"]):
             return "LiCoO2"
-        if any(kw in t for kw in ["聚合", "polymer", "电解质", "electrolyte", "spe"]):
-            return "CCO"
         if any(kw in t for kw in ["正极", "cathode"]):
             return "LiFePO4"
-        return "LiCoO2"
+        return "[*]CC[*]"
 
     def _extract_material_id_from_text(self, text: str) -> str:
         """从文本中提取化学式或 SMILES 标识符。"""

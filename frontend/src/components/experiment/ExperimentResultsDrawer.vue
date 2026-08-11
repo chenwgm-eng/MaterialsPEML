@@ -336,7 +336,7 @@
           <a-textarea
             v-model:value="predictedValuesText"
             :rows="8"
-            placeholder='例如：{"ionic_conductivity": 1.5e-4, "discharge_capacity_mAh_g": 120}'
+            placeholder='例如：{"tensile_strength": 45.2, "flexural_modulus": 2100}'
             class="deviation-json-input"
           />
           <div class="deviation-threshold-row">

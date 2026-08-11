@@ -137,11 +137,11 @@ export const MENU_GROUPS = [
     zone: 'research',
     items: [
       { path: '/technology-intelligence', title: '技术情报', icon: markRaw(BookOutlined), requiredAnyPermission: ['project.view'] },
-      { path: '/knowledge-graph', title: '知识图谱', icon: markRaw(ShareAltOutlined), requiredAnyPermission: ['candidate.view'] },
+      { path: '/knowledge-graph', title: '知识图谱', icon: markRaw(ShareAltOutlined), requiredAnyPermission: ['candidate.view'], researchHidden: true },
       { path: '/knowledge-base', title: '知识库', icon: markRaw(DatabaseOutlined), requiredAnyPermission: ['project.view'] },
       { path: '/materials', title: '物料规格库', icon: markRaw(ShopOutlined), requiredAnyPermission: ['project.view'] },
       { path: '/properties', title: '属性字典', icon: markRaw(ProfileOutlined), requiredAnyPermission: ['project.view'] },
-      { path: '/mdm', title: '主数据治理', icon: markRaw(DatabaseOutlined), requiredAnyPermission: ['tenant.manage'] },
+      { path: '/mdm', title: '主数据治理', icon: markRaw(DatabaseOutlined), requiredAnyPermission: ['tenant.manage'], researchHidden: true },
     ],
   },
   // 5. AI 与编排 → capability

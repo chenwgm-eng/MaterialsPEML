@@ -126,7 +126,10 @@ const columns = computed(() => {
       { title: 'SMILES', dataIndex: 'smiles', key: 'smiles', ellipsis: true },
       { title: 'PSMILES', dataIndex: 'psmiles', key: 'psmiles', ellipsis: true },
       { title: '来源', dataIndex: 'source', key: 'source', width: 100, ellipsis: true },
-      { title: `预测电导率 (${condUnit.value})`, dataIndex: 'predicted_ionic_conductivity', key: 'cond', width: 160, align: 'right', className: 'num-cell', customRender: ({ text }) => h(ScientificNotation, { value: text, property: 'predicted_ionic_conductivity' }) },
+      { title: '拉伸强度 (MPa)', dataIndex: 'tensile_strength', key: 'tensile_strength', width: 120, align: 'right', className: 'num-cell' },
+      { title: '弯曲模量 (MPa)', dataIndex: 'flexural_modulus', key: 'flexural_modulus', width: 130, align: 'right', className: 'num-cell' },
+      { title: '冲击强度 (kJ/m²)', dataIndex: 'impact_strength', key: 'impact_strength', width: 130, align: 'right', className: 'num-cell' },
+      { title: '热变形温度 (°C)', dataIndex: 'heat_deflection_temp', key: 'heat_deflection_temp', width: 130, align: 'right', className: 'num-cell' },
     ]
     if (hasMultiScore) {
       cols.push({ title: '综合评分', dataIndex: 'multi_objective_score', key: 'mo_score', width: 110, align: 'right', className: 'num-cell' })

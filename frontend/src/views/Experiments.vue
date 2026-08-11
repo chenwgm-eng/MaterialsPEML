@@ -343,7 +343,7 @@
           <div v-for="(item, idx) in editForm.measured_items" :key="idx" class="measured-row">
             <a-input
               v-model:value="item.key"
-              placeholder="属性名（如 ionic_conductivity）"
+              placeholder="属性名（如 tensile_strength）"
               class="measured-key"
               autocomplete="off"
               aria-label="属性名"
@@ -558,14 +558,14 @@ const sourceOptions = ref([...DEFAULT_SOURCE_OPTIONS])
 
 // P2-5：实验类型选项默认硬编码兜底，onMounted 时尝试从 GET /experiments/types 动态获取
 const DEFAULT_TYPE_OPTIONS = [
-  { label: '离子电导率', value: 'ionic_conductivity' },
-  { label: '电化学', value: 'electrochemical' },
-  { label: 'XRD', value: 'xrd' },
-  { label: 'SEM', value: 'sem' },
+  { label: '拉伸强度', value: 'tensile_strength' },
+  { label: '弯曲模量', value: 'flexural_modulus' },
+  { label: '冲击强度', value: 'impact_strength' },
+  { label: '熔体流动速率', value: 'melt_flow_index' },
   { label: 'DSC', value: 'dsc' },
   { label: 'TGA', value: 'tga' },
-  { label: 'EIS', value: 'eis' },
-  { label: 'CV', value: 'cv' },
+  { label: 'HDT', value: 'hdt' },
+  { label: 'XRD', value: 'xrd' },
 ]
 const typeOptions = ref([...DEFAULT_TYPE_OPTIONS])
 

@@ -41,52 +41,53 @@ def _iso(value) -> str:
     return str(value)
 
 
-# 内置默认领域包：当库中无任何活跃领域包时回退使用，等价于旧的硬编码逻辑。
-# 与迁移 0045 中播种的 battery 领域包保持一致，保证仅回退路径下行为不回归。
+# 内置默认领域包：当库中无任何活跃领域包时回退使用。
+# v4.1：默认领域为改性塑料（kingfa），与迁移 0046/0047 播种的领域包保持一致，
+# 保证仅回退路径下行为不回归。
 _BUILTIN_FALLBACK = {
     "material_representation": "formula",
     "recipe_templates": [
         {
             "material_type": "BASE_POLYMER",
-            "main_ratio": 0.9,
-            "additives": [{"category": "LITHIUM_SALT", "ratio": 0.1}],
-            "equipment": "双行星搅拌机",
+            "main_ratio": 0.7,
+            "additives": [{"category": "material.reinforcement", "ratio": 0.3}],
+            "equipment": "双螺杆挤出机",
             "bop": [
-                {"step": "混料", "temperature": 25, "duration_min": 60, "rpm": 1500, "equipment": "双行星搅拌机"},
-                {"step": "涂布", "temperature": 25, "duration_min": 30, "rpm": 0, "equipment": "涂布机"},
-                {"step": "烘烤", "temperature": 80, "duration_min": 720, "rpm": 0, "equipment": "真空烘箱"},
+                {"step": "预混", "temperature": 25, "duration_min": 30, "rpm": 800, "equipment": "高速混合机"},
+                {"step": "挤出造粒", "temperature": 230, "duration_min": 60, "rpm": 300, "equipment": "双螺杆挤出机"},
+                {"step": "注塑成型", "temperature": 240, "duration_min": 30, "rpm": 0, "equipment": "注塑机"},
             ],
         },
         {
             "material_type": "*",
             "main_ratio": 0.9,
             "additives": [
-                {"category": "BINDER", "ratio": 0.05},
+                {"category": "ADDITIVE", "ratio": 0.05},
                 {"category": "FILLER", "ratio": 0.05},
             ],
-            "equipment": "球磨机",
+            "equipment": "高速混合机",
             "bop": [
-                {"step": "球磨混料", "temperature": 25, "duration_min": 120, "rpm": 300, "equipment": "球磨机"},
-                {"step": "冷压成型", "temperature": 25, "duration_min": 30, "rpm": 0, "equipment": "粉末压片机"},
-                {"step": "烧结", "temperature": 500, "duration_min": 600, "rpm": 0, "equipment": "管式炉"},
+                {"step": "预混", "temperature": 25, "duration_min": 30, "rpm": 800, "equipment": "高速混合机"},
+                {"step": "挤出造粒", "temperature": 230, "duration_min": 60, "rpm": 300, "equipment": "双螺杆挤出机"},
+                {"step": "注塑成型", "temperature": 240, "duration_min": 30, "rpm": 0, "equipment": "注塑机"},
             ],
         },
     ],
     "fallback_recipe": {
-        "bom": {"BASE_POLYMER": 0.8, "LITHIUM_SALT": 0.2},
-        "equipment": "双行星搅拌机",
+        "bom": {"BASE_POLYMER": 0.7, "material.reinforcement": 0.3},
+        "equipment": "双螺杆挤出机",
         "bop": [
-            {"step": "混料", "temperature": 25, "duration_min": 60, "rpm": 1500, "equipment": "双行星搅拌机"},
-            {"step": "涂布", "temperature": 25, "duration_min": 30, "rpm": 0, "equipment": "涂布机"},
-            {"step": "烘烤", "temperature": 80, "duration_min": 720, "rpm": 0, "equipment": "真空烘箱"},
+            {"step": "预混", "temperature": 25, "duration_min": 30, "rpm": 800, "equipment": "高速混合机"},
+            {"step": "挤出造粒", "temperature": 230, "duration_min": 60, "rpm": 300, "equipment": "双螺杆挤出机"},
+            {"step": "注塑成型", "temperature": 240, "duration_min": 30, "rpm": 0, "equipment": "注塑机"},
         ],
     },
     "consistency": {
-        "polymer_kw": ["peo", "polymer", "pvdf", "pan ", "pan-", "pmma", "psmiles", "[*]"],
+        "polymer_kw": ["pp", "pa6", "pa66", "pc", "abs", "pbt", "pet", "pom", "polymer", "尼龙", "聚丙烯", "玻纤", "阻燃", "psmiles", "[*]"],
         "crystal_kw": ["lpscl", "lgps", "li6ps5cl", "lifepo4", "ncm", "sulfide", "li2s", "p2s5"],
     },
-    "default_target_properties": ["ionic_conductivity", "band_gap", "formation_energy"],
-    "example_formulas": ["Li6PS5Cl", "Li3YCl6", "LaTiO3", "LiMn2O4"],
+    "default_target_properties": ["tensile_strength", "flexural_modulus", "impact_strength", "heat_deflection_temp"],
+    "example_formulas": ["PA6/GF30", "PC/ABS", "PP/Talc20", "PBAT"],
 }
 
 
@@ -196,7 +197,7 @@ class DomainPackStore:
         多领域包场景下不再"取第一个活跃包"（存在歧义），而是：
         - 显式传入 domain_key：精确返回该领域包（须为活跃包，否则视为不存在）。
         - 未指定 domain_key：返回唯一的活跃包；若活跃包不止一个，则返回
-          优先级最低的默认包（battery 优先），调用方仍可显式指定 domain_key。
+          优先级最低的默认包（v4.1 默认领域 kingfa 优先），调用方仍可显式指定 domain_key。
         """
         if domain_key:
             pack = self.get_pack(domain_key)
@@ -206,8 +207,8 @@ class DomainPackStore:
             return None
         if len(packs) == 1:
             return packs[0]
-        # 多个活跃包：battery 作为默认领域，排在前面
-        return next((p for p in packs if p.domain_key == "battery"), packs[0])
+        # 多个活跃包：kingfa（改性塑料）作为 v4.1 默认领域，排在前面
+        return next((p for p in packs if p.domain_key in ("kingfa", "battery")), packs[0])
 
     @staticmethod
     def builtin_fallback() -> dict:

@@ -611,7 +611,11 @@ class SynthesisPlanner:
         except RuntimeError:
             # 无事件循环，可安全使用 asyncio.run
             try:
-                return asyncio.run(self.plan_synthesis_async(smiles, max_depth, num_routes))
+                routes = asyncio.run(self.plan_synthesis_async(smiles, max_depth, num_routes))
+                if routes:
+                    return routes
+                # ASKCOS 可达但无可用树（空 trees）：与异常同样回退本地合成树（回退必须透明）
+                return self._build_local_tree(smiles, max_depth, num_routes)
             except SynthesisServiceError:
                 # ASKCOS/InternLM 不可用时回退到本地合成树（v4.0 回退链要求）
                 return self._build_local_tree(smiles, max_depth, num_routes)

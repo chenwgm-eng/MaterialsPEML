@@ -1074,7 +1074,7 @@ class RouteRequest(BaseModel):
 
 class DiscoverRequest(BaseModel):
     target: str = ""
-    target_property: str = "ionic_conductivity"
+    target_property: str = "tensile_strength"  # v4.1 改性塑料默认目标
     max_iterations: int = Field(default=3, ge=1, le=20)
     elements: list[str] = Field(default_factory=list)
     num_candidates: int = Field(default=10, ge=1, le=50)  # P1-004: 添加边界校验
@@ -1082,6 +1082,7 @@ class DiscoverRequest(BaseModel):
     target_properties: list[dict] = Field(default_factory=list)  # 多目标：[{property, weight, direction, min, max}]
     parent_run_id: str = ""  # 可选：父轮次 run_id，用于迭代链追溯
     scenario_id: str = ""  # P0-001：关联研发场景 ID
+    smiles: str = ""  # 聚合物输入：SMILES / 体系提示（v4.1 透传给生成器）
     # 评测修复 P0-002：关联项目/任务，发现生成的候选材料必须落到项目下，
     # 否则 /projects/{id}/candidates 永远查不到（项目-候选关联断裂）
     project_id: str = ""
@@ -1312,7 +1313,7 @@ class ExperimentResultManualRequest(BaseModel):
         return v
 
 
-# T-016：常见电池材料属性数值范围白名单（超出范围拒绝入库，由调用方转为 400）。
+# T-016：常见材料属性数值范围白名单（超出范围拒绝入库，由调用方转为 400）。
 # key 为 property 裸名（_PROPERTY_ALIASES 的 key 或 prop.* 去前缀），
 # value 为 (下限, 上限, 单位标签)；不在白名单中的属性仅做 NaN/Inf 校验。
 _PROPERTY_VALUE_RANGES: dict[str, tuple[float, float, str]] = {
@@ -1324,6 +1325,19 @@ _PROPERTY_VALUE_RANGES: dict[str, tuple[float, float, str]] = {
     "capacity_retention": (0.0, 100.0, "%"),
     "youngs_modulus": (0.0, 1000.0, "GPa"),
     "shear_modulus": (0.0, 500.0, "GPa"),
+    # v4.1 改性塑料：高分子属性合理范围
+    "tensile_strength": (0.0, 2000.0, "MPa"),
+    "tensile_modulus": (0.0, 50000.0, "MPa"),
+    "flexural_modulus": (0.0, 50000.0, "MPa"),
+    "flexural_strength": (0.0, 2000.0, "MPa"),
+    "impact_strength": (0.0, 500.0, "kJ/m2"),
+    "heat_deflection_temp": (0.0, 500.0, "°C"),
+    "melt_flow_index": (0.0, 500.0, "g/10min"),
+    "elongation_at_break": (0.0, 1500.0, "%"),
+    "melting_point": (0.0, 600.0, "°C"),
+    "thermal_stability": (0.0, 900.0, "°C"),
+    "weight_loss": (0.0, 100.0, "%"),
+    "residual_mass": (0.0, 100.0, "%"),
 }
 
 # test_conditions 中温度字段的合法范围（°C），与前端 ExperimentDataForm.vue 软警告一致
@@ -1358,7 +1372,7 @@ def _validate_value_range(property_name: str, value: float, test_conditions: dic
                 )
 
 
-# 检测方法别名规范化：属性模板选项为 EIS/CV 等裸值，而 mdm.test_methods 主键为 method.* 格式。
+# 检测方法别名规范化：属性模板选项为 GB/T 1040 等标准名，而 mdm.test_methods 主键为 method.* 格式。
 # test_method 列有 FK → mdm.test_methods.method_id，写入前统一映射；
 # 未知值拒绝（400），既不静默置空丢数据，也不放任 FK 500。
 _TEST_METHOD_ALIASES = {
@@ -1371,6 +1385,32 @@ _TEST_METHOD_ALIASES = {
     "DC": "method.dc",
     "GA": "method.ga",
     "恒电流滴定": "method.gitt",
+    # v4.1 改性塑料：标准检测方法（GB/T / ISO / ASTM）
+    "GB/T 1040": "method.gbt_1040",
+    "ISO 527": "method.iso_527",
+    "ASTM D638": "method.astm_d638",
+    "GB/T 1843": "method.gbt_1843",
+    "ISO 180": "method.iso_180",
+    "ASTM D256": "method.astm_d256",
+    "GB/T 9341": "method.gbt_9341",
+    "ISO 178": "method.iso_178",
+    "ASTM D790": "method.astm_d790",
+    "GB/T 1634": "method.gbt_1634",
+    "ISO 75": "method.iso_75",
+    "ASTM D648": "method.astm_d648",
+    "GB/T 3682": "method.gbt_3682",
+    "ISO 1133": "method.iso_1133",
+    "ASTM D1238": "method.astm_d1238",
+    "GB/T 2408": "method.gbt_2408",
+    "UL94": "method.ul94",
+    "ISO 1210": "method.iso_1210",
+    "GB/T 1033": "method.gbt_1033",
+    "ISO 1183": "method.iso_1183",
+    "ASTM D792": "method.astm_d792",
+    "GB/T 19466": "method.gbt_19466",
+    "ISO 11357": "method.iso_11357",
+    "GB/T 33047": "method.gbt_33047",
+    "ISO 11358": "method.iso_11358",
 }
 
 
@@ -1405,6 +1445,20 @@ _PROPERTY_ALIASES = {
     "particle_size": "prop.particle_size",
     "glass_transition_temp": "prop.glass_transition_temp",
     "decomposition_temp": "prop.decomposition_temp",
+    # v4.1 改性塑料：高分子模板主字段（0058 迁移已播种 prop.*）
+    "tensile_strength": "prop.tensile_strength",
+    "elongation_at_break": "prop.elongation_at_break",
+    "tensile_modulus": "prop.tensile_modulus",
+    "impact_strength": "prop.impact_strength",
+    "flexural_modulus": "prop.flexural_modulus",
+    "flexural_strength": "prop.flexural_strength",
+    "heat_deflection_temp": "prop.heat_deflection_temp",
+    "melt_flow_index": "prop.melt_flow_index",
+    "melting_point": "prop.melting_point",
+    "thermal_stability": "prop.thermal_stability",
+    "weight_loss": "prop.weight_loss",
+    "residual_mass": "prop.residual_mass",
+    "flame_retardancy": "prop.flame_retardancy",
 }
 
 
@@ -1428,6 +1482,8 @@ _UNIT_ALIASES = {
     "℃": "C",
     "m²/g": "m2/g",
     "μm": "um",
+    "g/cm³": "g/cm3",
+    "kJ/m²": "kJ/m2",
 }
 
 
@@ -2501,6 +2557,96 @@ async def resume_ecml_from_data(run_id: str, req: ECMLResumeDataRequest):
     return summary
 
 
+class ParseGoalRequest(BaseModel):
+    """智能目标框解析请求（Q12：一句话目标 → 结构化研发上下文）。"""
+
+    goal: str = ""
+    constraints: dict | None = None
+
+
+# 材料体系关键词推断表（智能目标框）：缩写/中文名 → 领域包体系名
+_GOAL_SYSTEM_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
+    (("pa66", "尼龙66", "尼龙 66"), "PA66"),
+    (("pa6", "尼龙6", "尼龙 6", "聚酰胺"), "PA6"),
+    (("聚碳酸酯", "pc"), "PC"),
+    (("abs", "丙烯腈丁二烯苯乙烯"), "ABS"),
+    (("聚丙烯", "pp "), "PP"),
+    (("pbt", "聚对苯二甲酸丁二醇酯"), "PBT"),
+    (("pet", "聚对苯二甲酸乙二醇酯"), "PET"),
+    (("pla", "聚乳酸"), "PLA"),
+    (("pbat",), "PBAT"),
+    (("pps", "聚苯硫醚"), "PPS"),
+    (("pom", "聚甲醛"), "POM"),
+    (("peek", "聚醚醚酮"), "PEEK"),
+    (("pc/abs",), "PC/ABS"),
+    (("玻纤", "玻璃纤维", "gf"), "玻纤增强"),
+    (("碳纤", "碳纤维", "cf"), "碳纤增强"),
+    (("阻燃",), "阻燃改性"),
+    (("生物降解", "可降解"), "生物降解"),
+    (("增韧", "增韧改性"), "增韧改性"),
+]
+
+
+def _infer_goal_system(goal: str) -> str:
+    """从目标文本推断材料体系（Q12 智能目标框）。"""
+    import re as _re
+    t = (goal or "").lower()
+    matched = []
+    for kws, system in _GOAL_SYSTEM_KEYWORDS:
+        for kw in kws:
+            if _re.match(r"^[a-z0-9/]+$", kw):
+                # 英文缩写：词边界匹配（\bpc\b 不误命中 spc/process）
+                if _re.search(r"\b" + _re.escape(kw) + r"\b", t):
+                    matched.append(system)
+                    break
+            elif kw in t:
+                matched.append(system)
+                break
+    if not matched:
+        return ""
+    # 基材优先（第一个命中），增强/改性作为描述后缀
+    return matched[0]
+
+
+@app.post("/parse-goal", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
+async def parse_goal(req: ParseGoalRequest):
+    """智能目标框：一句话研发目标 → 结构化上下文（材料类型/体系/属性约束）。
+
+    复用 hybrid.intent_interpreter 的 NL 解析（元素约束、属性比较、锂语境推断），
+    叠加材料体系关键词推断。前端据此回填表单，实现"输入一句话就能跑"。
+    """
+    goal = (req.goal or "").strip()
+    if not goal:
+        raise HTTPException(status_code=400, detail="目标描述不能为空")
+    from .hybrid.intent_interpreter import IntentInterpreter
+
+    interpreter = IntentInterpreter()
+    intent = await interpreter.interpret(goal, req.constraints or {})
+    material_scope = intent.get("material_scope")
+    material_type = getattr(material_scope, "material_type", "") or ""
+    # 目标属性 → 可回填的约束形态（对齐 ResearchWorkbench 的 target_properties）
+    target_properties = []
+    for tp in intent.get("target_properties") or []:
+        entry = {
+            "name": tp.get("property"),
+            "direction": tp.get("direction", "maximize"),
+            "min": tp.get("min"),
+            "max": tp.get("max"),
+        }
+        if entry["name"]:
+            target_properties.append(entry)
+    return {
+        "goal": goal,
+        "material_scope": material_type,
+        "material_system": _infer_goal_system(goal),
+        "target_properties": target_properties,
+        "require_elements": intent.get("require_elements") or [],
+        "exclude_elements": intent.get("exclude_elements") or [],
+        "execution_profile": intent.get("execution_profile"),
+        "suggested_capabilities": intent.get("suggested_capabilities") or [],
+    }
+
+
 @app.post("/discover/crystal", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def discover_crystal(req: DiscoverRequest):
     # 多目标优化：target_properties 非空时启用加权评分
@@ -2581,17 +2727,21 @@ async def discover_crystal(req: DiscoverRequest):
 @app.post("/discover/polymer", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def discover_polymer(req: DiscoverRequest):
     target_props = req.target_properties if req.target_properties else None
+    # v4.1：target/smiles 作为体系提示透传给生成器（触发工程塑料模式）
+    material_system = req.target or req.smiles
     # 计算输入参数哈希快照（用于 AI 输出溯源）
     input_snapshot_hash = _compute_input_snapshot({
         "target_properties": req.target_properties or [],
         "num_candidates": req.num_candidates,
         "scenario_id": req.scenario_id,
+        "material_system": material_system,
     })
     # 聚合物生成涉及同步 LLM 调用，放在线程池中执行，避免阻塞事件循环导致前端请求被取消
     result = await asyncio.to_thread(
         agent.discover_polymer,
         target_properties=target_props,
         num_candidates=req.num_candidates,
+        material_system=material_system,
     )
     # 补充 ai_meta（每个候选 + 顶层）
     from datetime import datetime as _dt, timezone
@@ -2779,11 +2929,11 @@ def _build_agent_generate_prompt(
     if material_kind == "polymer":
         candidate_schema = (
             "    {\n"
-            '      "smiles": "聚合物的 SMILES 表示，如 CCO（乙醇）或 c1ccccc1（苯）",\n'
-            '      "name": "材料名称或简称，如 PEO",\n'
-            '      "polymer_type": "聚合物类型，如 聚醚 / 聚酯 / 聚酰胺",\n'
+            '      "smiles": "聚合物的 SMILES 表示，如 CC(=O)O（乙酸）或 c1ccccc1（苯）",\n'
+            '      "name": "材料名称或简称，如 PA6",\n'
+            '      "polymer_type": "聚合物类型，如 聚酰胺 / 聚碳酸酯 / ABS",\n'
             '      "rationale": "选择该配方的理由（1-2 句）",\n'
-            '      "predicted_properties": {"ionic_conductivity": 数值, "band_gap": 数值},\n'
+            '      "predicted_properties": {"tensile_strength": 数值, "flexural_modulus": 数值},\n'
             '      "confidence": 0.0-1.0 之间的数值，表示你对该候选达到目标属性的把握程度,\n'
             '      "key_assumptions": ["该预测成立依赖的关键假设"],\n'
             '      "evidence_sources": ["支撑该判断的证据来源"]\n'
@@ -2815,11 +2965,11 @@ def _build_agent_generate_prompt(
 
     system_prompt = (
         agent_persona
-        + "你是电池材料研发领域的首席材料学家。请基于任务目标，创造性地提出候选材料配方。\n\n"
+        + "你是高分子材料研发领域的首席材料学家。请基于任务目标，创造性地提出候选材料配方。\n\n"
         "要求：\n"
-        "1. 结合元素化学、晶体结构、材料已知规律进行推理，先给出思考过程（为什么选这些元素/结构/配比）\n"
+        "1. 结合高分子化学、工程塑料配方（基材/增强/阻燃/增韧）已知规律进行推理，先给出思考过程（为什么选这些基材/助剂/配比）\n"
         "2. 然后给出具体候选配方列表\n"
-        "3. 候选配方应覆盖不同结构族与元素组合，体现创造性，而非简单复述已知材料\n\n"
+        "3. 候选配方应覆盖不同树脂体系与助剂组合，体现创造性，而非简单复述已知材料\n\n"
         "输出必须是严格 JSON，不要包含 markdown 代码块标记或任何额外说明，格式如下：\n"
         "{\n"
         '  "reasoning": "你的思考过程：分析任务目标、候选元素空间、结构选择权衡、预期性能",\n'
@@ -2835,7 +2985,7 @@ def _build_agent_generate_prompt(
         "- confidence 必须诚实评估：文献充分支撑的已知材料族 0.7-0.9；合理外推 0.4-0.7； speculative 新结构 <0.4"
     )
     user_prompt = (
-        f"任务标题：{task_title or '电池材料研发'}\n"
+        f"任务标题：{task_title or '高分子改性材料研发'}\n"
         f"交付物：{deliverable or '未指定'}\n"
         f"目标属性要求：{prop_desc or '未指定'}\n"
         f"请生成 {num_candidates} 个{material_desc}"
@@ -3578,7 +3728,8 @@ def _predict_single_candidate(
                     features = {"formula": candidate.get("formula", ""),
                                 "smiles": candidate.get("smiles", "")}
                 else:
-                    features = {"smiles": candidate.get("smiles", candidate.get("psmiles", "")),
+                    features = {"smiles": candidate.get("smiles") or candidate.get("psmiles", ""),
+                                "psmiles": candidate.get("psmiles", ""),
                                 "formula": candidate.get("formula", "")}
                 result = predictor.predict(features, prop_name)
                 predicted_value = float(result.value)
@@ -3647,7 +3798,7 @@ async def batch_predict_candidates(req: BatchPredictRequest):
             req.target_properties, req.model_type,
         )
 
-        # 把预测值回填到候选顶层字段（便于列表展示）
+        # 把预测值回填到候选顶层字段（便于列表展示，v4.1 支持高分子属性通用回填）
         predictions = pred_result.get("predictions", {})
         for prop_name, pred in predictions.items():
             if "error" in pred:
@@ -3661,6 +3812,8 @@ async def batch_predict_candidates(req: BatchPredictRequest):
                 c["formation_energy"] = val
             elif prop_name == "ionic_conductivity" and c.get("ionic_conductivity_estimate") is None:
                 c["ionic_conductivity_estimate"] = val
+            elif c.get(prop_name) is None:
+                c[prop_name] = val
 
         # 2. 合成可行性检查（快速评分）
         synth_status = "pending"
@@ -4183,10 +4336,10 @@ async def create_process_deepening(candidate_id: str, req: ProcessDeepeningReque
 
 # 综合评分补算属性（与 generator 的 min-max 归一化方法一致，等权重）
 _SCORE_PROPS = [
-    ("stability_score", "maximize"),
-    ("band_gap", "maximize"),
-    ("formation_energy", "minimize"),
-    ("ionic_conductivity_estimate", "maximize"),
+    ("tensile_strength", "maximize"),
+    ("flexural_modulus", "maximize"),
+    ("impact_strength", "maximize"),
+    ("heat_deflection_temp", "maximize"),
 ]
 
 
@@ -4194,10 +4347,13 @@ def _backfill_multi_objective_scores(records: list[dict]) -> None:
     """为缺失综合评分的候选补算评分（原地修改）。
 
     历史/种子/转正候选可能未写入 multi_objective_score（为 0），
-    但属性齐全时按与候选生成器一致的 min-max 归一化方法补算，
-    保证工作台列表评分与候选详情属性可对应。
+    但属性齐全时按**绝对规格基准**归一化补算（ADR-0003），
+    与候选生成器同源（material_properties.REFERENCE_RANGES），
+    保证跨列表/跨轮次可比。
     属性优先取候选顶层字段，其次取 data JSONB（旧数据属性存于嵌套结构）。
     """
+    from .material_properties import REFERENCE_RANGES
+
     def _prop(r, key):
         v = r.get(key)
         if v is None:
@@ -4219,11 +4375,19 @@ def _backfill_multi_objective_scores(records: list[dict]) -> None:
         return
     total_weight = float(len(_SCORE_PROPS))
     for prop, direction in _SCORE_PROPS:
-        vals = [_num(_prop(r, prop)) for r in targets]
-        v_min, v_max = min(vals), max(vals)
-        rng = (v_max - v_min) if v_max > v_min else 1.0
-        for r, v in zip(targets, vals):
-            normalized = (v - v_min) / rng
+        ref = REFERENCE_RANGES.get(prop)
+        for r in targets:
+            v = _num(_prop(r, prop))
+            if ref is not None:
+                lo, hi, _unit, _src = ref
+                rng = (hi - lo) if hi > lo else 1.0
+                normalized = max(0.0, min(1.0, (v - lo) / rng))
+            else:
+                # 无参考范围的属性回退池内相对（罕见）
+                vals = [_num(_prop(x, prop)) for x in targets]
+                v_min, v_max = min(vals), max(vals)
+                rng = (v_max - v_min) if v_max > v_min else 1.0
+                normalized = (v - v_min) / rng
             if direction == "minimize":
                 normalized = 1.0 - normalized
             r["multi_objective_score"] = _num(r.get("multi_objective_score")) + (1.0 / total_weight) * normalized
@@ -4496,7 +4660,7 @@ def _match_route_by_id(routes: list[dict], route_id: str) -> tuple[dict | None, 
 
 
 def _resolve_target_property(domain_pack: dict | None = None) -> str:
-    """从领域包读取默认目标属性；未配置时回退 ionic_conductivity。
+    """从领域包读取默认目标属性；未配置时回退 v4.1 默认高分子属性。
 
     用于候选生成与 BOM 生成时传递 target_property，避免在多个接口中写死。
     """
@@ -4508,7 +4672,7 @@ def _resolve_target_property(domain_pack: dict | None = None) -> str:
         props = _dp.get("default_target_properties") or []
         if props and props[0]:
             return str(props[0])
-    return "ionic_conductivity"
+    return "tensile_strength"
 
 
 def _resolve_material_domain(cfg, domain_key: str = "") -> dict:
@@ -5347,7 +5511,7 @@ _TOOL_TEST_ARGS: dict[str, dict] = {
     "generate_crystal_candidates": {"elements": [], "num_candidates": 1},
     "generate_polymer_candidates": {"num_candidates": 1},
     "predict_crystal_properties": {"features": {"formula": "LiCoO2"}, "property_name": "band_gap"},
-    "predict_polymer_properties": {"features": {"smiles": "CCO"}, "property_name": "ionic_conductivity"},
+    "predict_polymer_properties": {"features": {"smiles": "CC(=O)O"}, "property_name": "tensile_strength"},
     "check_synthesis_feasibility": {"smiles": "CCO"},
     "verify_dft": {"smiles": "CCO", "property_name": "total_energy"},
     "get_experiment_results": {},
@@ -5359,8 +5523,8 @@ _TOOL_TEST_ARGS: dict[str, dict] = {
 # SCP 智能体工具的自测查询：schema 中 query 类字符串参数填此值
 _SCP_TEST_QUERIES: dict[str, str] = {
     "scp_scitool_chem": "查询乙醇（SMILES: CCO）的分子量与 logP",
-    "scp_scigraph_material": "查询 LiCoO2 的基本材料信息",
-    "scp_scitool_mat": "查询 LiCoO2 的电池正极材料性能",
+    "scp_scigraph_material": "查询 PA6 的基本材料信息",
+    "scp_scitool_mat": "查询玻纤增强 PA6 的拉伸强度性能",
     "scp_chem_reaction": "计算 25°C 下 1 mol/L NaCl 水溶液的物质的量浓度",
     "scp_origene_pubchem": "检索化合物 ethanol 的 PubChem 信息",
     "scp_origene_chembl": "检索 aspirin 的 ChEMBL 生物活性信息",
@@ -6571,7 +6735,10 @@ async def ecml_run_step(req: ECMLRunStepRequest):
             raise HTTPException(status_code=503, detail="外部 AI 服务不可达，请稍后重试")
 
     target_props = req.target_properties if req.target_properties else None
-    run_id = req.parent_run_id or f"ecml_{int(time.time())}_{req.target[:8]}"
+    # run_id 清理特殊字符（目标含 / 空格等会破坏 URL 路径）
+    import re as _rid_re
+    run_slug = _rid_re.sub(r"[^A-Za-z0-9_-]", "_", req.target)[:8] or "polymer"
+    run_id = req.parent_run_id or f"ecml_{int(time.time())}_{run_slug}"
 
     # 计算输入参数哈希快照（用于 AI 输出溯源）
     input_snapshot_hash = _compute_input_snapshot({
@@ -6716,8 +6883,8 @@ async def get_model_catalog():
                 "enabled": internlm_ok,
                 "grayed_out": not internlm_ok,
                 "available": internlm_ok,
-                "note": "大语言模型预测，覆盖离子电导率、带隙、生成能等多种性质" if internlm_ok else "InternLM 未配置 API Key",
-                "supported_properties": ["ionic_conductivity", "band_gap", "formation_energy", "e_above_hull"],
+                "note": "大语言模型预测，覆盖拉伸强度、弯曲模量、冲击强度等多种高分子性质" if internlm_ok else "InternLM 未配置 API Key",
+                "supported_properties": ["tensile_strength", "flexural_modulus", "impact_strength", "heat_deflection_temp"],
                 "provider": "intern-ai",
             },
             {
@@ -6728,7 +6895,8 @@ async def get_model_catalog():
                 "grayed_out": not internlm_ok,
                 "available": internlm_ok,
                 "note": "RDKit 描述符 + InternLM 联合预测，专为聚合物材料设计" if internlm_ok else "依赖 InternLM 配置",
-                "supported_properties": ["ionic_conductivity", "band_gap"],
+                "supported_properties": ["tensile_strength", "flexural_modulus", "impact_strength",
+                                         "heat_deflection_temp", "melt_flow_index", "glass_transition_temp"],
                 "provider": "local+intern-ai",
             },
             {
@@ -6775,7 +6943,7 @@ async def get_model_catalog():
                 "grayed_out": True,
                 "available": False,
                 "note": "聚合物图神经网络，扩展功能",
-                "supported_properties": ["ionic_conductivity", "band_gap"],
+                "supported_properties": ["tensile_strength", "flexural_modulus", "glass_transition_temp", "dielectric_constant"],
                 "provider": "local",
                 "extension_required": "需训练/加载预训练权重",
             },
@@ -8728,58 +8896,75 @@ async def set_material_type_template(material_type: str, req: MaterialTypeTempla
 
 # 实验类型 → 表单字段模板映射
 _EXPERIMENT_TYPE_TEMPLATES: dict[str, list[dict]] = {
-    "ionic_conductivity": [
-        {"key": "ionic_conductivity", "label_cn": "离子电导率", "value_type": "float", "unit": "S/cm", "required": True},
+    # ── 改性塑料领域测试模板（v4.1：全系统切换改性塑料，替换电池电化学模板） ──
+    "tensile": [
+        {"key": "tensile_strength", "label_cn": "拉伸强度", "value_type": "float", "unit": "MPa", "required": True},
+        {"key": "elongation_at_break", "label_cn": "断裂伸长率", "value_type": "float", "unit": "%", "required": False},
+        {"key": "tensile_modulus", "label_cn": "拉伸模量", "value_type": "float", "unit": "MPa", "required": False},
+        {"key": "test_speed", "label_cn": "测试速度", "value_type": "float", "unit": "mm/min", "required": False},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 1040", "ISO 527", "ASTM D638"]},
+        {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
+    ],
+    "impact": [
+        {"key": "impact_strength", "label_cn": "冲击强度", "value_type": "float", "unit": "kJ/m²", "required": True},
+        {"key": "notch_type", "label_cn": "缺口类型", "value_type": "str", "unit": "", "required": False, "options": ["无缺口", "A 型缺口", "C 型缺口"]},
         {"key": "test_temperature", "label_cn": "测试温度", "value_type": "float", "unit": "°C", "required": False},
-        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["EIS", "DC", "恒电流滴定"]},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 1843", "ISO 180", "ASTM D256"]},
         {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
     ],
-    "electrochemical": [
-        {"key": "operating_voltage", "label_cn": "工作电压", "value_type": "float", "unit": "V", "required": True},
-        {"key": "theoretical_capacity", "label_cn": "理论容量", "value_type": "float", "unit": "mAh/g", "required": True},
-        {"key": "cycle_stability", "label_cn": "循环稳定性", "value_type": "int", "unit": "cycles", "required": False},
-        {"key": "capacity_retention", "label_cn": "容量保持率", "value_type": "float", "unit": "%", "required": False},
-        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["CV", "GA", "EIS", "DC"]},
+    "flexural": [
+        {"key": "flexural_modulus", "label_cn": "弯曲模量", "value_type": "float", "unit": "MPa", "required": True},
+        {"key": "flexural_strength", "label_cn": "弯曲强度", "value_type": "float", "unit": "MPa", "required": False},
+        {"key": "test_speed", "label_cn": "测试速度", "value_type": "float", "unit": "mm/min", "required": False},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 9341", "ISO 178", "ASTM D790"]},
         {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
     ],
-    "eis": [
-        {"key": "bulk_resistance", "label_cn": "体电阻", "value_type": "float", "unit": "Ω", "required": True},
-        {"key": "charge_transfer_resistance", "label_cn": "电荷转移电阻", "value_type": "float", "unit": "Ω", "required": False},
+    "hdt": [
+        {"key": "heat_deflection_temp", "label_cn": "热变形温度", "value_type": "float", "unit": "°C", "required": True},
+        {"key": "load_stress", "label_cn": "载荷应力", "value_type": "float", "unit": "MPa", "required": False, "options": []},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 1634", "ISO 75", "ASTM D648"]},
+        {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
+    ],
+    "mfi": [
+        {"key": "melt_flow_index", "label_cn": "熔融指数", "value_type": "float", "unit": "g/10min", "required": True},
         {"key": "test_temperature", "label_cn": "测试温度", "value_type": "float", "unit": "°C", "required": False},
-        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["EIS"]},
+        {"key": "test_load", "label_cn": "载荷", "value_type": "float", "unit": "kg", "required": False},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 3682", "ISO 1133", "ASTM D1238"]},
         {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
     ],
-    "cv": [
-        {"key": "oxidation_potential", "label_cn": "氧化电位", "value_type": "float", "unit": "V", "required": True},
-        {"key": "reduction_potential", "label_cn": "还原电位", "value_type": "float", "unit": "V", "required": True},
-        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["CV"]},
+    "flame_retardancy": [
+        {"key": "flame_retardancy", "label_cn": "阻燃等级", "value_type": "str", "unit": "", "required": True, "options": ["V-0", "V-1", "V-2", "HB"]},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 2408", "UL94", "ISO 1210"]},
         {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
     ],
-    "xrd": [
-        {"key": "crystallinity", "label_cn": "结晶度", "value_type": "float", "unit": "%", "required": False},
-        {"key": "crystal_system", "label_cn": "晶系", "value_type": "str", "unit": "", "required": False},
-        {"key": "space_group", "label_cn": "空间群", "value_type": "str", "unit": "", "required": False},
-        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["XRD"]},
-        {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
-    ],
-    "sem": [
-        {"key": "particle_size", "label_cn": "粒径", "value_type": "float", "unit": "nm", "required": False},
-        {"key": "surface_area", "label_cn": "比表面积", "value_type": "float", "unit": "m²/g", "required": False},
-        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["SEM"]},
+    "density": [
+        {"key": "density", "label_cn": "密度", "value_type": "float", "unit": "g/cm³", "required": True},
+        {"key": "test_temperature", "label_cn": "测试温度", "value_type": "float", "unit": "°C", "required": False},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 1033", "ISO 1183", "ASTM D792"]},
         {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
     ],
     "dsc": [
         {"key": "glass_transition_temp", "label_cn": "玻璃化转变温度", "value_type": "float", "unit": "°C", "required": False},
         {"key": "melting_point", "label_cn": "熔点", "value_type": "float", "unit": "°C", "required": False},
-        {"key": "crystallization_temp", "label_cn": "结晶温度", "value_type": "float", "unit": "°C", "required": False},
-        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["DSC"]},
+        {"key": "crystallinity", "label_cn": "结晶度", "value_type": "float", "unit": "%", "required": False},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 19466", "ISO 11357"]},
         {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
     ],
     "tga": [
-        {"key": "decomposition_temp", "label_cn": "分解温度", "value_type": "float", "unit": "°C", "required": True},
+        {"key": "thermal_stability", "label_cn": "热稳定温度（5% 失重）", "value_type": "float", "unit": "°C", "required": True},
         {"key": "weight_loss", "label_cn": "失重率", "value_type": "float", "unit": "%", "required": False},
         {"key": "residual_mass", "label_cn": "残余质量", "value_type": "float", "unit": "%", "required": False},
-        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["TGA"]},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 33047", "ISO 11358"]},
+        {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
+    ],
+    "xrd": [
+        {"key": "crystallinity", "label_cn": "结晶度", "value_type": "float", "unit": "%", "required": False},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["XRD"]},
+        {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
+    ],
+    "sem": [
+        {"key": "filler_dispersion", "label_cn": "填料分散性评价", "value_type": "str", "unit": "", "required": False},
+        {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["SEM"]},
         {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
     ],
 }
@@ -9141,7 +9326,7 @@ async def _ai_generate_experiment_procedure(
             material_info += f"\n可用物料: {', '.join(mat_names)}"
 
     prompt = (
-        f"你是电池材料实验专家。请为以下材料设计一套标准实验测试步骤（用于离子电导率/电化学性能测试）。\n"
+        f"你是高分子改性塑料实验专家。请为以下材料设计一套标准实验测试步骤（用于力学性能/热学性能测试）。\n"
         f"{material_info}\n\n"
         f"请返回 JSON 数组，每个步骤包含以下字段：\n"
         f'- "step": 步骤序号（整数）\n'
@@ -9562,6 +9747,16 @@ def _save_single_result_record(req: ExperimentResultManualRequest) -> Experiment
         data_quality = "simulated" if req.confidence >= 0.8 else "estimated"
     else:
         data_quality = req.data_quality or "estimated"
+    # ADR-0002：人工录入路径写入溯源（evidence_level 与 data_quality 对齐）
+    provenance = [
+        {
+            "source_type": "manual_entry",
+            "provider": "local_db",
+            "model_or_tool": "experiment_controller",
+            "evidence_level": data_quality,
+            "recorded_by": req.uploaded_by or "",
+        }
+    ]
     record = ExperimentResultRecord(
         result_id=f"RES_{_uuid.uuid4().hex[:8]}",
         experiment_order_id=req.experiment_order_id,
@@ -9580,6 +9775,7 @@ def _save_single_result_record(req: ExperimentResultManualRequest) -> Experiment
         qc_status="PENDING",
         scenario_id=scenario_id,
         data_quality=data_quality,
+        provenance=provenance,
     )
     # 联动创建样品记录（必须先于 save_result_record：fk_results_sample 要求样品已存在）
     _ensure_sample_for_result(req.sample_id, source_type="manual_entry",
@@ -10536,7 +10732,7 @@ async def decompose_project(req: ProjectDecomposeRequest):
 
     system_prompt = (
         agent_persona
-        + "你是电池材料研发项目的任务拆解专家。请根据项目名称和研发目标，"
+        + "你是高分子改性塑料研发项目的任务拆解专家。请根据项目名称和研发目标，"
         "拆解出 1-3 个具体可执行的任务。每个任务对应一个交付物（某种材料），"
         "并给出该材料的目标属性（含优化方向与阈值）。\n\n"
         "输出必须是严格 JSON 数组，不要包含 markdown 代码块标记或任何额外说明。"
@@ -10546,7 +10742,7 @@ async def decompose_project(req: ProjectDecomposeRequest):
         '  "title": "任务标题，简洁描述要做什么",\n'
         '  "deliverable": "交付物名称，即最终要产出的材料",\n'
         '  "target_properties": [\n'
-        '    {"name": "属性名（英文 key，如 ionic_conductivity）", '
+        '    {"name": "属性名（英文 key，如 tensile_strength）", '
         '"direction": "maximize 或 minimize", "min": 数值或 null, "max": 数值或 null}\n'
         "  ]\n"
         "}\n"
@@ -10554,9 +10750,9 @@ async def decompose_project(req: ProjectDecomposeRequest):
         "1. 必须返回合法 JSON 数组。\n"
         "2. task_id 必须是合法 UUID 字符串。\n"
         "3. direction 只能是 maximize 或 minimize。\n"
-        "4. 属性名使用英文 snake_case，参考电池材料常见属性："
-        "ionic_conductivity / electronic_conductivity / capacity / voltage / "
-        "stability / energy_density / cycle_life / diffusion_coefficient 等。"
+        "4. 属性名使用英文 snake_case，参考高分子改性塑料常见属性："
+        "tensile_strength / flexural_modulus / impact_strength / heat_deflection_temp / "
+        "melt_flow_index / elongation_at_break / thermal_stability / crystallinity 等。"
     )
     user_prompt = (
         f"项目名称：{req.name}\n"

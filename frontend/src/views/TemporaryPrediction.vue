@@ -113,7 +113,7 @@
             </a-row>
             <!-- 单目标 -->
             <a-form-item v-if="crystalForm.optimize_mode === 'single'" label="目标属性">
-              <a-select v-model:value="crystalForm.target_property" :options="propertyOptions" />
+              <a-select v-model:value="crystalForm.target_property" :options="visiblePropertyOptions" />
             </a-form-item>
             <!-- 多目标 -->
             <div v-else>
@@ -392,9 +392,9 @@
               >选择</a-checkbox>
             </div>
             <div class="c-metrics">
-              <span v-if="c.band_gap != null" class="c-metric"><span class="c-label">带隙</span><b class="c-value">{{ fmtVal(c.band_gap) }}</b></span>
-              <span v-if="c.formation_energy != null" class="c-metric"><span class="c-label">形成能</span><b class="c-value">{{ fmtVal(c.formation_energy) }}</b></span>
-              <span v-if="c.ionic_conductivity_estimate != null" class="c-metric"><span class="c-label">电导率</span><b class="c-value">{{ fmtVal(c.ionic_conductivity_estimate) }}</b></span>
+              <span v-if="c.tensile_strength != null" class="c-metric"><span class="c-label">拉伸强度</span><b class="c-value">{{ fmtVal(c.tensile_strength) }}</b></span>
+              <span v-if="c.flexural_modulus != null" class="c-metric"><span class="c-label">弯曲模量</span><b class="c-value">{{ fmtVal(c.flexural_modulus) }}</b></span>
+              <span v-if="c.impact_strength != null" class="c-metric"><span class="c-label">冲击强度</span><b class="c-value">{{ fmtVal(c.impact_strength) }}</b></span>
               <span v-if="c.multi_objective_score != null" class="c-metric"><span class="c-label">综合评分</span><b class="c-value">{{ (c.multi_objective_score * 100).toFixed(0) }}%</b></span>
             </div>
             <a-collapse :bordered="false" class="c-collapse">
@@ -668,7 +668,7 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const materialType = ref('crystal')
+const materialType = ref('polymer')
 const candidates = ref([])
 const selected = ref([])
 const selectedKeys = ref([])
@@ -765,7 +765,7 @@ const availabilityColumns = computed(() => [
 
 const crystalForm = reactive({
   formula: '',
-  target_property: 'ionic_conductivity',
+  target_property: 'band_gap',
   num_candidates: 5,
   optimize_mode: 'single', // 'single' | 'multi'
   multi_objective_props: [],
@@ -843,7 +843,7 @@ const LAST_FORMULA_KEY = 'battery_prediction:last_formula'
 const LAST_SMILES_KEY = 'battery_prediction:last_smiles'
 
 const crystalTemplates = ['LiCoO2', 'LiFePO4', 'LiNi0.8Mn0.1Co0.1O2']
-const polymerTemplates = ['PEO', 'PVDF', 'PMMA']
+const polymerTemplates = ['PA6', 'PC', 'ABS', 'PP']
 
 const confirmVisible = ref(false)
 const confirmTitle = ref('')
@@ -862,11 +862,13 @@ const carryInfo = computed(() => {
   return parts.join(' · ')
 })
 
-// 目标属性 → 候选字段映射（晶体候选中离子电导率字段名带 _estimate 后缀）
+// 目标属性 → 候选字段映射（候选字段与属性 key 同名）
 const propertyFieldMap = {
-  ionic_conductivity: 'ionic_conductivity_estimate',
-  band_gap: 'band_gap',
-  formation_energy: 'formation_energy',
+  tensile_strength: 'tensile_strength',
+  flexural_modulus: 'flexural_modulus',
+  impact_strength: 'impact_strength',
+  heat_deflection_temp: 'heat_deflection_temp',
+  melt_flow_index: 'melt_flow_index',
 }
 
 const chartPropertyLabel = computed(() => {
@@ -878,11 +880,12 @@ const hasResults = computed(() => candidates.value.length > 0)
 
 // 属性 key → 候选字段映射
 const FIELD_MAP = {
-  ionic_conductivity: 'ionic_conductivity_estimate',
-  band_gap: 'band_gap',
-  formation_energy: 'formation_energy',
-  stability: 'stability_score',
-  energy_above_hull: 'energy_above_hull',
+  tensile_strength: 'tensile_strength',
+  flexural_modulus: 'flexural_modulus',
+  impact_strength: 'impact_strength',
+  heat_deflection_temp: 'heat_deflection_temp',
+  melt_flow_index: 'melt_flow_index',
+  glass_transition_temp: 'glass_transition_temp',
 }
 
 const hasMultiObjective = computed(() => {
@@ -967,15 +970,19 @@ onMounted(async () => {
     currentScenarioId.value = String(route.query.scenario_id)
   }
 
-  // 根据 query 自动判断材料类型
+  // 根据 query 自动判断材料类型（默认改性塑料 polymer；显式 formula 才切晶体）
   const qType = route.query.material_type
   const hasQuery = route.query.formula || route.query.smiles
-  if (qType === 'polymer' || (!route.query.formula && route.query.smiles)) {
-    materialType.value = 'polymer'
-    polymerForm.smiles = route.query.smiles || ''
-  } else {
+  if (qType === 'crystal' || (qType !== 'polymer' && route.query.formula)) {
     materialType.value = 'crystal'
     crystalForm.formula = route.query.formula || ''
+  } else {
+    materialType.value = 'polymer'
+    polymerForm.smiles = route.query.smiles || ''
+  }
+  // Dashboard 快捷入口 /workbench?target=PA6：target 作为体系提示填入聚合物输入
+  if (route.query.target && !route.query.smiles && materialType.value === 'polymer') {
+    polymerForm.smiles = String(route.query.target)
   }
 
   // P3-2/P0-001：研发工作台派生上下文 —— 目标属性预填，避免重复录入
@@ -1002,23 +1009,33 @@ onMounted(async () => {
   } catch (e) {
     if (e.name === 'AbortError' || e.code === 'ERR_CANCELED' || e.message === 'canceled') return
     propertyOptions.value = [
-      { label: '离子电导率', value: 'ionic_conductivity' },
-      { label: '带隙', value: 'band_gap' },
-      { label: '形成能', value: 'formation_energy' },
+      { label: '拉伸强度', value: 'tensile_strength' },
+      { label: '弯曲模量', value: 'flexural_modulus' },
+      { label: '冲击强度', value: 'impact_strength' },
+      { label: '热变形温度', value: 'heat_deflection_temp' },
+      { label: '玻璃化转变温度', value: 'glass_transition_temp' },
     ]
   }
 
-  // 加载多目标属性选项（预测方法维度）
-  const { dimensionOptions } = useMdmDict()
-  try {
-    const loaded = await dimensionOptions('data_source')
-    multiObjectiveOptions.value = loaded.length ? loaded : [...multiObjectiveOptionsFallback]
-    if (!loaded.length) {
-      message.warning('部分下拉选项未能从主数据加载，已使用本地兜底')
+// 按材料类型过滤属性选项：晶体分支显示带隙/形成能，聚合物分支仅显示高分子/通用属性
+const visiblePropertyOptions = computed(() => {
+  const all = propertyOptions.value
+  if (materialType.value === 'crystal') {
+    return all.filter((o) => o.value === 'band_gap' || o.value === 'formation_energy')
+  }
+  return all.filter((o) => o.value !== 'band_gap' && o.value !== 'formation_energy')
+})
+
+  // 多目标属性选项：直接使用 objectiveConfig 共享常量（属性 key 与后端 _SCORE_PROPS 对齐）
+  multiObjectiveOptions.value = [...MULTI_OBJECTIVE_OPTIONS]
+})
+
+// 材料类型切换时校准单目标属性：晶体分支仅支持带隙/形成能
+watch(materialType, (mt) => {
+  if (mt === 'crystal') {
+    if (crystalForm.target_property === 'tensile_strength') {
+      crystalForm.target_property = 'band_gap'
     }
-  } catch (e) {
-    multiObjectiveOptions.value = [...multiObjectiveOptionsFallback]
-    message.warning('部分下拉选项未能从主数据加载，已使用本地兜底')
   }
 })
 
@@ -1100,8 +1117,11 @@ function onCardCheck(c, idx, checked) {
 function detailEntries(c) {
   const labels = {
     formula: '化学式', smiles: 'SMILES', space_group: '空间群', structure_type: '结构类型',
-    band_gap: '带隙(eV)', formation_energy: '形成能(eV/atom)', ionic_conductivity_estimate: '电导率(S/cm)',
-    stability_score: '稳定性', multi_objective_score: '综合评分', source: '来源',
+    tensile_strength: '拉伸强度(MPa)', flexural_modulus: '弯曲模量(MPa)', impact_strength: '冲击强度(kJ/m²)',
+    heat_deflection_temp: '热变形温度(°C)', melt_flow_index: '熔体流动速率(g/10min)',
+    elongation_at_break: '断裂伸长率(%)', thermal_stability: '热稳定温度(°C)', crystallinity: '结晶度(%)',
+    glass_transition_temp: '玻璃化转变温度(K)', dielectric_constant: '介电常数',
+    multi_objective_score: '综合评分', source: '来源',
   }
   const entries = []
   for (const [k, label] of Object.entries(labels)) {

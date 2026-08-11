@@ -77,7 +77,7 @@ BUILTIN_PIPELINES: dict[str, list[dict]] = {
         {"action": "route_material", "agent_role": "planner", "autonomy_level": "L1"},
         {"action": "generate_polymer_candidates", "agent_role": "thinker", "autonomy_level": "L0"},
         {"action": "check_synthesis_feasibility", "agent_role": "doer", "autonomy_level": "L1"},
-        {"action": "predict_crystal_properties", "agent_role": "doer", "autonomy_level": "L1"},
+        {"action": "predict_polymer_properties", "agent_role": "doer", "autonomy_level": "L1"},
         {"action": "compliance_check", "agent_role": "verifier", "autonomy_level": "L2"},
     ],
 }

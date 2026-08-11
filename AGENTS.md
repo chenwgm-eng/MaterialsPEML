@@ -33,6 +33,7 @@ MaterialsPEML Lab — 电池材料 AI 研发平台（前端 Vue3 + 后端 FastAP
 - **领域包**：`industrialization.domain_packs`（battery 默认 / kingfa 改性塑料）DB 持久化，系统设置页切换，`/config?domain_key=` 读取；材料体系/属性随领域包变化。
 - **放行卡门禁**：候选 `data.release_card_required` 且未 `release_card_approved` 时阻断下单；无卡时自动补建待审批卡（防死锁），审批 agree 回写候选（dedup=False）。
 - **综合评分补算**：历史候选 `multi_objective_score=0` 但属性齐全时，`/candidates`、`/tasks/{id}/candidates`、`/process-engineer/workbench` 用 `_backfill_multi_objective_scores` 按生成器方法补算。
+- **领域包（v4.1 起全系统严格对照改性塑料）**：当前默认领域 = 改性塑料（kingfa）。领域相关默认值已从电池切换为高分子：实验模板（`_EXPERIMENT_TYPE_TEMPLATES`：tensile/impact/flexural/hdt/mfi/flame_retardancy/density…）、`ECML_TARGET_KEYS` 与 `EXPERIMENTAL_KEYS`（拉伸/弯曲/冲击/HDT/MFI/热稳定/断裂伸长/Tg）、评分补算 `_SCORE_PROPS`（4 个 maximize 力学属性）、知识库关键词（`knowledge/ingestion.py` MATERIAL_PATTERNS/PROPERTY_KEYWORDS）、生成器与 FormulaAgent 的 LLM 提示词。MDM 属性/样品类型/物料/设备已含塑料体系（PP/PA6/PC/ABS/PLA/PBAT + 玻纤/碳纤/阻燃剂 + 万能试验机/挤出机等）。`MDM 属性与物料分类有 FK（mdm.units/classifications）`——新增属性单位或物料分类须先入表；电池历史数据保留未删（防 FK 断裂）。
 
 ## 测试
 

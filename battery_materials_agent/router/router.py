@@ -37,7 +37,22 @@ class RouterResult(BaseModel):
 class MaterialRouter:
     """Routes materials to the correct processing branch based on input format."""
 
-    POLYMER_KEYWORDS = {"polymer", "peo", "pan", "pvdf", "pmma", "polystyrene", "polyethylene", "polypropylene"}
+    # v4.1 改性塑料领域：工程塑料缩写（精确整名匹配）+ 高分子通用词
+    POLYMER_ABBREVIATIONS = {
+        "PA6", "PA66", "PA12", "PA46", "PA610", "PA1010",
+        "PC", "ABS", "PP", "PE", "PS", "PBT", "PET", "POM",
+        "PPS", "PTFE", "PMMA", "PEI", "PEEK", "TPU", "EVA",
+        "PLA", "PBAT", "LCP", "PPO", "SAN", "PCT", "PVDF", "PVA",
+    }
+    POLYMER_KEYWORDS = {
+        "polymer", "peo", "pan", "pvdf", "pmma", "polystyrene", "polyethylene", "polypropylene",
+        "nylon", "polyamide", "polycarbonate", "polyacetal", "polyoxymethylene",
+        "polybutylene", "polylactic", "polylactide", "polyether", "polyurethane",
+        "尼龙", "聚酰胺", "聚碳酸酯", "聚丙烯", "聚乙烯", "聚苯乙烯", "聚甲醛",
+        "聚酯", "聚氨酯", "聚乳酸", "玻纤增强", "碳纤增强", "阻燃", "改性塑料",
+        "工程塑料", "pa6", "pa66", "abs", "pbt", "pet", "pom", "pps", "ptfe",
+        "peek", "tpu", "eva", "pla", "pbse", "lcp", "ppo",
+    }
     CRYSTAL_KEYWORDS = {"crystal", "cubic", "tetragonal", "orthorhombic", "spinel", "layered", "nasicon", "garnet"}
 
     def route(self, material: MaterialInput) -> RouterResult:
@@ -95,6 +110,15 @@ class MaterialRouter:
                 branch=hint_branch.get(material.material_type_hint, MaterialBranch.CRYSTAL_BRANCH),
                 confidence=0.6,
                 reason="User-provided type hint",
+            )
+
+        name_upper = material.name.strip().upper()
+        if name_upper in self.POLYMER_ABBREVIATIONS:
+            return RouterResult(
+                material_type=MaterialType.POLYMER,
+                branch=MaterialBranch.POLYMER_BRANCH,
+                confidence=0.9,
+                reason=f"Engineering plastic abbreviation match: {name_upper}",
             )
 
         name_lower = material.name.lower()

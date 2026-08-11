@@ -5,6 +5,8 @@
  * - TemporaryPrediction.vue（临时材料性能预测，已并入「材料设计」工作台）
  * - ECMLMonitor.vue（实验闭环迭代）
  *
+ * v4.1 改性塑料领域：目标对齐后端 _SCORE_PROPS（4 个 maximize 力学属性）。
+ *
  * 用法：
  *   import { DEFAULT_MULTI_OBJECTIVE_CONFIG, MULTI_OBJECTIVE_OPTIONS } from '@/constants/objectiveConfig'
  *   const multiObjectiveConfig = reactive({ ...DEFAULT_MULTI_OBJECTIVE_CONFIG })
@@ -12,19 +14,20 @@
  */
 
 // 默认多目标配置：权重 + 优化方向（与后端 _apply_multi_objective 语义一致）
+// v4.1 改性塑料：5 属性等权（0.2×5=1.0），对齐后端 _SCORE_PROPS 高分子评分属性
 export const DEFAULT_MULTI_OBJECTIVE_CONFIG = {
-  ionic_conductivity: { weight: 0.5, direction: 'maximize', min: null, max: null },
-  band_gap: { weight: 0.3, direction: 'maximize', min: null, max: null },
-  formation_energy: { weight: 0.3, direction: 'minimize', min: null, max: null },
-  stability: { weight: 0.3, direction: 'maximize', min: null, max: null },
-  energy_above_hull: { weight: 0.2, direction: 'minimize', min: null, max: null },
+  tensile_strength: { weight: 0.2, direction: 'maximize', min: null, max: null },
+  flexural_modulus: { weight: 0.2, direction: 'maximize', min: null, max: null },
+  impact_strength: { weight: 0.2, direction: 'maximize', min: null, max: null },
+  heat_deflection_temp: { weight: 0.2, direction: 'maximize', min: null, max: null },
+  melt_flow_index: { weight: 0.2, direction: 'maximize', min: null, max: null },
 }
 
 // 多目标可选项（中文 label + value）
 export const MULTI_OBJECTIVE_OPTIONS = [
-  { label: '离子电导率', value: 'ionic_conductivity' },
-  { label: '带隙', value: 'band_gap' },
-  { label: '形成能', value: 'formation_energy' },
-  { label: '稳定性', value: 'stability' },
-  { label: '能量高于凸包', value: 'energy_above_hull' },
+  { label: '拉伸强度', value: 'tensile_strength' },
+  { label: '弯曲模量', value: 'flexural_modulus' },
+  { label: '冲击强度', value: 'impact_strength' },
+  { label: '热变形温度', value: 'heat_deflection_temp' },
+  { label: '熔体流动速率', value: 'melt_flow_index' },
 ]

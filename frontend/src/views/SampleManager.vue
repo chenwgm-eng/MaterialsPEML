@@ -134,7 +134,7 @@
         <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item label="样品名称" name="name">
-              <a-input v-model:value="form.name" name="name" autocomplete="off" placeholder="如 LiNiO₂ 正极粉料…" />
+              <a-input v-model:value="form.name" name="name" autocomplete="off" placeholder="如 PA6/GF30 注塑样条…" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
