@@ -1,16 +1,14 @@
 # MaterialsPEML Lab
 
-** MaterialsPEML Lab 是面向高分子改性塑料（kingfa 领域）的 AI 研发平台。**
+**MaterialsPEML Lab 是面向高分子改性塑料（kingfa 领域）的 AI 研发平台。**
 
-> MaterialsPEML Lab is an AI-driven R&D platform for polymer-modified plastics (kingfa domain).
+> 英文版见 [README.en.md](README.en.md)
 
 ---
 
-## 简介 / Overview
+## 简介
 
 从"一句话研发目标"出发，自动完成候选识别 → 配方设计 → 工艺规划 → 业务审批 → 实验验证 → 反哺策略的研发闭环。
-
-Starting from a one-sentence R&D goal, it automates the closed loop: candidate screening → formulation design → process planning → approval → experiment validation → strategy feedback.
 
 核心定位：
 
@@ -19,50 +17,43 @@ Starting from a one-sentence R&D goal, it automates the closed loop: candidate s
 - 领域包机制：默认材料体系、配方模板、参考范围
 - 企业级能力：多租户权限 + 细粒度审批 + 全链路日志
 
-Key principles:
+## 技术栈
 
-- A four-tier data credibility model (measured / simulated / predicted / estimated) that answers "where did this value come from and how trustworthy is it"
-- Closed-loop ECML experimentation with a validation accuracy ruler (predicted vs. actual MAPE)
-- Domain packs defining default material systems, formulation templates, and reference ranges
-- Enterprise features: multi-tenant access control, fine-grained approvals, and full audit tracing
-
-## 技术栈 / Tech Stack
-
-- **后端 Backend**：FastAPI + SQLAlchemy + PostgreSQL（`postgresql+psycopg://...`），数据库迁移用 Alembic
-- **前端 Frontend**：Vue 3 + Vite + Ant Design Vue 4
+- **后端**：FastAPI + SQLAlchemy + PostgreSQL（`postgresql+psycopg://...`），数据库迁移用 Alembic
+- **前端**：Vue 3 + Vite + Ant Design Vue 4
 - **智能能力**：LLM（InternLM 等）+ MCP 科学工具（SCP）+ 本地生成/预测器
-- **测试 Tests**：pytest（后端）+ Playwright（前端 E2E 巡检）
+- **测试**：pytest（后端）+ Playwright（前端 E2E 巡检）
 
-## 快速开始 / Quick Start
+## 快速开始
 
 ```bash
-# 后端 Backend (port 8200)
+# 后端（端口 8200）
 python -m uvicorn battery_materials_agent.api:app --host 0.0.0.0 --port 8200
 
-# 前端 Frontend (Vite, port 5173)
+# 前端（Vite，端口 5173）
 cd frontend && npm install && npm run dev
 
-# 生产构建 Production build
+# 生产构建
 cd frontend && npm run build
 ```
 
-数据库 Database：
+数据库：
 
 ```
 postgresql+psycopg://batteryemcl:batteryemcl_dev@localhost:5433/batteryemcl
 ```
 
-## 运行测试 / Running Tests
+## 运行测试
 
 ```bash
-# 后端单测 Backend unit tests
+# 后端单测
 python -m pytest tests/unit/test_two_layer_workflow.py tests/unit/test_process_deepening_service.py -q
 
-# 前端 E2E 巡检（需 5173 + 8200 双活） Frontend E2E audits (requires both servers)
+# 前端 E2E 巡检（需 5173 + 8200 双活）
 cd frontend && node tests/deep-audit.mjs
 ```
 
-## 目录结构 / Repository Layout
+## 目录结构
 
 ```
 battery_materials_agent/     # 后端 FastAPI 服务
@@ -79,8 +70,6 @@ docs/                        # 产品说明书、用户手册、ADR 设计决策
 tests/unit/                  # pytest 单元测试
 ```
 
-## 许可证 / License
+## 许可证
 
 [PolyForm Noncommercial License 1.0.0](LICENSE) — 仅允许非商业用途；商业用途需另行授权。
-
-[PolyForm Noncommercial License 1.0.0](LICENSE) — noncommercial use only; commercial use requires a separate license.
