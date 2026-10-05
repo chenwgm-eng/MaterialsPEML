@@ -70,6 +70,12 @@ docs/                        # Product manual, user guide, ADR design decisions
 tests/unit/                  # pytest unit tests
 ```
 
+## Contact
+
+Interested in this project, collaboration, or a commercial license? Reach out at:
+
+**wangmiao.chen@cheeryell.com**
+
 ## License
 
 [PolyForm Noncommercial License 1.0.0](LICENSE) — noncommercial use only; commercial use requires a separate license.

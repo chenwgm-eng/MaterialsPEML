@@ -70,6 +70,12 @@ docs/                        # 产品说明书、用户手册、ADR 设计决策
 tests/unit/                  # pytest 单元测试
 ```
 
+## 联系我们
+
+对本项目感兴趣、希望合作或获取商业授权，欢迎联系：
+
+**wangmiao.chen@cheeryell.com**
+
 ## 许可证
 
 [PolyForm Noncommercial License 1.0.0](LICENSE) — 仅允许非商业用途；商业用途需另行授权。
