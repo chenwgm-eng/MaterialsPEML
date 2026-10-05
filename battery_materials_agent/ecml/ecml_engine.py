@@ -2775,8 +2775,16 @@ class ECMLEngine:
                 if (r.experiment_order_id or "").startswith(order_prefix):
                     rec = r.model_dump()
                     validation_data.append(rec)
-                    # ADR-0002：模拟值（data_quality=simulated）不得进入反馈分析（学习池）
-                    if r.data_quality != "simulated":
+                    # T07：模拟值 + 不合格/未审核数据不得进入学习反馈。
+                    # 仅 learning_eligible=True 且 QC 通过（VALID/VERIFIED）且 data_quality 非 simulated 的记录才可参与学习。
+                    rec["learning_skip_reason"] = ""
+                    if r.data_quality == "simulated":
+                        rec["learning_skip_reason"] = "simulated: 模拟数据不进入学习池"
+                    elif (r.qc_status or "").upper() not in {"VALID", "VERIFIED"}:
+                        rec["learning_skip_reason"] = f"qc_status={r.qc_status}: QC 未通过"
+                    elif not bool(getattr(r, "learning_eligible", False)):
+                        rec["learning_skip_reason"] = "learning_eligible=False"
+                    else:
                         experiment_data.append(rec)
         except Exception as e:
             logger.warning("ECML feedback 读取实验记录失败: %s", e)
