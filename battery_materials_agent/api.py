@@ -32,6 +32,11 @@ from .experiment.approval import ApprovalEngine
 
 from .experiment.equipment_store import Equipment, EquipmentStatus, EquipmentStore
 from .experiment.sample_store import Sample, SampleStatus, SampleStore
+from .experiment.sample_guard import (
+    ensure_sample_for_result,
+    register_order_lookup,
+    register_sample_store_getter,
+)
 from .experiment.candidate_store import CandidateRecord, CandidateStore
 from .experiment.idea_store import Idea, IdeaStatus, IdeaStore
 from .agent_team.agents.experiment_analyst import ExperimentAnalystAgent
@@ -592,6 +597,9 @@ async def startup():
     app.state.equipment_store = EquipmentStore()
     # 初始化样品管理存储
     app.state.sample_store = SampleStore()
+    # 注册样品守护依赖（供 sample_guard.ensure_sample_for_result / ecml_engine 使用）
+    register_sample_store_getter(lambda: getattr(app.state, "sample_store", None))
+    register_order_lookup(lambda oid: agent.experiment_controller._store.get_order(oid) if agent else None)
     # 初始化放行卡存储（用于 human_review_required 候选自动创建放行卡）
     from .release_card.store import ReleaseCardStore
     app.state.release_card_store = ReleaseCardStore()
@@ -9826,37 +9834,14 @@ async def get_order_audit(order_id: str):
 # ===========================================================================
 
 def _ensure_sample_for_result(sample_id: str, source_type: str = "experiment",
-                               order_id: str = "", candidate_id: str = ""):
+                              order_id: str = "", candidate_id: str = ""):
     """写入实验结果时联动创建样品记录，打通 samples.db 与 experiments.db。
 
-    通过 order_id 反查 ExperimentOrder.candidate_id，自动填充 source_order_id
-    和 source_candidate_id，使样品可溯源到候选材料和实验任务单。
+    委托到 experiment.sample_guard（注册式注入 sample_store / order 查询），
+    避免其他模块反向 import api。
     """
-    if not sample_id:
-        return
-    sample_store = getattr(app.state, "sample_store", None)
-    if sample_store is None:
-        return
-    try:
-        if sample_store.get(sample_id) is not None:
-            return
-        # 若未显式传入 candidate_id，尝试从 ExperimentOrder 反查
-        if not candidate_id and order_id:
-            try:
-                order = agent.experiment_controller._store.get_order(order_id)
-                if order is not None:
-                    candidate_id = order.candidate_id
-            except Exception:
-                pass
-        sample_store.save(Sample(
-            sample_id=sample_id,
-            name=sample_id,
-            source_type=source_type,
-            source_order_id=order_id,
-            source_candidate_id=candidate_id,
-        ))
-    except Exception as e:
-        logger.debug("联动创建样品失败 sample_id=%s: %s", sample_id, e)
+    ensure_sample_for_result(sample_id, source_type=source_type,
+                             order_id=order_id, candidate_id=candidate_id)
 
 
 def _save_single_result_record(req: ExperimentResultManualRequest) -> ExperimentResultRecord:

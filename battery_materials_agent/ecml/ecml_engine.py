@@ -2416,8 +2416,8 @@ class ECMLEngine:
                         sample_id = f"smp_{formula}_{state.iteration}"
                         # 联动创建样品记录（fk_results_sample 要求样品先存在，否则 FK 失败）
                         try:
-                            from ..api import _ensure_sample_for_result
-                            _ensure_sample_for_result(sample_id, source_type="experiment",
+                            from ..experiment.sample_guard import ensure_sample_for_result
+                            ensure_sample_for_result(sample_id, source_type="experiment",
                                                       order_id=order_id, candidate_id=candidate_id)
                         except Exception:
                             pass
@@ -2761,8 +2761,8 @@ class ECMLEngine:
                     # fk_results_sample：样品必须先存在，否则结果写入因 FK 失败
                     # （此前 resume 路径未建样品，生产模式注入数据被静默丢弃）
                     try:
-                        from ..api import _ensure_sample_for_result
-                        _ensure_sample_for_result(
+                        from ..experiment.sample_guard import ensure_sample_for_result
+                        ensure_sample_for_result(
                             sample_id,
                             source_type="experiment",
                             order_id=result_dict.get("order_id", ""),
