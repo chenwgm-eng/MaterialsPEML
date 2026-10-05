@@ -36,6 +36,27 @@
             <RightOutlined v-if="idx < pipelineStats.length - 1" class="funnel-arrow" />
           </div>
         </div>
+
+        <!-- 闭环验证精度（ADR-0002 审计展示：估算 vs 实验偏差） -->
+        <div v-if="validationMetrics" class="validation-metrics">
+          <div class="vm-title"><BarChartOutlined /> 闭环验证精度（估算 vs 实测）</div>
+          <div v-if="validationMetrics.n_compared > 0" class="vm-grid">
+            <div class="vm-item">
+              <div class="vm-value">{{ validationMetrics.overall_mape_pct }}%</div>
+              <div class="vm-label">平均相对偏差 MAPE</div>
+            </div>
+            <div class="vm-item">
+              <div class="vm-value">{{ validationMetrics.within_10pct_pct }}%</div>
+              <div class="vm-label">偏差 ≤10% 命中率</div>
+            </div>
+            <div class="vm-item">
+              <div class="vm-value">{{ validationMetrics.n_compared }}</div>
+              <div class="vm-label">对比样本数</div>
+            </div>
+          </div>
+          <div v-else class="vm-empty">本轮无实验记录可对比（{{ validationMetrics.n_records }} 条记录）</div>
+          <div class="vm-note">{{ validationMetrics.note }}</div>
+        </div>
       </div>
 
       <!-- 最佳候选卡片 -->
@@ -59,7 +80,7 @@
           v-if="bestCandidateAIMeta"
           :confidence="bestCandidateAIMeta.confidence"
           agent-name="ECML 闭环引擎"
-          model="InternLM / 图神经网络"
+          model="描述符启发式估算 / PolymerGNN"
           strategy="闭环迭代优化"
           :assumptions="bestCandidateAIMeta.assumptions"
           :evidence-sources="bestCandidateAIMeta.evidenceSources"
@@ -84,8 +105,8 @@
 
 <script setup>
 import { computed } from 'vue'
-import { TrophyOutlined, RightOutlined, ExperimentOutlined, ProfileOutlined, ReloadOutlined } from '@ant-design/icons-vue'
-import { formatNumber, formatSci } from '@/utils/format'
+import { TrophyOutlined, RightOutlined, ExperimentOutlined, ProfileOutlined, ReloadOutlined, BarChartOutlined } from '@ant-design/icons-vue'
+import { formatNumber } from '@/utils/format'
 import MoleculeView from '@/components/MoleculeView.vue'
 import AIOutputMeta from '@/components/AIOutputMeta.vue'
 
@@ -102,10 +123,6 @@ const props = defineProps({
   fallbackProperty: { type: String, default: '' },
   // 属性选项（label 解析）
   propertyOptions: { type: Array, default: () => [] },
-  // 单位符号
-  condUnit: { type: String, default: 'S/cm' },
-  energyUnit: { type: String, default: 'eV' },
-  energyPerAtomUnit: { type: String, default: 'eV/atom' },
 })
 
 const emit = defineEmits(['send-best-to-experiment', 'send-best-to-formula', 'scroll-to-detail', 'run-again'])
@@ -178,14 +195,20 @@ const bestCandidateAIMeta = computed(() => {
   }
   return {
     confidence,
-    assumptions: ['预测属性来自机器学习势/图神经网络模型，未经实验实测'],
+    // ADR-0001：诚实标注——属性为工程估算（骨架启发式），未经实验实测
+    assumptions: ['候选属性为基于骨架结构的工程估算值（ADR-0001），未经验证；关键决策需实验实测确认'],
     evidenceSources,
     humanReviewRequired: c.human_review_required === true || (synthCount === 0 && dftCount === 0),
   }
 })
 
-const runConclusion = computed(() => {
-  const target = props.state?.target || props.fallbackTarget
+// 闭环验证精度指标（来自 state.feedback.validation_metrics）
+const validationMetrics = computed(() => {
+  const fb = props.state?.feedback
+  return fb?.validation_metrics || null
+})
+
+const runConclusion = computed(() => {  const target = props.state?.target || props.fallbackTarget
   const prop = props.propertyOptions.find((o) => o.value === (props.state?.target_property || props.fallbackProperty))?.label || props.fallbackProperty
   const iterations = props.state?.iterations || 0
   const best = bestCandidate.value
@@ -193,7 +216,7 @@ const runConclusion = computed(() => {
     return `已完成 ${iterations} 轮迭代，未找到满足目标的候选材料。建议调整目标或属性约束后重新运行。`
   }
   const name = best.name || best.formula || best.smiles || best.psmiles || '未知材料'
-  return `经过 ${iterations} 轮迭代，系统推荐「${name}」作为${target}目标下「${prop}」的最优候选材料。该候选材料已通过 ${props.synthesizable.length} 项工业化检查、${props.verified.length} 项 DFT 验证。`
+  return `经过 ${iterations} 轮迭代，系统推荐「${name}」作为${target}目标下「${prop}」的最优候选材料。该候选材料已通过 ${props.synthesizable.length} 项工业化检查、${props.verified.length} 项性能验证。`
 })
 
 // 暴露 bestCandidate 和 noResult 给父组件（步骤流/发送下游函数需要）
@@ -236,6 +259,45 @@ defineExpose({ bestCandidate, noResult: computed(() => !props.state?.is_complete
   border: 1px solid var(--border);
   border-radius: var(--radius);
   position: relative;
+}
+
+/* 闭环验证精度卡片 */
+.validation-metrics {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius);
+}
+.vm-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.vm-grid {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.vm-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1d4ed8;
+  font-variant-numeric: tabular-nums;
+}
+.vm-label {
+  font-size: 11px;
+  color: #64748b;
+}
+.vm-empty {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.vm-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .funnel-item.funnel-active {

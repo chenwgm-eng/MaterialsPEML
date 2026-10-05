@@ -168,7 +168,8 @@ class TestTaskStore:
                     # FK 约束：空字符串需转为 NULL
                     "bom_id": task.bom_id or None,
                     "test_type": task.test_type,
-                    "test_method": task.test_method,
+                    # fk_test_tasks_method：空字符串需转为 NULL（与 _normalize_test_method 契约一致）
+                    "test_method": task.test_method or None,
                     "priority": task.priority,
                     "assignee": task.assignee,
                     "status": task.status,
@@ -242,7 +243,8 @@ class TestTaskStore:
                 {
                     "bom_id": task.bom_id or None,
                     "test_type": task.test_type,
-                    "test_method": task.test_method,
+                    # fk_test_tasks_method：空字符串需转为 NULL（与 _normalize_test_method 契约一致）
+                    "test_method": task.test_method or None,
                     "priority": task.priority,
                     "assignee": task.assignee,
                     "status": task.status,

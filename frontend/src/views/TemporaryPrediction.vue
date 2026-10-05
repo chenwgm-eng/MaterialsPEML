@@ -22,7 +22,8 @@
       <div class="mode-switch">
         <a-radio-group v-model:value="predictMode" button-style="solid">
           <a-radio-button value="standard">标准预测</a-radio-button>
-          <a-radio-button value="cross_scale">跨尺度建模</a-radio-button>
+          <!-- 跨尺度建模为晶体/分子专属（电化学多尺度），聚合物模式隐藏避免电池语义误导 -->
+          <a-radio-button v-if="materialType !== 'polymer'" value="cross_scale">跨尺度建模</a-radio-button>
         </a-radio-group>
       </div>
       <div v-if="predictMode === 'cross_scale'">
@@ -778,6 +779,13 @@ const polymerForm = reactive({
 
 // 跨尺度建模
 const predictMode = ref('standard')
+
+// 切到聚合物模式时退出跨尺度（该模式为晶体/分子专属）
+watch(materialType, (mt) => {
+  if (mt === 'polymer' && predictMode.value === 'cross_scale') {
+    predictMode.value = 'standard'
+  }
+})
 const crossScaleForm = reactive({
   material_type: 'crystal',
   formula: '',
@@ -1017,17 +1025,17 @@ onMounted(async () => {
     ]
   }
 
-// 按材料类型过滤属性选项：晶体分支显示带隙/形成能，聚合物分支仅显示高分子/通用属性
+  // 多目标属性选项：直接使用 objectiveConfig 共享常量（属性 key 与后端 _SCORE_PROPS 对齐）
+  multiObjectiveOptions.value = [...MULTI_OBJECTIVE_OPTIONS]
+})
+
+// 按材料类型过滤属性选项（必须在 setup 顶层，onMounted 内声明模板不可见）
 const visiblePropertyOptions = computed(() => {
   const all = propertyOptions.value
   if (materialType.value === 'crystal') {
     return all.filter((o) => o.value === 'band_gap' || o.value === 'formation_energy')
   }
   return all.filter((o) => o.value !== 'band_gap' && o.value !== 'formation_energy')
-})
-
-  // 多目标属性选项：直接使用 objectiveConfig 共享常量（属性 key 与后端 _SCORE_PROPS 对齐）
-  multiObjectiveOptions.value = [...MULTI_OBJECTIVE_OPTIONS]
 })
 
 // 材料类型切换时校准单目标属性：晶体分支仅支持带隙/形成能

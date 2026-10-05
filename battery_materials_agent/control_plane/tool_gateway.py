@@ -100,10 +100,20 @@ class ToolGateway:
         if not ok:
             return self._reject(invocation_id, tool_id, f"Input validation failed: {err}", start, ts, eff_key)
 
-        # 6. Budget reservation
+        # 6. Budget reservation（签名对齐 BudgetManager.reserve(scope, scope_id, category, amount)）
         if self.budget is not None:
             try:
-                self.budget.reserve(tool_id, descriptor.risk_level.value)
+                from .budget import BudgetScope, BudgetCategory
+                # 预算域：优先项目/用户，兜底 ORGANIZATION
+                scope_id = context.project_id or context.user_id or tool_id
+                scope = BudgetScope.PROJECT if context.project_id else (
+                    BudgetScope.USER if context.user_id else BudgetScope.ORGANIZATION
+                )
+                # 风险等级 → 预算类别（A/B 高风险走 EXTERNAL_CALL，C/D 走 COST）
+                risk = str(getattr(descriptor, "risk_level", "") or "")
+                category = BudgetCategory.EXTERNAL_CALL if risk in ("A", "B") else BudgetCategory.COST
+                amount = float(getattr(descriptor, "budget_amount", 0.0) or 0.0)
+                self.budget.reserve(scope, scope_id, category, amount)
             except Exception as e:
                 return self._reject(invocation_id, tool_id, f"Budget reservation failed: {e}", start, ts, eff_key)
 

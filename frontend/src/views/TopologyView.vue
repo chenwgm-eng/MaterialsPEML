@@ -91,7 +91,9 @@
               @keydown.space.prevent="onSelectAgent(agent)"
             >
               <div class="node-header">
-                <span class="node-avatar" aria-hidden="true">{{ agent.avatar || agent.name?.charAt(0) }}</span>
+                <span class="node-avatar" aria-hidden="true">
+                  <component :is="agentIcon(agent)" />
+                </span>
                 <span class="node-name">{{ agent.name }}</span>
               </div>
               <div class="node-meta">
@@ -272,6 +274,7 @@ import {
   availabilityLabel as sharedAvailabilityLabel,
 } from '@/constants/toolMeta'
 import { MESSAGES } from '@/constants/glossary'
+import { resolveAgentIcon } from '@/utils/agentAvatar'
 
 const systemStore = useSystemStore()
 
@@ -528,6 +531,10 @@ function callerAgentCount(toolName) {
 }
 
 // --- 标签辅助 ---
+function agentIcon(agent) {
+  return resolveAgentIcon(agent.avatar)
+}
+
 function roleColor(role) {
   const map = {
     material_discovery: 'purple',
@@ -857,7 +864,17 @@ onMounted(() => {
 }
 
 .node-avatar {
-  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--light-bg-hover);
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
 .node-name {

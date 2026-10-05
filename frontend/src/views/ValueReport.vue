@@ -276,7 +276,6 @@ import { MESSAGES } from '@/constants/glossary'
 // 从 MDM 加载成本类别选项（失败时使用硬编码兜底）
 const { dimensionOptions: mdmDimensionOptions } = useMdmDict()
 const { symbols: unitSymbols, load: loadUnitSymbols } = useUnitSymbols()
-const condUnit = computed(() => unitSymbols.value.conductivity || 'S/cm')
 const costCategoryOptions = ref([
   { label: '材料', value: 'material' },
   { label: '设备', value: 'equipment' },

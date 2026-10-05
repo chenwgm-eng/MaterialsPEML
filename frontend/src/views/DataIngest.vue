@@ -587,17 +587,9 @@ function formatTime(iso) {
 }
 
 onMounted(async () => {
-  const { dimensionOptions } = useMdmDict()
-  try {
-    const loaded = await dimensionOptions('data_source_type')
-    entityTypeOptions.value = loaded.length ? loaded : Object.entries(ENTITY_LABELS).map(([value, label]) => ({ label, value }))
-    if (!loaded.length) {
-      message.warning('部分下拉选项未能从主数据加载，已使用本地兜底')
-    }
-  } catch (e) {
-    entityTypeOptions.value = Object.entries(ENTITY_LABELS).map(([value, label]) => ({ label, value }))
-    message.warning('部分下拉选项未能从主数据加载，已使用本地兜底')
-  }
+  // 实体类型是固定枚举（sample/equipment/raw_material/project/experiment_result），
+  // 不得用 data_source_type 维度覆盖（该维度是数据来源 MANUAL_ENTRY/CSV 等，语义不符会 400）
+  entityTypeOptions.value = Object.entries(ENTITY_LABELS).map(([value, label]) => ({ label, value }))
   fetchImports()
 })
 </script>

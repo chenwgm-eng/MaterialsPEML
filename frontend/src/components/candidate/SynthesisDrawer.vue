@@ -155,7 +155,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { BranchesOutlined, InfoCircleOutlined, ExperimentOutlined, BulbOutlined } from '@ant-design/icons-vue'
+import { BranchesOutlined, InfoCircleOutlined, ExperimentOutlined, BulbOutlined, ApiOutlined } from '@ant-design/icons-vue'
 import client from '@/api/client'
 
 const props = defineProps({
@@ -184,7 +184,7 @@ const SYNTH_ENGINES = [
 const SCP_ENGINE_INFO = {
   value: 'scp',
   name: 'SCP 科学工具',
-  avatar: '⚗️',
+  avatar: ApiOutlined,
   provider: '浙江大学',
   tool_count: 169,
   summary: '面向化学信息学、药物设计、反应工程及计算化学领域的综合性工具库',

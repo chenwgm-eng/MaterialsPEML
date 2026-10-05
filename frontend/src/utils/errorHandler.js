@@ -78,7 +78,7 @@ export function translateError(error, context = '') {
     }
   }
 
-  // 2. 提取后端 detail（FastAPI HTTPException: string | object）
+  // 2. 提取后端 detail（FastAPI HTTPException: string | object | 校验错误数组）
   const detail = resp.data?.detail
   let rawMsg = ''
   let hint = ''
@@ -86,9 +86,24 @@ export function translateError(error, context = '') {
   if (typeof detail === 'string') {
     rawMsg = detail
   } else if (detail && typeof detail === 'object') {
-    rawMsg = detail.message || ''
-    hint = detail.hint || ''
-    service = detail.service || ''
+    if (Array.isArray(detail)) {
+      // FastAPI 422 校验错误：detail 为数组 [{ loc, msg, type, input }]，逐条转中文
+      const parts = detail
+        .map((item) => {
+          if (!item || typeof item !== 'object') return ''
+          const loc = Array.isArray(item.loc) ? item.loc.filter((x) => typeof x === 'string').join('.') : ''
+          let msg = item.msg || ''
+          if (/field required|missing/i.test(msg)) msg = '必填项缺失'
+          else if (/not a valid|input should be/i.test(msg)) msg = '格式不正确'
+          return loc ? `字段 ${loc}：${msg}` : msg
+        })
+        .filter(Boolean)
+      if (parts.length) rawMsg = parts.join('；')
+    } else {
+      rawMsg = detail.message || ''
+      hint = detail.hint || ''
+      service = detail.service || ''
+    }
   }
   if (!rawMsg && typeof resp.data === 'string') rawMsg = resp.data
   rawMsg = sanitizeMessage(rawMsg)

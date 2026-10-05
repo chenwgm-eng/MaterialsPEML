@@ -351,8 +351,10 @@ class PolymerPropertyPredictor:
                         smiles=smiles,
                         formula=features.get("formula", ""),
                         material_type="polymer",
-                        data_quality="simulated",  # T-029：真实训练权重 ML 预测结果
-                        provenance=[{"model": model_label, "weights": "polymer_gnn_openpoly"}],
+                        # ADR-0001：真实权重模型预测 → predicted（非 simulated，T-029 语义修正）
+                        data_quality="predicted",
+                        provenance=[{"model": model_label, "weights": "polymer_gnn_openpoly",
+                                     "evidence_level": "predicted"}],
                     )
             except Exception:  # noqa: BLE001
                 pass  # 回退到后续路径
@@ -373,8 +375,10 @@ class PolymerPropertyPredictor:
                         smiles=smiles,
                         formula=features.get("formula", ""),
                         material_type="polymer",
-                        data_quality="simulated",  # T-029：真实 ML 权重预测结果
-                        provenance=[{"model": model_label, "weights": "chemprop_pretrained"}],
+                        # ADR-0001：真实权重 Chemprop 预测 → predicted
+                        data_quality="predicted",
+                        provenance=[{"model": model_label, "weights": "chemprop_pretrained",
+                                     "evidence_level": "predicted"}],
                     )
             except Exception:  # noqa: BLE001
                 pass  # 回退到描述符路径

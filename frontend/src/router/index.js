@@ -78,7 +78,7 @@ const routes = [
   { path: '/raw-materials', redirect: '/materials' },
   { path: '/capabilities', redirect: '/capability-center' },
   { path: '/value-reports', redirect: '/value-report' },
-  { path: '/value-reports/:id', redirect: to => `/value-report/${to.params.id}` },
+  { path: '/value-reports/:id', redirect: to => `/value-report` },
   { path: '/knowledge', redirect: '/knowledge-graph' },
   { path: '/technology', redirect: '/technology-intelligence' },
   { path: '/tech-intelligence', redirect: '/technology-intelligence' },

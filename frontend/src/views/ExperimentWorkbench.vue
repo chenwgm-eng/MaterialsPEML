@@ -393,7 +393,6 @@ const { statusOptions: mdmStatusOptions, dimensionOptions: mdmDimensionOptions }
 // 从 MDM 加载单位符号（失败时 computed 使用默认单位兜底）
 const { symbols: unitSymbols, load: loadUnitSymbols } = useUnitSymbols()
 const massUnit = computed(() => unitSymbols.value.mass || 'kg')
-const condUnit = computed(() => unitSymbols.value.conductivity || 'S/cm')
 const orderStatusOptions = ref([
   { label: '草稿', value: 'DRAFT' },
   { label: '待审批', value: 'PENDING_APPROVAL' },
@@ -860,6 +859,7 @@ function beforeImportUpload(file) {
         return {
           ...normalized,
           _invalid: isNaN(val),
+          _rowIndex: idx + 2, // Excel 首行为表头
         }
       })
     } catch {
@@ -889,21 +889,31 @@ async function onImportSubmit() {
   }
   importing.value = true
   try {
-    // 优先使用预览数据批量提交
+    // 优先使用预览数据批量提交（跳过 _invalid 行，禁止 NaN→0 脏数据入库）
     if (importPreview.value.length > 0) {
-      const payloads = importPreview.value.map((row) => ({
-        experiment_order_id: selectedOrder.value?.order_id || '',
-        sample_id: row.sample_id || '',
-        sample_batch_id: row.sample_batch_id || '',
-        property_name: row.property_name || '',
-        value: Number(row.value) || 0,
-        unit: row.unit || '',
-        test_method: row.test_method || '',
-        uploaded_by: row.uploaded_by || '',
-        instrument_id: row.instrument_id || '',
-        raw_file_uri: row.raw_file_uri || '',
-        test_conditions: {},
-      }))
+      const invalidRows = importPreview.value.filter((r) => r._invalid)
+      if (invalidRows.length > 0) {
+        message.warning(`第 ${invalidRows.map((r) => r._rowIndex).join('、')} 行数值无效，已跳过`)
+      }
+      const payloads = importPreview.value
+        .filter((r) => !r._invalid)
+        .map((row) => ({
+          experiment_order_id: selectedOrder.value?.order_id || '',
+          sample_id: row.sample_id || '',
+          sample_batch_id: row.sample_batch_id || '',
+          property_name: row.property_name || '',
+          value: Number(row.value) || 0,
+          unit: row.unit || '',
+          test_method: row.test_method || '',
+          uploaded_by: row.uploaded_by || '',
+          instrument_id: row.instrument_id || '',
+          raw_file_uri: row.raw_file_uri || '',
+          test_conditions: {},
+        }))
+      if (payloads.length === 0) {
+        message.error('没有可导入的有效记录')
+        return
+      }
       const res = await createExperimentResultsBatch(payloads)
       message.success(`成功导入 ${res.imported} 条记录`)
     } else {

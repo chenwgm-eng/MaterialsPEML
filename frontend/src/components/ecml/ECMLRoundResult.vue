@@ -9,13 +9,13 @@
       </div>
     </template>
 
-    <!-- 推荐理由：可审计的决策依据 -->
-    <a-alert v-if="round.reasoning" :message="round.reasoning" type="info" show-icon style="margin-bottom: 12px" />
+    <!-- 推荐理由：可审计的决策依据（确认后 get_round 用 recommendation_reason/analysis 字段） -->
+    <a-alert v-if="round.reasoning || round.recommendation_reason || round.analysis" :message="round.reasoning || round.recommendation_reason || round.analysis" type="info" show-icon style="margin-bottom: 12px" />
 
-    <!-- 训练池摘要 -->
-    <div v-if="round.pool?.stats" class="round-pool-summary">
-      训练依据：材料体系「{{ round.pool.family }}」+ 属性「{{ round.pool.property_name }}」，共 {{ round.pool.stats.total }} 条有效数据
-      <span v-if="round.pool.stats.cross_project">（含 {{ round.pool.stats.cross_project }} 条跨项目复用）</span>
+    <!-- 训练池摘要（确认后 get_round 用 train_pool_snapshot） -->
+    <div v-if="(round.pool || round.train_pool_snapshot)?.stats" class="round-pool-summary">
+      训练依据：材料体系「{{ (round.pool || round.train_pool_snapshot).family }}」+ 属性「{{ (round.pool || round.train_pool_snapshot).property_name }}」，共 {{ (round.pool || round.train_pool_snapshot).stats.total }} 条有效数据
+      <span v-if="(round.pool || round.train_pool_snapshot).stats.cross_project">（含 {{ (round.pool || round.train_pool_snapshot).stats.cross_project }} 条跨项目复用）</span>
     </div>
 
     <!-- 推荐候选表 -->
@@ -117,9 +117,12 @@ const statusColor = computed(() => {
 
 const modelLabel = (k) => ({ gp: '高斯过程', gbt: '梯度提升树', mlp: '神经网络' }[k] || k || '-')
 // EHVI 多目标：model 为 { models: [{property, family, n_samples}] }，not 单 family
-const isMulti = computed(() => props.round?.acquisition?.name === 'ehvi')
+// 兼容两套键名：startECMLRound 响应用 model/acquisition/pool，确认后 get_round 返回 model_meta/acquisition_meta/train_pool_snapshot
+const _roundModel = computed(() => props.round?.model || props.round?.model_meta)
+const _roundAcq = computed(() => props.round?.acquisition || props.round?.acquisition_meta)
+const isMulti = computed(() => _roundAcq.value?.name === 'ehvi')
 const modelTag = computed(() => {
-  const m = props.round?.model
+  const m = _roundModel.value
   if (isMulti.value && Array.isArray(m?.models)) {
     return m.models.map((x) => modelLabel(x.family)).join(' + ')
   }
@@ -132,7 +135,7 @@ const multiSummary = (record) => {
 }
 const acqName = computed(() => {
   const map = { ei: 'EI·期望改进', ucb: 'UCB·置信上界', pi: 'PI·改进概率', ehvi: 'EHVI·超体积改进' }
-  return map[props.round?.acquisition?.name] || props.round?.acquisition?.name || ''
+  return map[_roundAcq.value?.name] || _roundAcq.value?.name || ''
 })
 
 const columns = [

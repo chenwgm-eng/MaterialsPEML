@@ -45,25 +45,28 @@
             <a-input v-model:value="materialFamily" placeholder="如 玻纤增强聚丙烯改性体系" allow-clear @blur="loadStats" />
           </a-form-item>
           <div class="pool-stats">
-            <template v-if="stats">
-              <div class="pool-stat">
-                <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.total }}</span>
-                <span class="pool-stat-label">条有效数据</span>
-              </div>
-              <div class="pool-stat">
-                <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.project }}</span>
-                <span class="pool-stat-label">条本项目</span>
-              </div>
-              <div class="pool-stat">
-                <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.cross_project }}</span>
-                <span class="pool-stat-label">条可跨项目复用</span>
-              </div>
-            </template>
-            <span v-else class="pool-stats-empty">加载中…</span>
-          </div>
-          <a-checkbox v-model:checked="includeCrossProject" class="pool-cross" @change="loadStats">
-            纳入同一材料体系下的跨项目历史数据（相似化学空间的实验经验可复用，帮助更准地推荐）
-          </a-checkbox>
+          <template v-if="stats">
+            <div class="pool-stat">
+              <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.total }}</span>
+              <span class="pool-stat-label">条有效数据</span>
+            </div>
+            <div class="pool-stat">
+              <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.project }}</span>
+              <span class="pool-stat-label">条本项目</span>
+            </div>
+            <div class="pool-stat">
+              <span class="pool-stat-num" :class="{ muted: stats.total === 0 }">{{ stats.cross_project }}</span>
+              <span class="pool-stat-label">条可跨项目复用</span>
+            </div>
+          </template>
+          <div v-else-if="loadingStats" class="pool-stats-empty">加载中…</div>
+          <div v-else-if="statsError" class="pool-stats-empty stats-error">{{ statsError }}</div>
+          <div v-else class="pool-stats-empty">启动一轮迭代后自动统计</div>
+        </div>
+        <a-checkbox v-model:checked="includeCrossProject" class="pool-cross" @change="loadStats">
+          纳入同一材料体系下的跨项目历史数据
+        </a-checkbox>
+        <div class="pool-cross-hint">相似化学空间的实验经验可复用，帮助更准地推荐</div>
           <div v-if="qualityHits > 0" class="pool-note">
             已自动剔除 {{ qualityHits }} 条未通过质量校验的数据点
           </div>
@@ -214,6 +217,7 @@ const showModelReason = ref(false)
 const stats = ref(null)
 const qualityHits = ref(0)
 const loadingStats = ref(false)
+const statsError = ref('')
 
 const modelLabel = (k) => ({ gp: '高斯过程', gbt: '梯度提升树', mlp: '神经网络' }[k] || k)
 
@@ -248,8 +252,15 @@ const autoModelReason = computed(() => {
 })
 
 async function loadStats() {
-  if (!props.runId) return
+  if (!props.runId) {
+    // 未选中/启动任何迭代：不发送请求，展示引导文案而非误导性的“加载中…”
+    stats.value = null
+    statsError.value = ''
+    loadingStats.value = false
+    return
+  }
   loadingStats.value = true
+  statsError.value = ''
   try {
     const res = await getECMLPoolStats(props.runId, {
       material_family: materialFamily.value,
@@ -257,8 +268,9 @@ async function loadStats() {
     })
     stats.value = res?.stats || null
     qualityHits.value = Array.isArray(res?.quality_report) ? res.quality_report.length : 0
-  } catch {
+  } catch (err) {
     stats.value = null
+    statsError.value = err?.response?.data?.detail || '训练数据池统计获取失败'
   } finally {
     loadingStats.value = false
   }
@@ -296,6 +308,14 @@ watch(
     if (p?.stats) stats.value = p.stats
   },
   { immediate: true }
+)
+
+// runId 变化（如从迭代历史「查看详情」选中某轮）时自动重新统计，无需手动刷新
+watch(
+  () => props.runId,
+  (id) => {
+    if (id) loadStats()
+  }
 )
 
 onMounted(() => {
@@ -405,13 +425,27 @@ onMounted(() => {
 .pool-stats-empty {
   color: var(--text-muted);
   font-size: 12px;
+  padding: 8px 0;
+}
+
+.pool-stats-empty.stats-error {
+  color: var(--error);
 }
 
 .pool-cross {
   font-size: 12px;
   color: var(--text-secondary);
-  display: block;
+  display: inline-flex;
+  align-items: center;
   margin-top: 4px;
+}
+
+.pool-cross-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  padding-left: 22px;
+  line-height: 1.5;
 }
 
 .pool-note {

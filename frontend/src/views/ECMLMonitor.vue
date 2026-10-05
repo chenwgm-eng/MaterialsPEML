@@ -164,9 +164,6 @@
       :fallback-target="form.target"
       :fallback-property="form.target_property"
       :property-options="propertyOptions"
-      :cond-unit="condUnit"
-      :energy-unit="energyUnit"
-      :energy-per-atom-unit="energyPerAtomUnit"
       @send-best-to-experiment="sendBestToExperiment"
       @send-best-to-formula="sendBestToFormula"
       @scroll-to-detail="scrollToDetail"
@@ -200,14 +197,19 @@
             <span v-else class="text-muted">-</span>
           </template>
           <template v-else-if="column.key === 'provenance'">
-            <a-tag
+            <span
               v-if="record.provenance"
-              :color="evidenceLevelColor(record.provenance.evidence_level)"
               class="provenance-badge"
               @click.stop="showAudit(record.provenance)"
             >
-              {{ provenanceLabel(record.provenance) }}
-            </a-tag>
+              <EvidenceBadge
+                v-if="isCredibilityLevel(record.provenance.evidence_level)"
+                :level="record.provenance.evidence_level"
+              />
+              <a-tag v-else :color="evidenceLevelColor(record.provenance.evidence_level)">
+                {{ provenanceLabel(record.provenance) }}
+              </a-tag>
+            </span>
             <span v-else class="text-muted">-</span>
           </template>
           <template v-else-if="column.key === 'industrial'">
@@ -356,14 +358,19 @@
             {{ formatValueUnit(record.value, record.unit) }}
           </template>
           <template v-else-if="column.key === 'provenance_badge'">
-            <a-tag
+            <span
               v-if="record.provenance"
-              :color="evidenceLevelColor(record.provenance.evidence_level)"
               class="provenance-badge"
               @click.stop="showAudit(record.provenance)"
             >
-              {{ provenanceLabel(record.provenance) }}
-            </a-tag>
+              <EvidenceBadge
+                v-if="isCredibilityLevel(record.provenance.evidence_level)"
+                :level="record.provenance.evidence_level"
+              />
+              <a-tag v-else :color="evidenceLevelColor(record.provenance.evidence_level)">
+                {{ provenanceLabel(record.provenance) }}
+              </a-tag>
+            </span>
             <span v-else class="text-muted">-</span>
           </template>
         </template>
@@ -398,14 +405,19 @@
             </a-tag>
           </template>
           <template v-else-if="column.key === 'provenance_badge'">
-            <a-tag
+            <span
               v-if="record.provenance"
-              :color="evidenceLevelColor(record.provenance.evidence_level)"
               class="provenance-badge"
               @click.stop="showAudit(record.provenance)"
             >
-              {{ provenanceLabel(record.provenance) }}
-            </a-tag>
+              <EvidenceBadge
+                v-if="isCredibilityLevel(record.provenance.evidence_level)"
+                :level="record.provenance.evidence_level"
+              />
+              <a-tag v-else :color="evidenceLevelColor(record.provenance.evidence_level)">
+                {{ provenanceLabel(record.provenance) }}
+              </a-tag>
+            </span>
             <span v-else class="text-muted">-</span>
           </template>
         </template>
@@ -754,6 +766,16 @@
           </a-descriptions-item>
         </a-descriptions>
 
+        <!-- 执行智能体 -->
+        <div v-if="stepDetailAgentId" class="step-detail-section">
+          <div class="step-detail-section-title">执行智能体</div>
+          <AgentDetailCard
+            :agent-id="stepDetailAgentId"
+            :fallback-name="stepDetailAgentName"
+            :fallback-desc="stepDetailAgentDesc || '该环节由 AI 智能体自动执行'"
+          />
+        </div>
+
         <!-- 输出产物 -->
         <div v-if="stepDetailOutputs.length" class="step-detail-section">
           <div class="step-detail-section-title">输出产物</div>
@@ -799,7 +821,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, h, onMounted, watch, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Empty } from 'ant-design-vue'
 import {
@@ -815,12 +837,13 @@ import { getExperimentAnalysis, listExperimentResults } from '@/api/experiments'
 import { getEcmlRuns, getECMLNextRound } from '@/api/ecml'
 import client from '@/api/client'
 import { formatSci } from '@/utils/format'
-import ScientificNotation from '@/components/ScientificNotation.vue'
 import { useMdmDict, useUnitSymbols } from '@/utils/mdmDict'
 import { getSourceBadge } from '@/utils/candidateSource'
 import { DEFAULT_MULTI_OBJECTIVE_CONFIG, MULTI_OBJECTIVE_OPTIONS } from '@/constants/objectiveConfig'
 import { ECML_RECOMMENDED_TARGET_KEY, ECML_RECOMMENDED_CANDIDATE_KEY } from '@/utils/researchContext'
 import ECMLStepFlow from '@/components/ECMLStepFlow.vue'
+import EvidenceBadge from '@/components/EvidenceBadge.vue'
+import AgentDetailCard from '@/components/AgentDetailCard.vue'
 import MoleculeView from '@/components/MoleculeView.vue'
 import ParetoChart from '@/components/ParetoChart.vue'
 import RadarChart from '@/components/RadarChart.vue'
@@ -831,7 +854,7 @@ import ECMLStrategyPanel from '@/components/ecml/ECMLStrategyPanel.vue'
 import ECMLRoundResult from '@/components/ecml/ECMLRoundResult.vue'
 import ECMLCommitteePanel from '@/components/ecml/ECMLCommitteePanel.vue'
 import ECMLResultOverview from '@/components/ecml/ECMLResultOverview.vue'
-import { startECMLRound, listECMLRounds, getECMLRound, confirmECMLRound } from '@/api/ecml'
+import { startECMLRound, getECMLRound } from '@/api/ecml'
 
 const ecmlStore = useECMLStore()
 const route = useRoute()
@@ -839,10 +862,7 @@ const router = useRouter()
 
 // 从 MDM 加载单位符号（失败时 computed 使用默认单位兜底）
 const { symbols: unitSymbols, load: loadUnitSymbols } = useUnitSymbols()
-const condUnit = computed(() => unitSymbols.value.conductivity || 'S/cm')
 const massUnit = computed(() => unitSymbols.value.mass || 'kg')
-const energyUnit = computed(() => unitSymbols.value.energy || 'eV')
-const energyPerAtomUnit = computed(() => unitSymbols.value.energy_per_atom || 'eV/atom')
 
 const LAST_FORM_KEY = 'battery_emcl:last_form'
 const currentScenarioId = ref('')
@@ -1111,6 +1131,10 @@ const clickableSteps = computed(() => {
 // 步骤详情抽屉
 const stepDetailVisible = ref(false)
 const stepDetailKey = ref('')
+// 当前选中步骤的执行智能体（来自 ECMLStepFlow 步骤对象）
+const stepDetailAgentId = ref('')
+const stepDetailAgentName = ref('')
+const stepDetailAgentDesc = ref('')
 const stepDetailTitle = computed(() => {
   const opt = runStepOptions.value.find((o) => o.value === stepDetailKey.value)
   return opt?.label || '步骤详情'
@@ -1152,8 +1176,11 @@ const stepDetailOutputs = computed(() => {
   return outputs
 })
 
-function onStepClick(key) {
-  stepDetailKey.value = key
+function onStepClick(step) {
+  stepDetailKey.value = step.key
+  stepDetailAgentId.value = step.agentId || ''
+  stepDetailAgentName.value = step.agentName || ''
+  stepDetailAgentDesc.value = step.desc || ''
   stepDetailVisible.value = true
 }
 
@@ -1494,6 +1521,13 @@ function rejectReasonText(reasons) {
 const showAuditModal = ref(false)
 const auditSummary = ref(null)
 
+// ADR-0001/0002 数据可信度四档词表：命中时用全局 EvidenceBadge 渲染（权威展示），
+// 其余（能力来源档 primary/computed/auxiliary/draft）保留本页映射
+const CREDIBILITY_LEVELS = new Set(['measured', 'verified', 'simulated', 'predicted', 'estimated', 'literature'])
+function isCredibilityLevel(level) {
+  return CREDIBILITY_LEVELS.has(String(level || '').toLowerCase())
+}
+
 function evidenceLevelColor(level) {
   const map = { primary: 'green', computed: 'blue', auxiliary: 'orange', draft: 'default' }
   return map[level] || 'default'
@@ -1574,12 +1608,40 @@ async function fetchNextRoundSuggestions(runId) {
 }
 
 async function viewIteration(record) {
-  // 只 push 路由：onMounted 的 run_id 恢复逻辑（restoreRun + 轮询/下一轮建议）会自动执行，
-  // 手动再调 restoreRun 会导致同一运行被恢复两次（双请求/双轮询）
+  // 同页 query 跳转不会重挂载组件（onMounted 不执行），必须手动走恢复逻辑
   const query = { run_id: record.run_id }
   if (currentScenarioId.value) query.scenario_id = currentScenarioId.value
   router.push({ path: '/ecml', query })
+  await restoreRunById(record.run_id)
 }
+
+// 恢复指定 run（供 viewIteration 与 watch(route.query.run_id) 复用）
+async function restoreRunById(runId) {
+  if (!runId) return
+  try {
+    const res = await ecmlStore.restoreRun(runId)
+    if (res?.target) form.target = res.target
+    if (res?.target_property) form.target_property = res.target_property
+    if (res?.is_complete) {
+      fetchNextRoundSuggestions(runId)
+    } else if (res?.run_id) {
+      pollingActive.value = true
+      ecmlStore.startPolling(res.run_id)
+    }
+  } catch (e) {
+    error.value = e?.response?.data?.detail || '恢复 ECML 运行状态失败'
+  }
+}
+
+// 同页 query 变化（迭代历史点击）不重挂载 → watch 补恢复
+watch(
+  () => route.query.run_id,
+  (rid) => {
+    if (rid && String(rid) !== (ecmlStore.state?.run_id || '')) {
+      restoreRunById(String(rid))
+    }
+  },
+)
 
 async function onStartNextRound() {
   if (!currentRunId.value) return
@@ -2084,6 +2146,12 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 8px;
+}
+
+/* 步骤详情抽屉中，智能体卡片铺满抽屉宽度（弹层场景保持 320px 紧凑） */
+.step-detail-section :deep(.agent-detail-card) {
+  max-width: none;
+  width: 100%;
 }
 
 .step-output-label {

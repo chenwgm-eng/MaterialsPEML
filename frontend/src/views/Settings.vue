@@ -851,7 +851,7 @@ async function saveRunMode() {
   saving.runMode = true
   try {
     await systemStore.saveConfig({ run_mode: config.runMode })
-    message.success(`运行模式已切换为 ${config.runMode === 'production' ? '生产模式' : '演示模式'}，重启后生效`)
+    message.success(`运行模式已切换为 ${config.runMode === 'production' ? '生产模式' : '演示模式'}，立即生效`)
   } catch (e) {
     message.error('运行模式' + MESSAGES.saveFailed + '，请检查网络或联系管理员')
   } finally {

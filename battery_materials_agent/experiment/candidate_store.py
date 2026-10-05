@@ -5,7 +5,7 @@ enabling cross-module traceability (e.g. sample → candidate → discovery).
 """
 
 from __future__ import annotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from datetime import datetime, timezone
 from sqlalchemy import text
 from enum import Enum
@@ -71,6 +71,40 @@ class IllegalCandidateTransitionError(ValueError):
         super().__init__(msg)
 
 
+# ADR-0001 术语分层：候选来源 → 数据可信度档的唯一权威映射。
+# 前端（EvidenceBadge 等）必须消费本派生结果，不得自行从 property_source 推导。
+# - estimated：查表/规则/启发式/结构数据库来源（未经带真实权重模型验证）
+# - predicted：LLM 生成来源（领域决策 2026-08-23：按模型预测展示）
+CANDIDATE_SOURCE_EVIDENCE_LEVEL: dict[str, str] = {
+    # 聚合物生成器来源
+    "engineering_plastics": "estimated",   # 工程塑料查表法（REFERENCE_PROPERTIES）
+    "rule_based": "estimated",             # 规则启发式
+    "derivative": "estimated",             # 派生变体（启发式增量）
+    "known": "estimated",                  # 内置已知材料库
+    "internlm_generated": "predicted",     # 领域决策：LLM 生成 → 模型预测
+    "llm_generated": "predicted",          # 领域决策：LLM 生成 → 模型预测
+    # 晶体生成器来源（结构数据库/生成模型，属性未经带权重模型验证 → 保守估算）
+    "gnome_pg": "estimated",
+    "gnome_mp_mirror": "estimated",
+    "gnome_local": "estimated",
+    "materials_project": "estimated",
+    "local_database": "estimated",
+}
+
+
+def resolve_candidate_evidence_level(source: str, data: dict | None) -> str:
+    """解析候选的权威可信度档。
+
+    优先级：候选 data 中显式 evidence_level（逐条标注逃生通道）>
+    来源映射 > 默认 estimated（ADR-0001 保守取向：无法证明是真实权重模型的不得称预测）。
+    """
+    if isinstance(data, dict):
+        explicit = str(data.get("evidence_level") or "").strip().lower()
+        if explicit:
+            return explicit
+    return CANDIDATE_SOURCE_EVIDENCE_LEVEL.get(source or "", "estimated")
+
+
 def _iso(value) -> str:
     """将 datetime 或字符串转换为 ISO 字符串；None 返回空字符串。"""
     if value is None:
@@ -106,6 +140,16 @@ class CandidateRecord(BaseModel):
     synthesis_feasibility: dict[str, Any] = Field(default_factory=dict)
     tenant_id: str = ""  # 多租户隔离：归属租户；空=default
     data: dict[str, Any] = Field(default_factory=dict)  # full candidate JSON
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def evidence_level(self) -> str:
+        """ADR-0001 权威可信度档（随 model_dump 输出，前端徽标唯一数据源）。
+
+        仅作用于 API 序列化边界：save() 按显式列参数落库、content_hash 只由
+        formula+target_application 派生，本字段不进入存储内容与去重逻辑。
+        """
+        return resolve_candidate_evidence_level(self.source, self.data)
 
 
 class CandidateStore:
@@ -203,7 +247,7 @@ class CandidateStore:
                 text("SELECT candidate_id, candidate_type, name, smiles, source, "
                      "scenario_id, task_id, project_id, "
                      "multi_objective_score, created_at, data, "
-                     "status, owner, assigned_role "
+                     "status, owner, assigned_role, tenant_id "
                      "FROM experiment.candidates "
                      f"WHERE content_hash = :content_hash AND {tenant_filter()}"),
                 {"content_hash": content_hash, "tenant_id": get_tenant()},
@@ -252,6 +296,9 @@ class CandidateStore:
                 VALUES (:candidate_id, :candidate_type, :name, :smiles, :source, :scenario_id,
                  :task_id, :project_id, :multi_objective_score, :created_at, CAST(:data AS JSONB),
                  :content_hash, :status, :owner, :assigned_role, :tenant_id)
+                -- 冲突分支不覆盖 status/owner/assigned_role/tenant_id：
+                -- 状态只能经 update_status 状态机迁移（防止重复 save 把已推进候选回卷为
+                -- screening，审查 2026-08 MINOR#7）；租户归属一经写入不得搬移
                 ON CONFLICT (candidate_id) DO UPDATE SET
                     candidate_type = EXCLUDED.candidate_type,
                     name = EXCLUDED.name,
@@ -263,11 +310,7 @@ class CandidateStore:
                     multi_objective_score = EXCLUDED.multi_objective_score,
                     created_at = EXCLUDED.created_at,
                     data = EXCLUDED.data,
-                    content_hash = EXCLUDED.content_hash,
-                    status = EXCLUDED.status,
-                    owner = EXCLUDED.owner,
-                    assigned_role = EXCLUDED.assigned_role,
-                    tenant_id = EXCLUDED.tenant_id
+                    content_hash = EXCLUDED.content_hash
                 """),
                 {
                     "candidate_id": record.candidate_id,
@@ -412,37 +455,44 @@ class CandidateStore:
         Raises:
             IllegalCandidateTransitionError: 非法迁移或角色不符
         """
-        record = self.get(candidate_id)
-        if record is None:
-            raise IllegalCandidateTransitionError(
-                "UNKNOWN", to_status, f"Candidate {candidate_id!r} not found",
-            )
-
-        from_status = record.status or CandidateStatus.SCREENING.value
-        try:
-            from_enum = CandidateStatus(from_status)
-            to_enum = CandidateStatus(to_status)
-        except ValueError as e:
-            raise IllegalCandidateTransitionError(from_status, to_status, str(e)) from e
-
-        allowed = CANDIDATE_ALLOWED_TRANSITIONS.get(from_enum, set())
-        if to_enum not in allowed:
-            allowed_str = [s.value for s in allowed] if allowed else "none (terminal state)"
-            raise IllegalCandidateTransitionError(
-                from_status, to_status,
-                f"Allowed transitions from {from_enum.value}: {allowed_str}",
-            )
-
-        # 角色校验：目标状态对应的主导角色
-        expected_role = CANDIDATE_STATUS_ROLE.get(to_enum, "")
-        if expected_role and actor_operation_roles is not None and expected_role not in actor_operation_roles:
-            raise IllegalCandidateTransitionError(
-                from_status, to_status,
-                f"状态 {to_enum.value} 须由 {expected_role} 角色执行，"
-                f"当前可用操作角色 {sorted(actor_operation_roles) or '无'}",
-            )
-
+        # 校验与写入同一事务 + FOR UPDATE 行锁：防止并发下两个请求基于旧状态
+        # 双双通过校验（如 feasible→rejected 与 feasible→process_planning 同时成功），
+        # 与 experiment_controller.update_order_status 的原子化做法对齐。
         with self.engine.begin() as conn:
+            cur_row = conn.execute(
+                text("SELECT status FROM experiment.candidates "
+                     f"WHERE candidate_id = :candidate_id AND {tenant_filter()} FOR UPDATE"),
+                {"candidate_id": candidate_id, "tenant_id": get_tenant()},
+            ).fetchone()
+            if cur_row is None:
+                raise IllegalCandidateTransitionError(
+                    "UNKNOWN", to_status, f"Candidate {candidate_id!r} not found",
+                )
+
+            from_status = cur_row[0] or CandidateStatus.SCREENING.value
+            try:
+                from_enum = CandidateStatus(from_status)
+                to_enum = CandidateStatus(to_status)
+            except ValueError as e:
+                raise IllegalCandidateTransitionError(from_status, to_status, str(e)) from e
+
+            allowed = CANDIDATE_ALLOWED_TRANSITIONS.get(from_enum, set())
+            if to_enum not in allowed:
+                allowed_str = [s.value for s in allowed] if allowed else "none (terminal state)"
+                raise IllegalCandidateTransitionError(
+                    from_status, to_status,
+                    f"Allowed transitions from {from_enum.value}: {allowed_str}",
+                )
+
+            # 角色校验：目标状态对应的主导角色
+            expected_role = CANDIDATE_STATUS_ROLE.get(to_enum, "")
+            if expected_role and actor_operation_roles is not None and expected_role not in actor_operation_roles:
+                raise IllegalCandidateTransitionError(
+                    from_status, to_status,
+                    f"状态 {to_enum.value} 须由 {expected_role} 角色执行，"
+                    f"当前可用操作角色 {sorted(actor_operation_roles) or '无'}",
+                )
+
             if owner:
                 conn.execute(
                     text("UPDATE experiment.candidates SET status = :status, "

@@ -89,12 +89,10 @@
           </span>
         </div>
       </div>
-      <!-- 选中项目但无任务时：提示用户 -->
+      <!-- 选中项目但无任务时：单行内联提示（不占工作区高度，空态详情由下方分栏呈现） -->
       <div v-else-if="selectedProjectId && !taskOptions.length" class="task-info-bar empty-task">
-        <EmptyState
-          type="data"
-          description="该项目暂无任务，请先在「项目中心」新建项目并生成任务"
-        />
+        <InfoCircleOutlined class="empty-task-icon" />
+        <span>该项目暂无任务，请先在「项目中心」新建项目并生成任务</span>
       </div>
 
       <!-- Agent 生成进度（异步模式实时反馈） -->
@@ -162,6 +160,30 @@
       </div>
       <!-- 已选项目：左右分栏 -->
       <template v-else>
+      <!-- 候选状态机流程说明（新人引导：候选从生成到实验的必经之路） -->
+      <a-alert type="info" show-icon class="status-flow-hint" :closable="false">
+        <template #message>
+          <b>候选流程：</b>
+          <span class="flow-steps">
+            <a-tooltip title="screening"><a-tag>初筛</a-tag></a-tooltip><RightOutlined class="flow-arrow" />
+            <a-tooltip title="feasible"><a-tag>可行性</a-tag></a-tooltip><RightOutlined class="flow-arrow" />
+            <a-tooltip title="process_planning"><a-tag>工艺规划</a-tag></a-tooltip><RightOutlined class="flow-arrow" />
+            <a-tooltip title="process_confirmed"><a-tag>工艺确认</a-tag></a-tooltip><RightOutlined class="flow-arrow" />
+            <a-tooltip title="ready_for_experiment"><a-tag>可实验</a-tag></a-tooltip>
+          </span>
+          <span class="flow-tip">按顺序推进；任意环节可拒绝</span>
+        </template>
+      </a-alert>
+      <!-- Dashboard 快捷模板体系提示（?target=PA6）：点击进入临时预测预填 -->
+      <a-alert v-if="recommendedTarget" type="info" show-icon closable class="target-hint" @close="dismissTargetHint">
+        <template #message>
+          快捷入口：材料体系「{{ recommendedTarget }}」。点击
+          <a @click="goTempPredictionWithTarget">临时预测</a>
+          直接以该体系生成候选。
+        </template>
+      </a-alert>
+      <!-- 左右分栏：独立行容器，避免顶部提示挤占分栏宽度 -->
+      <div class="workbench-split">
       <!-- 左侧候选列表 -->
       <div class="left-panel" :style="{ width: leftPanelWidth + 'px' }">
         <CandidateList
@@ -216,6 +238,7 @@
           </div>
         </template>
       </div>
+      </div><!-- /workbench-split -->
       </template>
     </div>
 
@@ -305,8 +328,11 @@ import {
   LoadingOutlined,
   LineChartOutlined,
   DeleteOutlined,
+  RightOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons-vue'
 import { useRouter, useRoute } from 'vue-router'
+import { getUserId } from '@/api/client'
 import CandidateList from '@/components/CandidateList.vue'
 import CandidateDetail from '@/components/CandidateDetail.vue'
 import CandidateAgentBar from '@/components/candidate/CandidateAgentBar.vue'
@@ -329,6 +355,26 @@ const { symbols: unitSymbols, load: loadUnitSymbols } = useUnitSymbols()
 // ── 主视图模式：workbench（候选材料工作台）/ temp（临时材料性能预测）──
 // 支持 URL query ?mode=temp 直接进入临时预测（研发工作台派生入口）
 const mode = ref(route.query.mode === 'temp' ? 'temp' : 'workbench')
+
+// Dashboard 快捷模板 /workbench?target=PA6：target 作为体系提示（复用 recommendedTarget 展示）
+watch(
+  () => route.query.target,
+  (t) => {
+    if (t && mode.value === 'workbench') {
+      recommendedTarget.value = String(t)
+    }
+  },
+  { immediate: true },
+)
+function dismissTargetHint() {
+  recommendedTarget.value = ''
+  router.replace({ query: { ...route.query, target: undefined } })
+}
+function goTempPredictionWithTarget() {
+  const t = recommendedTarget.value
+  dismissTargetHint()
+  router.push({ path: '/workbench', query: { mode: 'temp', target: t } })
+}
 
 // 临时材料性能预测转正成功 → 切回工作台并定位到新候选
 function onTempPromoted(payload) {
@@ -878,12 +924,30 @@ function goFormulaDesign() {
   router.push({ name: 'FormulaDesign', query })
 }
 
-// 送去工艺深化：跳转工艺深化工作台，预选该候选（深化服务会自动推进 feasible → process_planning）
-function goProcessDeepening() {
+// 送去工艺深化：更新候选状态为 process_planning（经 feasible 中间态），然后跳转合成路径页面
+async function goProcessDeepening() {
   if (!selectedCandidate.value) return
   const c = selectedCandidate.value
+  const cid = c.candidate_id || c.id || ''
+  if (!cid) return
+
+  try {
+    // 状态机路径：screening → feasible → process_planning
+    // 当前状态已是 feasible 或更高时跳过第一步
+    const { updateCandidateStatus } = await import('@/api/candidates')
+    if (c.status === 'screening') {
+      await updateCandidateStatus(cid, { status: 'feasible', owner: getUserId() || '', reason: '送去工艺深化' })
+    }
+    await updateCandidateStatus(cid, { status: 'process_planning', owner: getUserId() || '', reason: '进入工艺深化' })
+    message.success('候选已推进至工艺深化阶段')
+  } catch (err) {
+    const detail = err?.response?.data?.detail
+    if (detail) message.warning(detail)
+    // 状态更新失败不阻塞跳转，用户仍可到合成路径手动操作
+  }
+
   const query = {
-    candidate_id: c.candidate_id || c.id || '',
+    candidate_id: cid,
     smiles: c.smiles || '',
   }
   if (currentScenarioId.value) query.scenario_id = currentScenarioId.value
@@ -999,6 +1063,45 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 候选状态机流程引导：紧凑单行横幅，不挤占分栏区域 */
+.status-flow-hint {
+  margin-bottom: 6px;
+  flex-shrink: 0;
+  padding: 2px 0 !important;
+}
+.status-flow-hint :deep(.ant-alert-message) {
+  line-height: 1.5;
+  font-size: 13px;
+}
+.status-flow-hint :deep(.ant-alert-icon) {
+  font-size: 14px;
+  margin-right: 6px;
+}
+.status-flow-hint :deep(.ant-alert-content) {
+  padding: 0;
+}
+.flow-steps {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.flow-steps :deep(.ant-tag) {
+  line-height: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+  margin: 0;
+}
+.flow-arrow {
+  font-size: 9px;
+  color: #94a3b8;
+}
+.flow-tip {
+  margin-left: 6px;
+  color: #64748b;
+  font-size: 11px;
+}
+
 .candidate-workbench {
   display: flex;
   flex-direction: column;
@@ -1133,22 +1236,32 @@ onMounted(async () => {
 }
 
 .task-info-bar.empty-task {
-  padding: 12px;
-}
-
-.task-info-bar.empty-task :deep(.ant-empty) {
-  margin: 0;
-}
-
-.task-info-bar.empty-task :deep(.ant-empty-description) {
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
   font-size: 12px;
   color: var(--text-secondary, #666);
+}
+
+.empty-task-icon {
+  color: var(--primary, #f97316);
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .workbench-body {
   flex: 1;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
+  min-height: 0;
+}
+
+/* 左右分栏行容器：占满顶部提示之外的剩余高度与宽度 */
+.workbench-split {
+  flex: 1;
+  display: flex;
+  min-width: 0;
   min-height: 0;
 }
 

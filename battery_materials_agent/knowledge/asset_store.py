@@ -57,11 +57,37 @@ class PaperStore:
         if source_tier not in self.VALID_SOURCE_TIERS:
             source_tier = "journal"
 
-        # 若有 DOI，先查是否已存在
+        # 若有 DOI，先查是否已存在：已存在时更新元数据（修复：此前直接返回旧记录，新摘要/作者/关键词不刷新）
         if doi:
             existing = self.get_by_doi(doi)
             if existing:
-                return existing
+                paper_id = existing["paper_id"]
+                with self.engine.begin() as conn:
+                    conn.execute(
+                        text("""UPDATE knowledge.papers
+                        SET title=:title, authors=CAST(:authors AS JSONB), journal=:journal,
+                            year=:year, abstract=:abstract, keywords=CAST(:keywords AS JSONB),
+                            source=:source, source_tier=:source_tier, url=:url,
+                            citation_count=:citation_count, extra=CAST(:extra AS JSONB),
+                            updated_at=:updated_at
+                        WHERE paper_id=:paper_id"""),
+                        {
+                            "paper_id": paper_id,
+                            "title": paper.get("title", existing.get("title", "")),
+                            "authors": json.dumps(paper.get("authors") or existing.get("authors") or []),
+                            "journal": paper.get("journal") or existing.get("journal", ""),
+                            "year": paper.get("year") or existing.get("year"),
+                            "abstract": paper.get("abstract") or existing.get("abstract", ""),
+                            "keywords": json.dumps(paper.get("keywords") or existing.get("keywords") or []),
+                            "source": paper.get("source") or existing.get("source", ""),
+                            "source_tier": source_tier,
+                            "url": paper.get("url") or existing.get("url", ""),
+                            "citation_count": paper.get("citation_count") or existing.get("citation_count", 0),
+                            "extra": json.dumps(paper.get("extra") or existing.get("extra") or {}),
+                            "updated_at": now,
+                        },
+                    )
+                return self.get_by_doi(doi) or existing
 
         paper_id = paper.get("paper_id") or _new_id("P")
         with self.engine.begin() as conn:

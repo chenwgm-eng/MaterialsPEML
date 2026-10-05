@@ -215,6 +215,11 @@ class EquipmentStore:
         return result.rowcount > 0
 
     def _row_to_equipment(self, row) -> Equipment:
+        # 历史脏数据（未知 status 字符串）防御：解析失败回退 IDLE，不 500
+        try:
+            status = EquipmentStatus(row[6]) if row[6] else EquipmentStatus.IDLE
+        except ValueError:
+            status = EquipmentStatus.IDLE
         return Equipment(
             equipment_id=row[0] or "",
             name=row[1] or "",
@@ -222,7 +227,7 @@ class EquipmentStore:
             category=row[3] or "",
             serial_number=row[4] or "",
             location=row[5] or "",
-            status=EquipmentStatus(row[6]) if row[6] else EquipmentStatus.IDLE,
+            status=status,
             last_calibration=row[7] or "",
             next_calibration=row[8] or "",
             responsible_person=row[9] or "",

@@ -49,6 +49,9 @@ class ExperimentRecord(BaseModel):
     notes: str = ""
     order_id: str = ""      # 关联实验任务单（ experiment_orders.order_id ）
     candidate_id: str = ""  # 关联候选材料标识
+    # ADR-0002：数据可信度与溯源必须随记录透出（verified/simulated/estimated/literature）
+    data_quality: str = ""
+    provenance: list[dict] | dict | None = None  # 新写入为 list[dict]，0059 历史回填为 dict
 
 
 def _parse_json_field(value, default):
@@ -159,7 +162,7 @@ class DataMiddleware:
         query = (
             "SELECT result_id, sample_id, sample_batch_id, source_type, uploaded_by, "
             "uploaded_at, property_name, value, unit, test_conditions, "
-                "experiment_order_id, instrument_id "
+                "experiment_order_id, instrument_id, data_quality, provenance "
                 "FROM experiment.experiment_result_records WHERE 1=1"
         )
         params: dict[str, Any] = {}
@@ -196,6 +199,8 @@ class DataMiddleware:
                 operator=r[4] or "",
                 order_id=r[10] or "",
                 candidate_id="",
+                data_quality=r[12] or "",
+                provenance=_parse_json_field(r[13], default=None),
             ))
         return records
 

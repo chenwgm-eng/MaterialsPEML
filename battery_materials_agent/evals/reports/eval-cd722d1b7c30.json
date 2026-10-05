@@ -1,0 +1,31 @@
+{
+  "eval_run_id": "eval-cd722d1b7c30",
+  "target_type": "model",
+  "target_id": "askcos",
+  "target_version": "v1",
+  "dataset": "synthesis_bench",
+  "status": "completed",
+  "cases": [],
+  "results": [],
+  "metrics": {
+    "per_dataset": {
+      "synthesis_bench": {
+        "error": "dataset_not_found"
+      }
+    },
+    "total_cases": 0,
+    "gate": {
+      "passed": false,
+      "violations": [
+        "missing_dataset:synthesis_bench:dataset_not_found"
+      ],
+      "zero_tolerance_passed": false,
+      "baseline_passed": true
+    }
+  },
+  "started_at": "2026-08-14T15:20:02.224283Z",
+  "completed_at": "2026-08-14T15:20:02.225283Z",
+  "baseline_version": null,
+  "failed_cases": [],
+  "publication_recommendation": "block"
+}

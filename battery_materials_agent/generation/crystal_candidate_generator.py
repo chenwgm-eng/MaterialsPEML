@@ -859,13 +859,14 @@ class CrystalCandidateGenerator:
             all_candidates = _apply_multi_objective(all_candidates, target_properties)
             return all_candidates[:num_candidates]
 
-        # 单目标回退（保持向后兼容）
+        # 单目标回退（保持向后兼容；方向与 material_properties.PROPERTY_DIRECTION 一致：
+        # band_gap maximize 降序、formation_energy minimize 升序）
         if target_property == "ionic_conductivity":
             all_candidates.sort(key=lambda c: c.ionic_conductivity_estimate, reverse=True)
         elif target_property == "band_gap":
-            all_candidates.sort(key=lambda c: c.band_gap)
+            all_candidates.sort(key=lambda c: c.band_gap, reverse=True)
         elif target_property == "formation_energy":
-            all_candidates.sort(key=lambda c: c.formation_energy, reverse=True)
+            all_candidates.sort(key=lambda c: c.formation_energy)
 
         return all_candidates[:num_candidates]
 

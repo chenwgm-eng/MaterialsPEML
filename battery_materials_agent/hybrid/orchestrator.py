@@ -415,10 +415,11 @@ class HybridOrchestrator:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
-            # 委员会触发检查：依据计划状态自动检测是否需要创建委员会 case
+            # 委员会触发检查：依据计划状态自动检测是否需要创建委员会 case。
+            # step_id（step_{idx}）无语义，必须同时传 action 供触发器语义分发
             if self._committee_trigger:
                 triggers = self._committee_trigger.check_all(
-                    plan, step=step.step_id
+                    plan, step=step.step_id, action=step.action
                 )
                 for trigger in triggers:
                     if trigger.triggered:

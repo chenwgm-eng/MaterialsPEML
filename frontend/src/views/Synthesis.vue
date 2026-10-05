@@ -38,33 +38,39 @@
           row-key="candidate_id"
           size="small"
           :custom-row="pipelineRowProps"
+          :row-class-name="pipelineRowClass"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'name'">
-              <div class="cand-name">{{ record.name || record.candidate_id }}</div>
-              <div class="cand-sub">{{ record.source || record.candidate_type || '' }}</div>
-            </template>
-            <template v-else-if="column.key === 'score'">
-              <span v-if="record.multi_objective_score" class="num score-num">
-                {{ (record.multi_objective_score * 100).toFixed(0) }}%
-              </span>
-              <span v-else class="muted">—</span>
+              <div class="cand-name">{{ record.candidate?.name || record.candidate?.candidate_id }}</div>
+              <div class="cand-meta">
+                <a-tag size="small" :color="candTypeColor(record.candidate?.candidate_type)">{{ typeLabel(record.candidate?.candidate_type) }}</a-tag>
+                <a-tag size="small" :color="candSource(record).color">{{ candSource(record).label }}</a-tag>
+                <span v-if="candFormula(record)" class="cand-formula muted">{{ candFormula(record) }}</span>
+              </div>
             </template>
             <template v-else-if="column.key === 'status'">
-              <a-tag :color="statusColor(record.status)">{{ statusLabel(record.status) }}</a-tag>
+              <a-tag :color="statusColor(record.candidate?.status)">{{ statusLabel(record.candidate?.status) }}</a-tag>
             </template>
             <template v-else-if="column.key === 'schemes'">
-              <span :class="{ 'num': true, 'scheme-empty': !record.scheme_count }">
-                {{ record.scheme_count || 0 }}
-              </span>
+              <div v-if="!schemeSummary(record).total" class="scheme-cell muted">暂无方案</div>
+              <div v-else class="scheme-cell">
+                <div class="scheme-line">
+                  <span class="num">{{ schemeSummary(record).total }}</span>
+                  <span class="scheme-unit">套</span>
+                  <a-tag v-if="schemeSummary(record).confirmed" size="small" color="green">已确认</a-tag>
+                  <a-tag v-else size="small">待确认</a-tag>
+                </div>
+                <div v-if="schemeSummary(record).routes" class="scheme-sub muted">
+                  {{ schemeSummary(record).routes }} 条路线
+                  <span v-if="schemeSummary(record).dftPassed" class="dft-pass"> · DFT 通过</span>
+                  <span v-else> · DFT 待校验</span>
+                </div>
+              </div>
             </template>
             <template v-else-if="column.key === 'owner'">
-              <span v-if="record.owner" class="owner-name">{{ record.owner }}</span>
-              <span v-else class="muted">—</span>
-              <div v-if="record.assigned_role" class="role-hint">{{ roleLabel(record.assigned_role) }}</div>
-            </template>
-            <template v-else-if="column.key === 'updated'">
-              <span class="muted">{{ formatUpdated(record) }}</span>
+              <span class="owner-name">{{ ownerDisplay(record.candidate?.owner) }}</span>
+              <div v-if="record.candidate?.assigned_role" class="role-hint">{{ roleLabel(record.candidate.assigned_role) }}</div>
             </template>
             <template v-else-if="column.key === 'action'">
               <a-button
@@ -599,8 +605,10 @@ import { getReactionNetwork, verifyRouteWithDFT } from '@/api/experiments'
 import { planSynthesisAsync, getSynthesisTask, createManualRoute } from '@/api/synthesis'
 import { getProcessEngineerWorkbench, runProcessDeepening, updateCandidateStatus, updateProcessSchemeStatus, deleteProcessScheme, createBomFromProcess } from '@/api/candidates'
 import { listAgents } from '@/api/agents'
+import { listUsersBrief } from '@/api/auth'
 import { useMdmDict } from '@/utils/mdmDict'
 import { getUserId } from '@/api/client'
+import { getSourceBadge } from '@/utils/candidateSource'
 import MoleculeView from '@/components/MoleculeView.vue'
 import ReactionNetwork from '@/components/ReactionNetwork.vue'
 import ProcessFlowGraph from '@/components/ProcessFlowGraph.vue'
@@ -671,11 +679,11 @@ const routeSourceLabel = (s) => ROUTE_SOURCE_META[s]?.label || s || ''
 const routeSourceColor = (s) => ROUTE_SOURCE_META[s]?.color || 'default'
 
 const pipelineColumns = [
-  { title: '候选', key: 'name' },
-  { title: '状态', key: 'status', width: 110 },
-  { title: '工艺方案', key: 'schemes', width: 90, align: 'center' },
-  { title: '责任人', key: 'owner', width: 120 },
-  { title: '操作', key: 'action', width: 100, align: 'right' },
+  { title: '候选', key: 'name', minWidth: 220 },
+  { title: '状态', key: 'status', width: 104 },
+  { title: '工艺方案', key: 'schemes', width: 168 },
+  { title: '责任人', key: 'owner', width: 116 },
+  { title: '操作', key: 'action', width: 172, align: 'right' },
 ]
 
 function pipelineRowProps(record) {
@@ -683,6 +691,59 @@ function pipelineRowProps(record) {
     style: { cursor: 'pointer' },
     onClick: () => selectCandidate(record),
   }
+}
+
+// ── 候选/工艺方案单元格辅助：让每一行自解释 ──
+// 用户 ID → 显示名映射（负责人列显示人名而非 U-xxx）
+const userNames = ref({})
+async function loadUserNames() {
+  try {
+    const list = await listUsersBrief()
+    const map = {}
+    for (const u of Array.isArray(list) ? list : []) {
+      map[u.user_id] = u.display_name || u.username || u.user_id
+    }
+    userNames.value = map
+  } catch {
+    userNames.value = {}
+  }
+}
+const ownerDisplay = (ownerId) => {
+  if (!ownerId) return '未指派'
+  return userNames.value[ownerId] || ownerId
+}
+
+// 候选类型标签颜色
+const candTypeColor = (t) => (t === 'crystal' ? 'purple' : t === 'polymer' ? 'blue' : 'default')
+
+// 来源徽标（MP / GNoME / 本地 / AI / 算法）
+const candSource = (record) => getSourceBadge(record.candidate || {})
+
+// 候选化学式（有则展示在副标题）
+const candFormula = (record) => {
+  const cand = record.candidate || {}
+  const f = cand.data?.formula || cand.formula || ''
+  if (!f || f === cand.name) return ''
+  return f
+}
+
+// 工艺方案摘要：套数 / 已确认套数 / 路线数 / DFT 是否通过
+function schemeSummary(record) {
+  const schemes = Array.isArray(record.process_schemes) ? record.process_schemes : []
+  const total = record.scheme_count || schemes.length
+  const confirmed = schemes.filter((s) => s.status === 'confirmed').length
+  const routes = schemes.reduce((n, s) => n + (Array.isArray(s.routes) ? s.routes.length : 0), 0)
+  const dftPassed = schemes.some((s) =>
+    (Array.isArray(s.routes) ? s.routes : []).some((r) => r.dft && r.dft.overall_status === 'passed'),
+  )
+  return { total, confirmed, routes, dftPassed }
+}
+
+function pipelineRowClass(record) {
+  const status = record.candidate?.status
+  if (status === 'ready_for_experiment') return 'success-row'
+  if (status === 'process_confirmed') return 'processing-row'
+  return ''
 }
 
 async function loadWorkbench() {
@@ -729,6 +790,71 @@ function selectCandidate(record) {
   selected.value = record
   selectedItem.value = record
   schemes.value = record.process_schemes || []
+}
+
+// 归档候选：候选状态机无 rejected 后继时建议归档（改为 rejected）
+const archivingId = ref('')
+async function onArchiveCandidate(record) {
+  // 工作台数据结构为 { candidate: {...}, process_schemes, ... }，候选字段嵌套在 record.candidate 下
+  const cand = record.candidate || record
+  const cid = cand.candidate_id
+  if (!cid) return
+  Modal.confirm({
+    title: '归档候选',
+    content: `确定将候选「${cand.name || cand.formula || cid}」归档为已拒绝吗？归档后不可恢复为进行中。`,
+    okText: '归档',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      archivingId.value = cid
+      try {
+        await updateCandidateStatus(cid, {
+          status: 'rejected',
+          owner: currentOwner,
+          reason: '工艺人员归档候选',
+        })
+        message.success('候选已归档')
+        await loadWorkbench()
+      } catch {
+        // 409（非法迁移）等由拦截器提示
+      } finally {
+        archivingId.value = ''
+      }
+    },
+  })
+}
+
+// 删除候选（被实验任务/工艺方案/配方/样品引用的候选后端会 409 拒绝）
+const deletingCandidateId = ref('')
+async function onDeleteCandidate(record) {
+  // 工作台数据结构为 { candidate: {...}, ... }，候选字段嵌套在 record.candidate 下
+  const cand = record.candidate || record
+  const cid = cand.candidate_id
+  if (!cid) return
+  Modal.confirm({
+    title: '删除候选',
+    content: '确定删除该候选吗？若已被实验任务/工艺方案/配方/样品引用将无法删除，建议改用归档。',
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      deletingCandidateId.value = cid
+      try {
+        await client.delete(`/candidates/${cid}`)
+        message.success('候选已删除')
+        if (selected.value?.candidate_id === cid) {
+          selected.value = null
+          schemes.value = []
+          selectedItem.value = null
+        }
+        await loadWorkbench()
+      } catch (e) {
+        message.error(e?.response?.data?.detail || '删除失败：候选可能已被下游引用')
+      } finally {
+        deletingCandidateId.value = ''
+      }
+    },
+  })
 }
 
 // 删除工艺方案（被配方 BOM 引用的方案后端会 409 拒绝，提示改为「已放弃」归档）
@@ -955,6 +1081,7 @@ onMounted(() => {
   window.addEventListener('resize', resizeScatter)
   loadMdmOptions()
   loadCapableAgents()
+  loadUserNames()
   // 工作台主导：进入页面默认加载深化流水线
   loadWorkbench()
 })
@@ -1413,12 +1540,22 @@ watch(
 /* ── 工作台：流水线与深化工作区 ── */
 .pipeline-filter { margin-bottom: 4px; }
 .pipeline-card :deep(.ant-table) { background: transparent; }
-.cand-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.cand-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.cand-name { font-size: 14px; font-weight: 600; color: var(--text-primary); line-height: 1.4; }
+.cand-meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.cand-meta :deep(.ant-tag) { margin: 0; font-size: 11px; line-height: 18px; padding: 0 6px; }
+.cand-formula { font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
 .owner-name { font-size: 13px; color: var(--text-primary); }
 .role-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.scheme-empty { color: var(--text-muted); }
+.scheme-cell { display: flex; flex-direction: column; gap: 2px; }
+.scheme-line { display: flex; align-items: center; gap: 4px; }
+.scheme-line .num { font-weight: 600; color: var(--text-primary); }
+.scheme-unit { font-size: 12px; color: var(--text-secondary); }
+.scheme-line :deep(.ant-tag) { margin: 0; font-size: 11px; line-height: 18px; padding: 0 6px; }
+.scheme-sub { font-size: 11px; color: var(--text-muted); }
+.dft-pass { color: var(--success-color, #52c41a); font-weight: 500; }
 .action-link { padding: 0 4px; }
+.pipeline-card :deep(.success-row) > td { background: rgba(82, 196, 26, 0.04); }
+.pipeline-card :deep(.processing-row) > td { background: rgba(64, 169, 255, 0.04); }
 
 .workspace-card :deep(.ant-card-body) { padding-top: 16px; }
 .candidate-info { padding-bottom: 16px; border-bottom: 1px solid var(--border-light); margin-bottom: 16px; }

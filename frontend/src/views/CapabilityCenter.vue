@@ -91,6 +91,7 @@
         :row-key="(r) => r.capability_id"
         :loading="loading"
         :custom-row="customRow"
+        :scroll="{ x: 1150 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'name'">

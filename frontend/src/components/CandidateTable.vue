@@ -25,7 +25,10 @@
           />
         </template>
         <template v-else-if="column.key === 'mo_score'">
-          <span class="mo-score-cell">{{ (record.multi_objective_score * 100).toFixed(1) }}%</span>
+          <span class="mo-score-cell">
+            <template v-if="record.multi_objective_score != null">{{ (record.multi_objective_score * 100).toFixed(1) }}%</template>
+            <template v-else>-</template>
+          </span>
         </template>
         <template v-else-if="column.key === 'mo_status'">
           <span class="mo-status-tags">
@@ -114,9 +117,9 @@ const tableData = computed(() =>
 )
 
 const columns = computed(() => {
-  // 检测是否存在多目标评分列（任意一行有非零 multi_objective_score 即显示）
+  // 检测是否存在多目标评分列（任意一行有非空 multi_objective_score 即显示；0 是合法评分）
   const hasMultiScore = props.data.some(
-    (r) => r.multi_objective_score !== undefined && r.multi_objective_score !== null && r.multi_objective_score > 0
+    (r) => r.multi_objective_score !== undefined && r.multi_objective_score !== null
   )
 
   if (props.type === 'polymer') {

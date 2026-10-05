@@ -2235,9 +2235,10 @@ class ECMLEngine:
         for pred in state.predictions[:3]:
             material_type = pred.get("material_type", "crystal")
             smiles = pred.get("smiles", "")
-            # 仅对非 polymer 分支且带 SMILES 的（有机分子）调用 DFT 验证
-            if (self.verifier is not None and not is_polymer
-                    and material_type == "polymer" and smiles):
+            # DFT 验证仅对"带 SMILES 的有机分子"适用（DFTVerifier 基于 RDKit）；
+            # 高分子（psmiles）与无机晶体均不适用，直接保留估算值（predicted_only）
+            if (self.verifier is not None and smiles
+                    and material_type in ("molecule", "organic")):
                 try:
                     result = self.verifier.verify_single_point(smiles, state.target_property or "total_energy")
                     verified_item = dict(pred)
@@ -2285,12 +2286,30 @@ class ECMLEngine:
                         "candidate": candidate.get("formula", candidate.get("smiles", "")),
                         "risk_factors": decision.risk_factors,
                     })
-                    # 在生产模式下，暂停等待审批
+                    # 在生产模式下，暂停等待人工审批（审批通过后由 resume 端点继续）。
+                    # 先创建实验任务单（等待真实数据），否则无 order 可 resume → 死锁
                     if self.experiment_controller and self.experiment_controller.run_mode == "production":
+                        approval_order_id = f"ORD-ECML-{state.run_id[:8]}-{state.iteration}"
+                        try:
+                            from ..experiment.experiment_controller import ExperimentOrder
+                            _o = ExperimentOrder(
+                                order_id=approval_order_id,
+                                candidate_id=candidate.get("candidate_id", ""),
+                                execution_mode="MANUAL_ENTRY",
+                                status="PENDING_APPROVAL",
+                                priority="P1",
+                                notes=f"ECML 自动生成（run={state.run_id}, iter={state.iteration}，等待人工审批）",
+                                ai_draft=True,
+                            )
+                            self.experiment_controller._store.save_order(_o)
+                            state.history.append({"step": "order_created", "order_id": approval_order_id})
+                        except Exception as _e:
+                            logger.warning("审批暂停时创建任务单失败: %s", _e)
                         state.current_step = ECMLStep.WAITING_FOR_DATA
                         state.history.append({
                             "step": "waiting_for_approval",
-                            "message": "实验需人工审批后继续",
+                            "order_id": approval_order_id,
+                            "message": "实验需人工审批后继续（任务单已创建，审批通过后录入数据即可恢复）",
                         })
                         return state
         if self.experiment_controller is not None and state.verified:
@@ -2299,13 +2318,19 @@ class ECMLEngine:
                     ExperimentOrder,
                 )
                 for candidate in state.verified[:2]:
-                    formula = candidate.get("formula") or candidate.get("smiles", "")
+                    # InternLM 预测 dict 可能只有 psmiles（无 formula/smiles）——补齐标识
+                    formula = (candidate.get("formula")
+                               or candidate.get("smiles")
+                               or candidate.get("psmiles")
+                               or candidate.get("name", ""))
                     if not formula:
                         continue
                     candidate_id = candidate.get("candidate_id", "")
 
                     # 创建 ExperimentOrder 关联候选材料，打通 candidate → order → experiment 链路
-                    order_id = f"ORD-ECML-{state.run_id[:8]}-{state.iteration}"
+                    # 订单 id 含候选序号，避免 verified[:2] 两个候选复用同一 order/result
+                    _idx = list(state.verified).index(candidate) if candidate in state.verified else 0
+                    order_id = f"ORD-ECML-{state.run_id[:8]}-{state.iteration}-{_idx}"
                     try:
                         order = ExperimentOrder(
                             order_id=order_id,
@@ -2321,8 +2346,30 @@ class ECMLEngine:
                         logger.warning("Failed to create ExperimentOrder for %s", formula, exc_info=True)
                         order_id = ""
 
+                    # 从候选 data 取估算属性（verified 是预测 dict 无 data；候选的工程性能在 data JSONB）
+                    _cand_data = {}
+                    for _c in state.candidates:
+                        if (_c.get("formula") == formula or _c.get("smiles") == formula
+                                or _c.get("name") == formula):
+                            _cand_data = _c.get("data") or {}
+                            break
                     result = self.experiment_controller.execute_experiment(
-                        {"formula": formula, "candidate_id": candidate_id, "order_id": order_id},
+                        {
+                            "formula": formula,
+                            "candidate_id": candidate_id,
+                            "order_id": order_id,
+                            # v4.1：把候选估算属性传给模拟引擎——模拟测量值围绕估算值生成，
+                            # 使 demo 闭环的"估算 vs 模拟实测"偏差分析有意义
+                            "estimated": {
+                                k: (_cand_data.get(k) if _cand_data.get(k) is not None else candidate.get(k))
+                                for k in (
+                                    "tensile_strength", "elongation_at_break", "tensile_modulus",
+                                    "flexural_modulus", "flexural_strength", "impact_strength",
+                                    "heat_deflection_temp", "melt_flow_index",
+                                )
+                                if (_cand_data.get(k) is not None or candidate.get(k) is not None)
+                            },
+                        },
                         self._experiment_type_for_branch(state.material_branch or ""),
                     )
                     result_dict = result.model_dump() if hasattr(result, "model_dump") else result
@@ -2367,6 +2414,13 @@ class ECMLEngine:
                     )
                     if not is_production:
                         sample_id = f"smp_{formula}_{state.iteration}"
+                        # 联动创建样品记录（fk_results_sample 要求样品先存在，否则 FK 失败）
+                        try:
+                            from ..api import _ensure_sample_for_result
+                            _ensure_sample_for_result(sample_id, source_type="experiment",
+                                                      order_id=order_id, candidate_id=candidate_id)
+                        except Exception:
+                            pass
                         with self._ingested_lock:
                             already_ingested = sample_id in self._ingested_samples
                         if not already_ingested:
@@ -2391,6 +2445,106 @@ class ECMLEngine:
                 state.history.append({"step": "experiment_warning", "error": str(e)})
         state.history.append({"step": "experiment", "count": len(state.experiment_results)})
         return state
+
+    def _compute_validation_metrics(self, state: ECMLState, validation_data: list[dict]) -> dict:
+        """闭环验证精度：本轮估算值 vs 实验记录（含模拟）偏差统计（MAPE/命中率）。
+
+        对齐规则：prediction.property_name 为裸 key（tensile_strength），
+        实验记录 property_name 为 prop.* 规范化形式，去前缀匹配。
+        审计语义：demo 模式对比"估算 vs 模拟实测"（展示闭环自洽性），
+        生产模式对比"估算 vs 真实实测"（真实精度）。不进学习决策（ADR-0002）。
+        """
+        if not validation_data or not state.predictions:
+            return {"n_records": len(validation_data), "n_compared": 0, "note": "无实验记录可对比"}
+        # 估算基准：候选 data 的查表估算值（与模拟引擎同源，ADR-0003/查表法），
+        # 按 formula 索引——实验记录 sample_id 形如 smp_{formula}_{iter}，可精确反查同一候选的估算值
+        cand_est_by_formula: dict[str, dict[str, float]] = {}
+        for _c in state.candidates:
+            _cd = _c.get("data") or {}
+            _f = _c.get("formula") or _c.get("name") or ""
+            if not _f:
+                continue
+            _props = {
+                _k: float(_v) for _k, _v in _cd.items()
+                if isinstance(_v, (int, float)) and _k in (
+                    "tensile_strength", "elongation_at_break", "tensile_modulus",
+                    "flexural_modulus", "flexural_strength", "impact_strength",
+                    "heat_deflection_temp", "melt_flow_index", "crystallinity",
+                )
+            }
+            if _props:
+                cand_est_by_formula[_f] = _props
+
+        per_prop: dict[str, dict] = {}
+        total_abs_err = 0.0
+        total_pairs = 0
+        hit_10 = 0
+        hit_20 = 0
+        for rec in validation_data:
+            prop = (rec.get("property_name") or "").strip()
+            if prop.startswith("prop."):
+                prop = prop[len("prop."):]
+            # 从 sample_id 反查候选 formula（smp_{formula}_{iter}）
+            sample_id = rec.get("sample_id") or ""
+            formula = ""
+            if sample_id.startswith("smp_"):
+                rest = sample_id[len("smp_"):]
+                formula = rest.rsplit("_", 1)[0]
+            est = cand_est_by_formula.get(formula, {})
+            pred = est.get(prop)
+            if pred is None:
+                # 无查表估算时回退预测器输出（候选级，要求 formula 精确匹配，避免空串误配）
+                for p in state.predictions:
+                    p_f = (p.get("formula") or p.get("name") or "").strip()
+                    if (p.get("property_name") or "").strip() == prop and formula and p_f == formula:
+                        try:
+                            pred = float(p.get("value") or 0.0)
+                        except (TypeError, ValueError):
+                            pred = None
+                        break
+            if pred is None:
+                continue
+            try:
+                actual = float(rec.get("value"))
+            except (TypeError, ValueError):
+                continue
+            denom = abs(actual) if actual != 0 else 1e-9
+            rel = abs(pred - actual) / denom
+            stat = per_prop.setdefault(prop, {"n": 0, "err_sum": 0.0, "hit10": 0})
+            stat["n"] += 1
+            stat["err_sum"] += rel
+            if rel <= 0.10:
+                stat["hit10"] += 1
+            total_abs_err += rel
+            total_pairs += 1
+            if rel <= 0.10:
+                hit_10 += 1
+            if rel <= 0.20:
+                hit_20 += 1
+        per_prop_list = [
+            {
+                "property": prop,
+                "n": st["n"],
+                "mape_pct": round(st["err_sum"] / st["n"] * 100, 1),
+                "within_10pct": round(st["hit10"] / st["n"] * 100, 1),
+            }
+            for prop, st in per_prop.items()
+        ]
+        # 数据质量分布（审计：模拟/实测/估算各占多少）
+        dq_dist: dict[str, int] = {}
+        for rec in validation_data:
+            dq = rec.get("data_quality") or "estimated"
+            dq_dist[dq] = dq_dist.get(dq, 0) + 1
+        return {
+            "n_records": len(validation_data),
+            "n_compared": total_pairs,
+            "overall_mape_pct": round(total_abs_err / total_pairs * 100, 1) if total_pairs else None,
+            "within_10pct_pct": round(hit_10 / total_pairs * 100, 1) if total_pairs else None,
+            "within_20pct_pct": round(hit_20 / total_pairs * 100, 1) if total_pairs else None,
+            "per_property": per_prop_list,
+            "data_quality_distribution": dq_dist,
+            "note": "demo 模式对比估算 vs 模拟实测（闭环自洽性）；生产模式对比估算 vs 真实实测（真实精度）",
+        }
 
     def _experiment_type_for_branch(self, branch: str):
         """按材料分支选择模拟实验类型（v4.1 高分子分支走力学/热学测试）。"""
@@ -2445,21 +2599,40 @@ class ECMLEngine:
             except (TypeError, ValueError):
                 continue
             # v4.1：模拟测量值 key 带单位后缀（如 tensile_strength_MPa），
-            # property_name 列有 FK → mdm.properties.property_id，先剥离后缀映射到 prop.*；
+            # property_name 列有 FK → mdm.properties.property_id：剥离后缀后映射到 prop.*；
             # 无对应主数据时跳过该条（避免 FK 500 静默失败污染历史）
             from ..api import _PROPERTY_ALIASES
             canonical = prop_name
-            for suffix in ("_MPa", "_pct", "_percent", "_C", "_g_10min", "_kJ_m2", "_ohm", "_V", "_eV", "_K", "_m2_g", "_nm", "_deg", "_J_g"):
+            for suffix in ("_MPa", "_pct", "_percent", "_C", "_g_10min", "_kJ_m2", "_ohm", "_V", "_eV", "_K", "_m2_g", "_nm", "_deg", "_J_g",
+                           "_S_cm", "_Hz", "_mAh_g", "_mAh_cm2", "_g_cm3", "_nm2", "_deg_c", "_counts"):
                 if canonical.endswith(suffix):
                     canonical = canonical[: -len(suffix)]
                     break
-            if not canonical.startswith("prop.") and canonical not in _PROPERTY_ALIASES:
-                logger.debug("跳过无 MDM 主数据的模拟测量值: %s", prop_name)
-                continue
+            if not canonical.startswith("prop."):
+                mapped = _PROPERTY_ALIASES.get(canonical)
+                if mapped:
+                    canonical = mapped
+                else:
+                    logger.debug("跳过无 MDM 主数据的模拟测量值: %s", prop_name)
+                    continue
             # ADR-0002：demo 模拟值以 simulated 身份落库——不进学习池、不得标 measured
             is_simulation = self.experiment_controller is not None and self.experiment_controller.run_mode != "production"
+            # 单位兜底：模拟结果未带 units 时按属性映射（MDM unit_code 规范）
+            _PROP_UNITS = {
+                "prop.tensile_strength": "MPa", "prop.tensile_modulus": "MPa",
+                "prop.flexural_modulus": "MPa", "prop.flexural_strength": "MPa",
+                "prop.impact_strength": "kJ/m2", "prop.heat_deflection_temp": "C",
+                "prop.melt_flow_index": "g/10min", "prop.elongation_at_break": "%",
+                "prop.weight_loss": "%", "prop.residual_mass": "%",
+                "prop.crystallinity": "%", "prop.melting_point": "C",
+                "prop.thermal_stability": "C", "prop.glass_transition_temp": "C",
+                "prop.ionic_conductivity": "S/cm",
+            }
+            unit_val = units.get(prop_name, "") or _PROP_UNITS.get(canonical, "")
+            # result_id 用 order_id 尾部（含候选序号），避免同迭代两个候选同属性互相覆盖
+            _order_suffix = (order_id or "").rsplit("-", 1)[-1] if order_id else str(iteration)
             record = ExperimentResultRecord(
-                result_id=f"REC-ECML-{run_id_suffix}-{iteration}-{prop_name}",
+                result_id=f"REC-ECML-{run_id_suffix}-{_order_suffix}-{prop_name}",
                 experiment_order_id=order_id,
                 sample_id=sample_id,
                 sample_batch_id=f"ecml_iter_{iteration}",
@@ -2469,7 +2642,7 @@ class ECMLEngine:
                 uploaded_at=uploaded_at,
                 property_name=canonical,
                 value=value_float,
-                unit=units.get(prop_name, ""),
+                unit=unit_val,
                 test_method=test_method,
                 test_conditions={"iteration": iteration, "target_property": target_property},
                 instrument_id="",
@@ -2521,6 +2694,18 @@ class ECMLEngine:
                 if already_ingested:
                     continue
                 try:
+                    # fk_results_sample：样品必须先存在，否则结果写入因 FK 失败
+                    # （此前 resume 路径未建样品，生产模式注入数据被静默丢弃）
+                    try:
+                        from ..api import _ensure_sample_for_result
+                        _ensure_sample_for_result(
+                            sample_id,
+                            source_type="experiment",
+                            order_id=result_dict.get("order_id", ""),
+                            candidate_id=result_dict.get("candidate_id", ""),
+                        )
+                    except Exception:
+                        logger.warning("resume_from_data 预建样品失败 sample_id=%s", sample_id, exc_info=True)
                     self._save_ecml_result_records(
                         result_dict=result_dict,
                         order_id=result_dict.get("order_id", ""),
@@ -2534,7 +2719,10 @@ class ECMLEngine:
                     with self._ingested_lock:
                         self._ingested_samples.add(sample_id)
                 except Exception as e:
-                    logger.warning("Failed to sync experiment results to result records: %s", e)
+                    logger.error(
+                        "resume_from_data 同步实验结果到 result records 失败 sample_id=%s（数据未落库，需排查）",
+                        sample_id, exc_info=e,
+                    )
 
         # 继续执行 Step 7
         state.current_step = ECMLStep.STEP7_FEEDBACK
@@ -2555,14 +2743,23 @@ class ECMLEngine:
         """生成结构化 feedback，真正影响下一轮参数。"""
         state.current_step = ECMLStep.STEP7_FEEDBACK
 
-        # 现在能从 middleware 查到 Step6 同步写入的实验数据
+        # 实验数据：从 ExperimentDataStore 读取（带 data_quality/provenance，ADR-0002 可审计），
+        # 按本 run 的订单前缀过滤（ECML step6 写入 sample_id=smp_{formula}_{iter} / order_id=ORD-ECML-{run}）。
+        # 注意：middleware.query_records 忽略 formula 参数且 ExperimentRecord 无 data_quality 字段，不可用。
         experiment_data: list[dict] = []
-        if self.middleware is not None:
-            for candidate in state.verified[:3]:
-                formula = candidate.get("formula", candidate.get("smiles", ""))
-                if formula:
-                    records = self.middleware.query_records(formula=formula, limit=5)
-                    experiment_data.extend([r.model_dump() for r in records])
+        validation_data: list[dict] = []
+        order_prefix = f"ORD-ECML-{state.run_id[:8]}"
+        try:
+            recs = self.experiment_controller._store.list_result_records()
+            for r in recs:
+                if (r.experiment_order_id or "").startswith(order_prefix):
+                    rec = r.model_dump()
+                    validation_data.append(rec)
+                    # ADR-0002：模拟值（data_quality=simulated）不得进入反馈分析（学习池）
+                    if r.data_quality != "simulated":
+                        experiment_data.append(rec)
+        except Exception as e:
+            logger.warning("ECML feedback 读取实验记录失败: %s", e)
 
         # 分析本轮预测质量，生成下一轮建议
         pred_values = [p.get("value", 0.0) for p in state.predictions]
@@ -2580,12 +2777,15 @@ class ECMLEngine:
         next_elements_filter: list[str] = []
 
         if state.iteration < state.max_iterations:
+            # 收敛/扩大判定系数（领域包 `converge_factor`/`expand_factor` 可覆盖，默认 1.5/0.5）
+            converge_factor = float(self._domain_thresholds.get("_converge_factor", 1.5))
+            expand_factor = float(self._domain_thresholds.get("_expand_factor", 0.5))
             if direction == 'maximize':
                 needs_expand = best_value < target_threshold
-                should_converge = best_value >= target_threshold * 1.5
+                should_converge = best_value >= target_threshold * converge_factor
             else:  # minimize
                 needs_expand = best_value > target_threshold
-                should_converge = best_value <= target_threshold * 0.5
+                should_converge = best_value <= target_threshold * expand_factor
 
             if needs_expand:
                 # 最佳值未达阈值 → 扩大候选空间
@@ -2612,6 +2812,8 @@ class ECMLEngine:
                 "num_candidates": next_num_candidates,
                 "elements_filter": next_elements_filter,
             },
+            # v4.1 闭环审计：估算 vs 实测（含模拟）精度指标——审查者可直接回答"估算有多准"
+            "validation_metrics": self._compute_validation_metrics(state, validation_data),
             "provenance": [{
                 "source_type": "local_db",
                 "provider": "local_db",

@@ -1,6 +1,7 @@
 """Main Battery Materials Agent - entry point for the ECML closed-loop system."""
 
 from __future__ import annotations
+import json
 import logging
 from .config import AgentConfig, get_config
 from .router.router import MaterialRouter, MaterialInput, RouterResult
@@ -302,8 +303,11 @@ class BatteryMaterialsAgent:
         """
         from .middleware.data_middleware import ExperimentRecord
         engine = self.experiment_controller._store.engine
+        # formula 参数按"候选 ID 或候选名"匹配（o.candidate_id 等值），
+        # 同时兼容按 sample_id 前缀模糊（ECML 模拟记录 sample_id=smp_{formula}_{iter}）
         clauses = [
             "(:formula = '' OR o.candidate_id = :formula)",
+            "(:formula = '' OR r.sample_id ILIKE :formula_sample_like)",
             "(:sample_id = '' OR r.sample_id ILIKE :sample_id_like)",
             "(:experiment_type = '' OR r.test_method = :experiment_type)",
             "(:project_id = '' OR o.project_id = :project_id)",
@@ -317,7 +321,8 @@ class BatteryMaterialsAgent:
         query = (
             "SELECT r.result_id, r.sample_id, r.sample_batch_id, r.source_type, "
             "r.uploaded_by, r.uploaded_at, r.property_name, r.value, r.unit, "
-            "r.test_method, o.order_id, o.project_id, o.candidate_id "
+            "r.test_method, o.order_id, o.project_id, o.candidate_id, "
+            "r.data_quality, r.provenance "
             "FROM experiment.experiment_result_records r "
             "LEFT JOIN experiment.experiment_orders o ON r.experiment_order_id = o.order_id "
             "WHERE " + " AND ".join(clauses) + " ORDER BY r.uploaded_at DESC"
@@ -327,6 +332,7 @@ class BatteryMaterialsAgent:
                 text(query),
                 {
                     "formula": formula or "",
+                    "formula_sample_like": f"%{formula}%" if formula else "",
                     "sample_id": sample_id or "",
                     "sample_id_like": f"%{sample_id}%" if sample_id else "",
                     "experiment_type": experiment_type or "",
@@ -347,13 +353,20 @@ class BatteryMaterialsAgent:
             ts = r[5]
             if ts is not None and not isinstance(ts, str):
                 ts = ts.isoformat()
+            # ADR-0002：provenance JSONB 可能已被驱动解析为对象，或仍为字符串
+            provenance = r[14]
+            if isinstance(provenance, str):
+                try:
+                    provenance = json.loads(provenance) if provenance else None
+                except (json.JSONDecodeError, TypeError):
+                    provenance = None
             records.append(ExperimentRecord(
                 record_id=str(r[0]),
                 sample_id=r[1] or "",
                 formula=r[12] or "",
                 experiment_type=r[9] or r[6] or "",
                 measured_values={r[6]: r[7]} if r[6] else {},
-                units={r[6]: r[8]} if r[6] else {},
+                units={r[6]: r[8] or ""} if r[6] else {},
                 source=r[3] or "unknown",
                 timestamp=ts or "",
                 batch_id=r[2] or "",
@@ -361,6 +374,8 @@ class BatteryMaterialsAgent:
                 notes=f"任务单: {r[10]}" if r[10] else "",
                 order_id=r[10] or "",
                 candidate_id=r[12] or "",
+                data_quality=r[13] or "",
+                provenance=provenance,
             ))
         return records
 

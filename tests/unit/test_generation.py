@@ -100,12 +100,8 @@ class TestPolymerCandidateGenerator:
         assert "Poly(ethylene oxide)" in names
         assert "Poly(vinylidene fluoride)" in names
 
-    def test_generate_derivatives(self):
-        base = self.generator.KNOWN_POLYMERS[0]
-        variants = self.generator.generate_derivatives(base, num_variants=3)
-        assert len(variants) == 3
-        for v in variants:
-            assert "Poly(ethylene oxide)" in v.name
+    # generate_derivatives 死代码已删除（审查 2026-08：零调用方 + 无 source 的
+    # "+30" 派生增量违反 ADR 查表纪律），其专属测试随之移除。
 
     def test_filter_by_rules(self):
         candidates = self.generator.KNOWN_POLYMERS

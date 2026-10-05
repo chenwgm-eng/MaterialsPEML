@@ -83,23 +83,27 @@
             </a-tag>
           </div>
           <div class="card-subtitle">{{ getSubtitle(item) }}</div>
-          <!-- 关键属性 -->
+          <!-- 关键属性（ADR-0001：可信度徽标消费后端 CandidateRecord.evidence_level 权威字段，禁止前端推导） -->
           <div class="card-metrics">
             <span v-if="item.tensile_strength != null" class="metric">
               <span class="metric-label">拉伸强度</span>
               <span class="metric-value">{{ Number(item.tensile_strength).toFixed(1) }} MPa</span>
+              <EvidenceBadge :level="item.evidence_level" class="metric-badge" />
             </span>
             <span v-if="item.flexural_modulus != null" class="metric">
               <span class="metric-label">弯曲模量</span>
               <span class="metric-value">{{ Number(item.flexural_modulus).toFixed(0) }} MPa</span>
+              <EvidenceBadge :level="item.evidence_level" class="metric-badge" />
             </span>
             <span v-if="item.impact_strength != null" class="metric">
               <span class="metric-label">冲击强度</span>
               <span class="metric-value">{{ Number(item.impact_strength).toFixed(1) }} kJ/m²</span>
+              <EvidenceBadge :level="item.evidence_level" class="metric-badge" />
             </span>
             <span v-if="item.heat_deflection_temp != null" class="metric">
               <span class="metric-label">热变形温度</span>
               <span class="metric-value">{{ Number(item.heat_deflection_temp).toFixed(0) }} °C</span>
+              <EvidenceBadge :level="item.evidence_level" class="metric-badge" />
             </span>
           </div>
           <!-- 需求7：三点状态指示（预测/合成/验证） -->
@@ -133,20 +137,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import EmptyState from '@/components/EmptyState.vue'
 import SmartLoading from '@/components/SmartLoading.vue'
 import { InfoCircleOutlined } from '@ant-design/icons-vue'
 import StructureView from './StructureView.vue'
+import EvidenceBadge from './EvidenceBadge.vue'
 import { getSourceBadge } from '@/utils/candidateSource'
-import { useUnitSymbols } from '@/utils/mdmDict'
-
-// MDM 单位符号
-const { load: loadUnitSymbols, get: getUnitSymbol } = useUnitSymbols()
-const energyUnit = computed(() => getUnitSymbol('energy'))
-const energyPerAtomUnit = computed(() => getUnitSymbol('energy_per_atom'))
-const condUnit = computed(() => getUnitSymbol('conductivity'))
-onMounted(() => { loadUnitSymbols() })
 
 const props = defineProps({
   candidates: { type: Array, default: () => [] },
@@ -512,6 +509,11 @@ const statusDotsMap = computed(() => {
   gap: 3px;
   font-size: 10px;
   line-height: 14px;
+}
+
+.metric-badge {
+  transform: scale(0.85);
+  transform-origin: left center;
 }
 
 .metric-label {

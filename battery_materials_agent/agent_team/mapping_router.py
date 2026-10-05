@@ -21,20 +21,30 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/mappings", tags=["mappings"])
 
+# 依赖注入点：由应用启动时 configure() 注入，替代反向 import api 模块
+# （领域子路由不得依赖 API 单体，否则形成运行时循环依赖）
+_store_provider = None
+_proxy_provider = None
+
+
+def configure(store, proxy) -> None:
+    """启动时注入 ActivityMappingStore 与 AgentProxy（api.py startup 调用）。"""
+    global _store_provider, _proxy_provider
+    _store_provider = store
+    _proxy_provider = proxy
+
 
 def _get_store():
-    """获取全局 ActivityMappingStore 实例。"""
-    from .. import api as api_module
-    store = getattr(api_module, "_activity_mapping_store", None)
+    """获取注入的 ActivityMappingStore 实例。"""
+    store = _store_provider
     if store is None:
         raise HTTPException(status_code=503, detail="映射存储未初始化")
     return store
 
 
 def _get_proxy():
-    """获取全局 AgentProxy 实例。"""
-    from .. import api as api_module
-    proxy = getattr(api_module, "_agent_proxy", None)
+    """获取注入的 AgentProxy 实例。"""
+    proxy = _proxy_provider
     if proxy is None:
         raise HTTPException(status_code=503, detail="AgentProxy 未初始化")
     return proxy

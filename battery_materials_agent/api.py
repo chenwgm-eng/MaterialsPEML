@@ -302,6 +302,20 @@ _frontend_index = _frontend_dist / "index.html"
 import logging
 logger = logging.getLogger(__name__)
 
+# 日志持久化（可观测性）：错误与警告写入 data/app.log，重启不丢、可离线审计
+_log_dir = Path(__file__).resolve().parent.parent / "data"
+try:
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    _file_handler = logging.FileHandler(str(_log_dir / "app.log"), encoding="utf-8")
+    _file_handler.setLevel(logging.WARNING)
+    _file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    )
+    logging.getLogger().addHandler(_file_handler)
+except Exception:
+    # 日志目录不可写时仅控制台，不影响服务
+    pass
+
 
 def _init_control_plane():
     """初始化 Control Plane 组件（Tool Catalog / Gateway / Policy Engine / Store）。
@@ -446,11 +460,12 @@ def _resolve_route_alias(path: str, method: str) -> str | None:
     # GET /knowledge/graph → /knowledge/graphs（POST /knowledge/graph 真实存在，不重写）
     if path == "/knowledge/graph" and method == "GET":
         return "/knowledge/graphs"
-    # /mdm/dict/* → /mdm/*
-    if path.startswith("/mdm/dict/"):
-        return "/mdm/" + path[len("/mdm/dict/"):]
-    if path == "/mdm/dict":
-        return "/mdm/properties"
+    # /mdm/dict/* → /mdm/*（仅 GET 只读语义；POST/PUT/DELETE 不重写，避免非预期写入）
+    if method in ("GET", "HEAD"):
+        if path.startswith("/mdm/dict/"):
+            return "/mdm/" + path[len("/mdm/dict/"):]
+        if path == "/mdm/dict":
+            return "/mdm/properties"
     # /data-quality/rules → /dashboard/data-quality
     if path == "/data-quality/rules":
         return "/dashboard/data-quality"
@@ -516,6 +531,27 @@ async def execution_context_middleware(request: Request, call_next):
         )
         request.state.execution_context = None
 
+    # AI 身份服务端化（增量）：Agent 可携带 X-Execution-Context 头
+    # （IdentityManager 签发的含 agent_id 的子上下文）。验签+有效期+委托链
+    # 校验通过时，服务端据此判定该请求为 AI 发起——高危门禁不再只依赖
+    # 请求体自报的 ai_initiated 标志（该标志迁移期保留为冗余信号）。
+    _presented_ctx_header = request.headers.get("X-Execution-Context")
+    if _presented_ctx_header and request.state.execution_context is not None:
+        try:
+            from .control_plane.context import ExecutionContext as _ExecCtx
+            _presented = _ExecCtx.model_validate(json.loads(_presented_ctx_header))
+            if (
+                _presented.agent_id
+                and _identity_manager.validate_context(_presented)
+            ):
+                # 沿用本请求的 correlation/trace 便于全链路追踪
+                _presented.correlation_id = correlation_id
+                _presented.trace_id = trace_id
+                request.state.execution_context = _presented
+                request.state.ai_principal = True
+        except Exception:
+            logger.warning("X-Execution-Context 校验失败，按普通用户处理 path=%s", audit_path)
+
     request.state.correlation_id = correlation_id
     request.state.trace_id = trace_id
 
@@ -562,6 +598,11 @@ async def startup():
     # 候选材料存储：复用 agent 的 candidate_store，确保 Discovery 和 ECML 两条路径
     # 写入同一 store，下游 Sample/ExperimentOrder 可通过 candidate_id 反查
     app.state.candidate_store = agent.candidate_store
+    # 架构解耦（审查 2026-08）：领域模块通过注入获取依赖，禁止反向 import api
+    from .release_card.router import set_candidate_store as _rc_set_candidate_store
+    _rc_set_candidate_store(agent.candidate_store)
+    from .experiment.experiment_controller import set_raw_material_db
+    set_raw_material_db(getattr(agent, "raw_material_db", None))
     # 业务链路 MDM：BOM 方案存储（候选材料 1:N BOM 方案，0021 迁移放宽）
     from .experiment.bom_store import BomStore
     app.state.bom_store = BomStore()
@@ -741,6 +782,9 @@ async def startup():
         # 注入到 ECML 引擎
         if hasattr(agent, "ecml") and agent.ecml is not None:
             agent.ecml._agent_proxy = _agent_proxy
+        # 注入映射控制台子路由（替代其反向 import api 全局变量）
+        from .agent_team import mapping_router as _mapping_router_module
+        _mapping_router_module.configure(_activity_mapping_store, _agent_proxy)
         logger.info("AgentProxy initialized and wired to ECML engine")
     except Exception as e:
         logger.warning("Activity mapping / AgentProxy init failed (non-fatal): %s", e)
@@ -1486,6 +1530,23 @@ _UNIT_ALIASES = {
     "kJ/m²": "kJ/m2",
 }
 
+# mdm.units 存在性缓存（模块级，启动后加载；避免每次录入都开同步连接查库）
+_unit_code_cache: set[str] | None = None
+
+
+def _load_unit_cache() -> set[str]:
+    global _unit_code_cache
+    if _unit_code_cache is not None:
+        return _unit_code_cache
+    try:
+        # 经 MDM 权威访问器读取（禁止穿透 experiment_controller._store.engine 私有成员）
+        from .mdm.reference_dict import ReferenceDictStore
+        _unit_code_cache = {u.unit_code for u in ReferenceDictStore().list_units()}
+    except Exception as e:
+        logger.warning("加载单位缓存失败（回退按次查询）: %s", e)
+        _unit_code_cache = set()
+    return _unit_code_cache
+
 
 def _normalize_unit(raw: str) -> str:
     """规范化 unit 为 mdm.units 的合法 unit_code。未知单位 400（不放任 FK 500）。"""
@@ -1493,16 +1554,28 @@ def _normalize_unit(raw: str) -> str:
     if not v:
         return v
     v = _UNIT_ALIASES.get(v, v)
-    try:
-        from sqlalchemy import text as _text
-        with agent.experiment_controller._store.engine.connect() as conn:
-            row = conn.execute(
-                _text("SELECT 1 FROM mdm.units WHERE unit_code = :u"), {"u": v}
-            ).fetchone()
-        if row is not None:
+    from .mdm.reference_dict import ReferenceDictStore
+    _mdm = ReferenceDictStore()
+    cache = _load_unit_cache()
+    if cache:
+        # 缓存命中失败也放行缓存未覆盖（新播种单位未刷新时按次查询兜底）
+        if v in cache:
             return v
-    except HTTPException:
-        raise
+        try:
+            if _mdm.get_unit(v) is not None:
+                _unit_code_cache.add(v)
+                return v
+        except Exception as e:
+            logger.warning("单位存在性校验失败 unit=%s: %s", v, e)
+            return v
+        raise HTTPException(
+            status_code=400,
+            detail=f"未知单位「{raw}」。请使用 mdm.units 中登记的 unit_code（如 S/cm、V、mAh/g、C、%）",
+        )
+    # 缓存未就绪（启动早期）：按次查询（旧路径）
+    try:
+        if _mdm.get_unit(v) is not None:
+            return v
     except Exception as e:
         # 单位表查询失败时不阻断录入，交由 FK 兜底
         logger.warning("单位存在性校验失败 unit=%s: %s", v, e)
@@ -1517,6 +1590,21 @@ class QCApproveRequest(BaseModel):
     reviewed_by: str = ""
     learning_eligible: bool = False
     reason: str = ""
+
+
+def _is_ai_initiated(request: Request, payload_flag: bool) -> bool:
+    """服务端判定 AI 发起（T-031 门禁信号收敛）。
+
+    权威信号：验签通过的 X-Execution-Context 且含 agent_id（见
+    execution_context_middleware）；请求体 ai_initiated 自报标志仅作
+    迁移期冗余，Agent 凭证全面接入后废弃。
+    """
+    if getattr(request.state, "ai_principal", False):
+        return True
+    ctx = getattr(request.state, "execution_context", None)
+    if ctx is not None and getattr(ctx, "agent_id", None):
+        return True
+    return bool(payload_flag)
 
 
 class OrderApprovalRequest(BaseModel):
@@ -2963,14 +3051,27 @@ def _build_agent_generate_prompt(
         )
         material_desc = "晶体候选配方"
 
+    if material_kind == "polymer":
+        persona_domain = (
+            "你是高分子材料研发领域的首席材料学家。请基于任务目标，创造性地提出候选材料配方。\n\n"
+            "要求：\n"
+            "1. 结合高分子化学、工程塑料配方（基材/增强/阻燃/增韧）已知规律进行推理，先给出思考过程（为什么选这些基材/助剂/配比）\n"
+            "2. 然后给出具体候选配方列表\n"
+            "3. 候选配方应覆盖不同树脂体系与助剂组合，体现创造性，而非简单复述已知材料\n\n"
+        )
+    else:
+        persona_domain = (
+            "你是晶体材料研发领域的首席材料学家。请基于任务目标，创造性地提出候选晶体材料。\n\n"
+            "要求：\n"
+            "1. 结合元素化学、晶体结构、空间群与材料已知规律进行推理，先给出思考过程（为什么选这些元素/结构）\n"
+            "2. 然后给出具体候选晶体列表\n"
+            "3. 候选应覆盖不同结构族与元素组合，体现创造性，而非简单复述已知材料\n\n"
+        )
+
     system_prompt = (
         agent_persona
-        + "你是高分子材料研发领域的首席材料学家。请基于任务目标，创造性地提出候选材料配方。\n\n"
-        "要求：\n"
-        "1. 结合高分子化学、工程塑料配方（基材/增强/阻燃/增韧）已知规律进行推理，先给出思考过程（为什么选这些基材/助剂/配比）\n"
-        "2. 然后给出具体候选配方列表\n"
-        "3. 候选配方应覆盖不同树脂体系与助剂组合，体现创造性，而非简单复述已知材料\n\n"
-        "输出必须是严格 JSON，不要包含 markdown 代码块标记或任何额外说明，格式如下：\n"
+        + persona_domain
+        + "输出必须是严格 JSON，不要包含 markdown 代码块标记或任何额外说明，格式如下：\n"
         "{\n"
         '  "reasoning": "你的思考过程：分析任务目标、候选元素空间、结构选择权衡、预期性能",\n'
         '  "candidates": [\n'
@@ -3234,18 +3335,18 @@ async def discover_agent_generate(req: AgentGenerateRequest):
         )
 
     # 把 predicted_properties 中的数值回填到顶层字段（便于多目标评分与展示）
+    # v4.1：高分子工程性能（_SCORE_PROPS）同步回填，否则 agent-generate 路径聚合物评分恒 0
     for c in candidates:
         pp = c.get("predicted_properties") or {}
-        if "ionic_conductivity" in pp:
-            try:
-                c["ionic_conductivity_estimate"] = float(pp["ionic_conductivity"])
-            except (TypeError, ValueError):
-                pass
-        if "band_gap" in pp and "band_gap" not in c:
-            try:
-                c["band_gap"] = float(pp["band_gap"])
-            except (TypeError, ValueError):
-                pass
+        for k in ("ionic_conductivity", "band_gap", "formation_energy",
+                  "tensile_strength", "flexural_modulus", "impact_strength",
+                  "heat_deflection_temp", "melt_flow_index", "elongation_at_break",
+                  "thermal_stability", "crystallinity"):
+            if k in pp and c.get(k) is None:
+                try:
+                    c[k] = float(pp[k])
+                except (TypeError, ValueError):
+                    pass
 
     # 放行门禁：human_review_required 的候选自动创建 Release Card 进入审批队列
     for c in candidates:
@@ -3734,12 +3835,16 @@ def _predict_single_candidate(
                 result = predictor.predict(features, prop_name)
                 predicted_value = float(result.value)
 
-                # 达标判断
+                # 达标判断（0 是合法目标值，不能用 or 链短路）
                 target_def = next((p for p in target_properties if p.get("name") == prop_name), None)
                 met = True
                 if target_def:
                     direction = target_def.get("direction", "maximize")
-                    target_value = target_def.get("target_value") or target_def.get("max") or target_def.get("min")
+                    target_value = target_def.get("target_value")
+                    if target_value is None:
+                        target_value = target_def.get("max")
+                    if target_value is None:
+                        target_value = target_def.get("min")
                     if target_value is not None:
                         try:
                             tv = float(target_value)
@@ -3959,7 +4064,7 @@ async def discover_generate(req: GenerateRequest):
     }
 
 
-@app.get("/candidates")
+@app.get("/candidates", dependencies=[Depends(require_login)])
 async def list_candidates(candidate_type: str = "", scenario_id: str = "",
                           limit: int = 0, offset: int = 0, include_demo: bool = False):
     """列出持久化的候选材料记录，支持按类型与场景 ID 筛选。
@@ -3982,7 +4087,7 @@ async def list_candidates(candidate_type: str = "", scenario_id: str = "",
     }
 
 
-@app.get("/candidates/{candidate_id}")
+@app.get("/candidates/{candidate_id}", dependencies=[Depends(require_login)])
 async def get_candidate(candidate_id: str):
     """获取单个候选材料详情（含完整生成数据）。"""
     record = app.state.candidate_store.get(candidate_id)
@@ -4108,6 +4213,9 @@ async def update_candidate_status(candidate_id: str, req: CandidateStatusRequest
     操作角色从认证用户（JWT）推导，不再信任客户端传入的 actor_role。
     """
     from .experiment.candidate_store import IllegalCandidateTransitionError
+    # 不存在时给 404 而非 409（此前非法迁移异常被统一报 409，误导）
+    if app.state.candidate_store.get(candidate_id) is None:
+        raise HTTPException(status_code=404, detail=f"候选材料 {candidate_id} 不存在")
     try:
         updated = app.state.candidate_store.update_status(
             candidate_id, req.status,
@@ -4352,7 +4460,7 @@ def _backfill_multi_objective_scores(records: list[dict]) -> None:
     保证跨列表/跨轮次可比。
     属性优先取候选顶层字段，其次取 data JSONB（旧数据属性存于嵌套结构）。
     """
-    from .material_properties import REFERENCE_RANGES
+    from .material_properties import REFERENCE_RANGES, normalize_by_reference
 
     def _prop(r, key):
         v = r.get(key)
@@ -4376,26 +4484,19 @@ def _backfill_multi_objective_scores(records: list[dict]) -> None:
     total_weight = float(len(_SCORE_PROPS))
     for prop, direction in _SCORE_PROPS:
         ref = REFERENCE_RANGES.get(prop)
+        # 无参考范围时回退池内相对（罕见）：池值预先取好传给共享归一化
+        pool_vals = None
+        if ref is None:
+            pool_vals = [_num(_prop(x, prop)) for x in targets]
         for r in targets:
             v = _num(_prop(r, prop))
-            if ref is not None:
-                lo, hi, _unit, _src = ref
-                rng = (hi - lo) if hi > lo else 1.0
-                normalized = max(0.0, min(1.0, (v - lo) / rng))
-            else:
-                # 无参考范围的属性回退池内相对（罕见）
-                vals = [_num(_prop(x, prop)) for x in targets]
-                v_min, v_max = min(vals), max(vals)
-                rng = (v_max - v_min) if v_max > v_min else 1.0
-                normalized = (v - v_min) / rng
-            if direction == "minimize":
-                normalized = 1.0 - normalized
+            normalized = normalize_by_reference(v, ref, direction=direction, pool_values=pool_vals)
             r["multi_objective_score"] = _num(r.get("multi_objective_score")) + (1.0 / total_weight) * normalized
 
 
 @app.get("/process-engineer/workbench",
          dependencies=[Depends(require_role(UserRole.RESEARCHER))])
-async def process_engineer_workbench(status: str = "", limit: int = 100):
+async def process_engineer_workbench(status: str = "", limit: int = Query(100, ge=1, le=500)):
     """工艺人员工作台：列出进入工艺深化流水线的候选配方及其工艺方案。
 
     属于候选状态机第二层（feasible → process_planning → process_confirmed）。
@@ -4446,7 +4547,7 @@ async def list_task_candidates(task_id: str):
     }
 
 
-@app.get("/candidates/{candidate_id}/bom")
+@app.get("/candidates/{candidate_id}/bom", dependencies=[Depends(require_login)])
 async def get_candidate_bom(candidate_id: str):
     """查询候选材料对应的 BOM 方案（业务链路：候选材料 1:N BOM 方案，0021 迁移放宽）。
 
@@ -4565,7 +4666,7 @@ async def list_bom_test_tasks(bom_id: str):
 # 0021 新增：候选详情 Tab 数据持久化与从合成路径生成 BOM+工艺方案
 # ===========================================================================
 
-@app.get("/candidates/{candidate_id}/artifacts")
+@app.get("/candidates/{candidate_id}/artifacts", dependencies=[Depends(require_login)])
 async def list_candidate_artifacts(candidate_id: str):
     """返回候选所有产出物（性质预测 + 合规检查 + 最新合成任务）。
 
@@ -4590,7 +4691,7 @@ async def list_candidate_artifacts(candidate_id: str):
     }
 
 
-@app.get("/candidates/{candidate_id}/artifacts/{artifact_type}")
+@app.get("/candidates/{candidate_id}/artifacts/{artifact_type}", dependencies=[Depends(require_login)])
 async def get_candidate_artifact(candidate_id: str, artifact_type: str):
     """返回候选特定类型产出物（artifact_type: prediction / compliance）。"""
     artifact = app.state.candidate_artifact_store.get(candidate_id, artifact_type)
@@ -4602,7 +4703,7 @@ async def get_candidate_artifact(candidate_id: str, artifact_type: str):
     return artifact.model_dump()
 
 
-@app.get("/candidates/{candidate_id}/synthesis-tasks")
+@app.get("/candidates/{candidate_id}/synthesis-tasks", dependencies=[Depends(require_login)])
 async def list_candidate_synthesis_tasks(candidate_id: str):
     """返回候选的合成任务历史（按创建时间倒序）。"""
     tasks = _get_synthesis_task_store().list_by_candidate(candidate_id)
@@ -7022,13 +7123,24 @@ async def update_config(req: ConfigUpdateRequest):
         updated.append("basis_set")
     # Engine mode (legacy / internlm; "logos" auto-maps to internlm via EngineMode._missing_)
     if req.engine_mode is not None:
-        cfg.engine_mode = EngineMode(req.engine_mode)
+        try:
+            cfg.engine_mode = EngineMode(req.engine_mode)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"engine_mode 非法值「{req.engine_mode}」") from e
         updated.append("engine_mode")
     # Run mode (demo / production) — admin only, persisted to .env
     if req.run_mode is not None:
         from .config import RunMode
-        cfg.run_mode = RunMode(req.run_mode)
+        try:
+            cfg.run_mode = RunMode(req.run_mode)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"run_mode 非法值「{req.run_mode}」") from e
         updated.append("run_mode")
+        # 同步运行时实例（demo/production 切换立即生效，无需重启）
+        try:
+            agent.experiment_controller.run_mode = req.run_mode
+        except Exception as e:
+            logger.warning("同步 experiment_controller.run_mode 失败: %s", e)
     # InternLM
     if req.internlm_enabled is not None:
         cfg.internlm.enabled = req.internlm_enabled
@@ -7153,7 +7265,10 @@ async def update_api_config(req: ConfigUpdatePayload):
     if req.llm_max_tokens is not None:
         cfg.llm.max_tokens = req.llm_max_tokens
 
-    save_config_to_env(cfg)
+    try:
+        save_config_to_env(cfg)
+    except Exception as exc:
+        logger.warning("save_config_to_env 失败（内存配置已生效，.env 未持久化）: %s", exc)
     return _serialize_agent_config(cfg)
 
 
@@ -7703,8 +7818,11 @@ async def execute_plan(req: ExecutePlanRequest):
     """执行编排方案，返回 record_id 供前端轮询进度。"""
     _require_agent_team()
     _init_hybrid_stack()  # 确保 capability_router 已注入 executor
-    team = [AgentDefinition(**t) for t in req.team]
-    steps = [TaskStep(**s) for s in req.steps]
+    try:
+        team = [AgentDefinition.model_validate(t) for t in req.team]
+        steps = [TaskStep.model_validate(s) for s in req.steps]
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"编排计划参数非法：{e}") from e
     plan = OrchestrationPlan(team=team, steps=steps)
 
     # 计算输入参数哈希快照（用于 AI 输出溯源）
@@ -8007,9 +8125,17 @@ async def create_raw_material(req: RawMaterialUpsertRequest):
             if cat and cat.default_unit:
                 inv_unit = cat.default_unit
         except Exception:
-            pass
+            # 查询失败与"主数据无默认单位"必须可区分，禁止静默吞掉后伪造单位
+            logger.warning("MDM 物料类别默认单位查询失败 category=%s", req.category, exc_info=True)
     if not inv_unit:
-        inv_unit = "kg"
+        # 库存单位是主数据语义（影响库存统计与扣减口径），
+        # 不得伪造默认值掩盖——要求调用方显式指定或先补齐 MDM 类别默认单位
+        raise HTTPException(
+            status_code=400,
+            detail=(f"无法确定库存单位：请求未传 inventory_unit，"
+                    f"且物料类别 {req.category or '(空)'} 在 MDM 中无 default_unit。"
+                    f"请显式传入 inventory_unit 或先维护物料类别主数据"),
+        )
     spec = MaterialSpec(
         material_id=req.material_id or f"RM-{_uuid.uuid4().hex[:6].upper()}",
         name=req.name,
@@ -8045,36 +8171,41 @@ async def create_raw_material(req: RawMaterialUpsertRequest):
 
 @app.put("/raw-materials/{material_id}", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
 async def update_raw_material(material_id: str, req: RawMaterialUpsertRequest):
-    """编辑物料规格。版本号自动递增，记录修改人与原因。"""
+    """编辑物料规格。版本号自动递增，记录修改人与原因。
+
+    部分更新：仅请求中显式传入的字段生效（exclude_unset），
+    未传字段保留原值——修复此前数值/布尔字段被默认值静默清零的数据丢失。
+    """
     from .industrialization.raw_material_db import MaterialSpec
     existing = agent.raw_material_db.get_spec(material_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"物料 {material_id} 不存在")
+    _set = req.model_dump(exclude_unset=True)
     spec = MaterialSpec(
         material_id=material_id,
-        name=req.name or existing.name,
-        smiles=req.smiles or existing.smiles,
-        category=req.category or existing.category,
-        inventory_quantity=req.inventory_quantity,
-        inventory_unit=req.inventory_unit or existing.inventory_unit or "kg",
-        unit_cost=req.unit_cost,
-        supplier=req.supplier or existing.supplier,
-        reach_compliant=req.reach_compliant,
-        is_toxic=req.is_toxic,
-        batch_number=req.batch_number or existing.batch_number,
-        expiry_date=req.expiry_date or existing.expiry_date,
-        coa_uri=req.coa_uri or existing.coa_uri,
-        sds_uri=req.sds_uri or existing.sds_uri,
-        test_report_uri=req.test_report_uri or existing.test_report_uri,
-        test_institution=req.test_institution or existing.test_institution,
-        test_date=req.test_date or existing.test_date,
-        min_order_quantity=req.min_order_quantity,
+        name=_set.get("name") or existing.name,
+        smiles=_set.get("smiles") or existing.smiles,
+        category=_set.get("category") or existing.category,
+        inventory_quantity=_set.get("inventory_quantity", existing.inventory_quantity),
+        inventory_unit=_set.get("inventory_unit") or existing.inventory_unit or "",
+        unit_cost=_set.get("unit_cost", existing.unit_cost),
+        supplier=_set.get("supplier") or existing.supplier,
+        reach_compliant=_set.get("reach_compliant", existing.reach_compliant),
+        is_toxic=_set.get("is_toxic", existing.is_toxic),
+        batch_number=_set.get("batch_number") or existing.batch_number,
+        expiry_date=_set.get("expiry_date") or existing.expiry_date,
+        coa_uri=_set.get("coa_uri") or existing.coa_uri,
+        sds_uri=_set.get("sds_uri") or existing.sds_uri,
+        test_report_uri=_set.get("test_report_uri") or existing.test_report_uri,
+        test_institution=_set.get("test_institution") or existing.test_institution,
+        test_date=_set.get("test_date") or existing.test_date,
+        min_order_quantity=_set.get("min_order_quantity", existing.min_order_quantity),
         version=existing.version + 1,
         updated_by=req.updated_by,
         update_reason=req.update_reason or "编辑物料",
-        data_source=req.data_source or existing.data_source,
-        prediction_meta=req.prediction_meta or existing.prediction_meta,
-        properties=req.properties if req.properties else existing.properties,
+        data_source=_set.get("data_source") or existing.data_source,
+        prediction_meta=_set.get("prediction_meta") or existing.prediction_meta,
+        properties=_set.get("properties") if _set.get("properties") else existing.properties,
     )
     agent.raw_material_db.upsert_spec(spec)
     return spec.model_dump()
@@ -8224,13 +8355,20 @@ async def approve_material_request(request_id: str, req: MaterialRequestReviewRe
         if request.request_type == "add" and existing:
             raise HTTPException(status_code=409, detail="物料ID已存在，请使用修改申请")
         version_num = (existing.version + 1) if existing else 1
+        # float 转换防御：非法字符串转 400（此前 ValueError 500）
+        try:
+            inv_qty = float(data.get("inventory_quantity") or 0.0)
+            u_cost = float(data.get("unit_cost") or 0.0)
+            min_qty = float(data.get("min_order_quantity", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="inventory_quantity/unit_cost/min_order_quantity 必须为数值")
         spec = MaterialSpec(
             material_id=material_id or f"RM-{uuid.uuid4().hex[:6].upper()}",
             name=data.get("name", ""),
             smiles=data.get("smiles", ""),
             category=data.get("category", ""),
-            inventory_quantity=float(data.get("inventory_quantity") or 0.0),
-            unit_cost=float(data.get("unit_cost") or 0.0),
+            inventory_quantity=inv_qty,
+            unit_cost=u_cost,
             supplier=data.get("supplier", ""),
             reach_compliant=bool(data.get("reach_compliant", False)),
             is_toxic=bool(data.get("is_toxic", False)),
@@ -8241,7 +8379,7 @@ async def approve_material_request(request_id: str, req: MaterialRequestReviewRe
             test_report_uri=data.get("test_report_uri", ""),
             test_institution=data.get("test_institution", ""),
             test_date=data.get("test_date", ""),
-            min_order_quantity=float(data.get("min_order_quantity", 0.0) or 0.0),
+            min_order_quantity=min_qty,
             version=version_num,
             updated_by=req.reviewed_by or request.requester,
             update_reason=data.get("update_reason", f"申请审批通过 {request_id}"),
@@ -8361,7 +8499,10 @@ async def create_formula(request: Request):
             or target_info.get("smiles")
             or ""
         )
-        quantity = float(body.get("quantity") or body.get("quantity_kg") or 1.0)
+        try:
+            quantity = float(body.get("quantity") or body.get("quantity_kg") or 1.0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="quantity 必须为数值")
 
         # 计算输入参数哈希快照（用于 AI 输出溯源）
         input_snapshot_hash = _compute_input_snapshot({
@@ -8637,11 +8778,14 @@ async def activate_formula_version(
     formula_id: str,
     version_id: str,
     payload: dict | None = Body(None),
+    current: User | None = Depends(get_current_user),
+    request: Request = None,
 ):
     """将指定版本设为配方当前活跃版本。"""
     ai_initiated = bool(payload.get("ai_initiated")) if payload else False
     # T-031：AI 发布配方需先经 Committee 人工确认（三段式：提交→审核→放行）
-    if ai_initiated:
+    # 服务端判定优先：验签 Agent 凭证 > 请求体自报标志
+    if _is_ai_initiated(request, ai_initiated):
         return _require_high_risk_review_or_raise(
             "auto_publish_formula",
             {"formula_id": formula_id, "version_id": version_id, **(payload or {})},
@@ -8651,6 +8795,20 @@ async def activate_formula_version(
     formula = store.set_active(formula_id, version_id)
     if formula is None:
         raise HTTPException(status_code=404, detail="配方或版本不存在")
+    # 发布即审计：操作者绑定登录身份（payload 自报不作为审计主体）
+    try:
+        get_audit_logger().log(AuditEntry(
+            event_type="decision",
+            module="formula",
+            action="activate_version",
+            detail={"formula_id": formula_id, "version_id": version_id},
+            operator=(current.username if current else "") or "unknown",
+            confirmed=True,
+            resource_type="formula",
+            resource_id=formula_id,
+        ))
+    except Exception:
+        logger.warning("配方激活审计写入失败 formula_id=%s", formula_id, exc_info=True)
     return formula.model_dump()
 
 
@@ -8926,7 +9084,7 @@ _EXPERIMENT_TYPE_TEMPLATES: dict[str, list[dict]] = {
         {"key": "instrument_id", "label_cn": "仪器编号", "value_type": "str", "unit": "", "required": False},
     ],
     "mfi": [
-        {"key": "melt_flow_index", "label_cn": "熔融指数", "value_type": "float", "unit": "g/10min", "required": True},
+        {"key": "melt_flow_index", "label_cn": "熔体流动速率", "value_type": "float", "unit": "g/10min", "required": True},
         {"key": "test_temperature", "label_cn": "测试温度", "value_type": "float", "unit": "°C", "required": False},
         {"key": "test_load", "label_cn": "载荷", "value_type": "float", "unit": "kg", "required": False},
         {"key": "test_method", "label_cn": "测试方法", "value_type": "str", "unit": "", "required": False, "options": ["GB/T 3682", "ISO 1133", "ASTM D1238"]},
@@ -9399,7 +9557,7 @@ async def _ai_generate_experiment_procedure(
 
 
 @app.post("/experiments/orders", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
-async def create_experiment_order(req: ExperimentOrderRequest):
+async def create_experiment_order(req: ExperimentOrderRequest, request: Request):
     """创建实验任务单。"""
     import uuid as _uuid
 
@@ -9413,7 +9571,8 @@ async def create_experiment_order(req: ExperimentOrderRequest):
         raise HTTPException(status_code=400, detail=f"项目 {req.project_id} 不存在")
 
     # T-031：AI 自动创建实验任务单需先经 Committee 人工确认（三段式：提交→审核→放行）
-    if req.ai_initiated:
+    # 服务端判定优先：验签 Agent 凭证 > 请求体自报标志
+    if _is_ai_initiated(request, req.ai_initiated):
         return _require_high_risk_review_or_raise(
             "auto_create_experiment_order",
             req.model_dump(),
@@ -9502,6 +9661,25 @@ async def create_experiment_order(req: ExperimentOrderRequest):
         except Exception as e:
             logger.warning("create_experiment_order: AI 生成实验步骤失败: %s", e)
 
+    # 候选估算属性 → 订单预期值（供实验录入后的偏差分析使用，闭环"估算 vs 实测"）
+    acceptance_criteria = dict(req.acceptance_criteria or {})
+    if req.candidate_id and not acceptance_criteria.get("expected_values"):
+        cand_rec = app.state.candidate_store.get(req.candidate_id)
+        if cand_rec is not None:
+            cand_data = cand_rec.data or {}
+            expected = {
+                k: cand_rec.model_dump().get(k) if cand_rec.model_dump().get(k) is not None
+                else cand_data.get(k)
+                for k in (
+                    "tensile_strength", "elongation_at_break", "flexural_modulus",
+                    "flexural_strength", "impact_strength", "heat_deflection_temp",
+                    "melt_flow_index", "crystallinity",
+                )
+            }
+            expected = {k: v for k, v in expected.items() if isinstance(v, (int, float))}
+            if expected:
+                acceptance_criteria["expected_values"] = expected
+
     order = ExperimentOrder(
         order_id=f"EXP_{_uuid.uuid4().hex[:8]}",
         project_id=req.project_id,
@@ -9517,7 +9695,7 @@ async def create_experiment_order(req: ExperimentOrderRequest):
         material_requirements=material_requirements,
         procedure=procedure,
         required_results=req.required_results,
-        acceptance_criteria=req.acceptance_criteria,
+        acceptance_criteria=acceptance_criteria,
         notes=req.notes,
         scenario_id=req.scenario_id or "",
         bom_id=req.bom_id or "",
@@ -9554,7 +9732,7 @@ async def create_experiment_order(req: ExperimentOrderRequest):
     return order.model_dump()
 
 
-@app.get("/experiments/orders")
+@app.get("/experiments/orders", dependencies=[Depends(require_login)])
 async def list_experiment_orders(
     status: str | None = None,
     project_id: str | None = None,
@@ -9574,7 +9752,7 @@ async def list_experiment_orders(
     return result
 
 
-@app.get("/experiments/orders/{order_id}")
+@app.get("/experiments/orders/{order_id}", dependencies=[Depends(require_login)])
 async def get_experiment_order(order_id: str):
     """获取单个实验任务详情。"""
     order = agent.experiment_controller._store.get_order(order_id)
@@ -9667,7 +9845,7 @@ async def reject_experiment_order(order_id: str, req: OrderApprovalRequest):
     return {"status": "rejected", "order_id": order_id}
 
 
-@app.get("/experiments/orders/{order_id}/audit")
+@app.get("/experiments/orders/{order_id}/audit", dependencies=[Depends(require_login)])
 async def get_order_audit(order_id: str):
     """获取任务单的审计日志。"""
     logger = get_audit_logger()
@@ -9995,7 +10173,7 @@ def _enrich_qc_record(record: ExperimentResultRecord) -> dict:
     return data
 
 
-@app.get("/experiments/results")
+@app.get("/experiments/results", dependencies=[Depends(require_login)])
 async def list_experiment_results(qc_status: str | None = None, order_id: str | None = None,
                                   include_demo: bool = False):
     """查询实验结果。
@@ -10557,7 +10735,8 @@ async def list_pending_high_risk_actions():
     "/committee/high-risk-actions/{case_id}/approve",
     dependencies=[Depends(require_role(UserRole.PROJECT_MANAGER))],
 )
-async def approve_high_risk_action(case_id: str, payload: dict | None = Body(None)):
+async def approve_high_risk_action(case_id: str, payload: dict | None = Body(None),
+                                   current: User | None = Depends(get_current_user)):
     """批准高风险 AI 操作：将 case 置为 pass，记录审批事件。
 
     批准仅完成治理侧放行；原业务操作的实质执行由调用方在收到批准后再次发起
@@ -10583,6 +10762,20 @@ async def approve_high_risk_action(case_id: str, payload: dict | None = Body(Non
         "reviewer": reviewer,
         "comment": comment,
     })
+    # 高危放行即审计：操作者绑定登录身份
+    try:
+        get_audit_logger().log(AuditEntry(
+            event_type="decision",
+            module="committee",
+            action="high_risk_approve",
+            detail={"case_id": case_id, "decision": "approve", "comment": comment},
+            operator=(current.username if current else "") or reviewer or "unknown",
+            confirmed=True,
+            resource_type="committee_case",
+            resource_id=case_id,
+        ))
+    except Exception:
+        logger.warning("高危审批审计写入失败 case_id=%s", case_id, exc_info=True)
     logger.info(
         "High-risk AI action approved (case_id=%s, reviewer=%s)", case_id, reviewer or "pm",
     )
@@ -10593,7 +10786,8 @@ async def approve_high_risk_action(case_id: str, payload: dict | None = Body(Non
     "/committee/high-risk-actions/{case_id}/reject",
     dependencies=[Depends(require_role(UserRole.PROJECT_MANAGER))],
 )
-async def reject_high_risk_action(case_id: str, payload: dict | None = Body(None)):
+async def reject_high_risk_action(case_id: str, payload: dict | None = Body(None),
+                                  current: User | None = Depends(get_current_user)):
     """拒绝高风险 AI 操作：将 case 置为 reject，记录审批事件。"""
     _require_committee()
     from .committee.enums import CommitteeType, CaseStatus
@@ -10615,6 +10809,20 @@ async def reject_high_risk_action(case_id: str, payload: dict | None = Body(None
         "reviewer": reviewer,
         "comment": comment,
     })
+    # 高危否决即审计：操作者绑定登录身份
+    try:
+        get_audit_logger().log(AuditEntry(
+            event_type="decision",
+            module="committee",
+            action="high_risk_reject",
+            detail={"case_id": case_id, "decision": "reject", "comment": comment},
+            operator=(current.username if current else "") or reviewer or "unknown",
+            confirmed=True,
+            resource_type="committee_case",
+            resource_id=case_id,
+        ))
+    except Exception:
+        logger.warning("高危否决审计写入失败 case_id=%s", case_id, exc_info=True)
     logger.info(
         "High-risk AI action rejected (case_id=%s, reviewer=%s)", case_id, reviewer or "pm",
     )
@@ -11763,7 +11971,7 @@ async def create_equipment(req: EquipmentUpsertRequest):
     return eq.model_dump()
 
 
-@app.get("/equipment")
+@app.get("/equipment", dependencies=[Depends(require_login)])
 async def list_equipment(category: str = "", status: str = ""):
     """查询设备列表，支持按类别和状态筛选。"""
     store: EquipmentStore = app.state.equipment_store
@@ -11771,7 +11979,7 @@ async def list_equipment(category: str = "", status: str = ""):
     return [e.model_dump() for e in items]
 
 
-@app.get("/equipment/{equipment_id}")
+@app.get("/equipment/{equipment_id}", dependencies=[Depends(require_login)])
 async def get_equipment(equipment_id: str):
     """查询单个设备。"""
     store: EquipmentStore = app.state.equipment_store
@@ -11818,7 +12026,7 @@ async def delete_equipment(equipment_id: str):
         raise HTTPException(status_code=404, detail=f"设备 {equipment_id} 不存在")
     # 引用检查：实验任务（订单）引用了该设备则禁止删除
     try:
-        orders = app.state.experiment_controller.list_orders()
+        orders = agent.experiment_controller._store.list_orders()
     except Exception:  # noqa: BLE001 - 实验控制器不可用时放宽引用检查
         orders = []
     referenced = [o for o in orders if getattr(o, "equipment_id", "") == equipment_id]
@@ -11948,7 +12156,7 @@ async def delete_sample(sample_id: str):
     return {"status": "deleted", "sample_id": sample_id}
 
 
-@app.get("/samples")
+@app.get("/samples", dependencies=[Depends(require_login)])
 async def list_samples(include_demo: bool = False):
     """查询样品列表。
 
@@ -11959,7 +12167,7 @@ async def list_samples(include_demo: bool = False):
     return _filter_demo([s.model_dump() for s in samples], include_demo)
 
 
-@app.get("/samples/{sample_id}")
+@app.get("/samples/{sample_id}", dependencies=[Depends(require_login)])
 async def get_sample(sample_id: str):
     """查询单个样品。"""
     store: SampleStore = app.state.sample_store
@@ -11970,12 +12178,13 @@ async def get_sample(sample_id: str):
 
 
 @app.put("/samples/{sample_id}/transfer", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
-async def transfer_sample(sample_id: str, req: SampleTransferRequest):
+async def transfer_sample(sample_id: str, req: SampleTransferRequest, request: Request):
     """流转样品（更新状态和位置）。"""
     store: SampleStore = app.state.sample_store
     # T-031：AI 发起的样品"放行"(released) 流转需先经 Committee 人工确认
     # 注：released 不在 SampleStatus 枚举内，AI 放行属业务语义，由人工确认后处理
-    if req.ai_initiated and req.to_status == "released":
+    # 服务端判定优先：验签 Agent 凭证 > 请求体自报标志
+    if req.to_status == "released" and _is_ai_initiated(request, req.ai_initiated):
         return _require_high_risk_review_or_raise(
             "auto_release_sample",
             {"sample_id": sample_id, **req.model_dump()},
@@ -11985,6 +12194,9 @@ async def transfer_sample(sample_id: str, req: SampleTransferRequest):
         to_status = SampleStatus(req.to_status)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"无效的状态值: {req.to_status}")
+    # 区分"样品不存在"（404）与"非法迁移"（400）——store.transfer 对两者都返回 None
+    if store.get(sample_id) is None:
+        raise HTTPException(status_code=404, detail=f"样品 {sample_id} 不存在")
     transfer = store.transfer(
         sample_id=sample_id,
         to_status=to_status,
@@ -11993,12 +12205,15 @@ async def transfer_sample(sample_id: str, req: SampleTransferRequest):
         notes=req.notes,
     )
     if transfer is None:
-        raise HTTPException(status_code=404, detail=f"样品 {sample_id} 不存在")
+        raise HTTPException(
+            status_code=400,
+            detail=f"样品状态迁移未在 MDM 主数据中登记：{to_status.value}",
+        )
     sample = store.get(sample_id)
     return {"sample": sample.model_dump(), "transfer": transfer.model_dump()}
 
 
-@app.get("/samples/{sample_id}/transfers")
+@app.get("/samples/{sample_id}/transfers", dependencies=[Depends(require_login)])
 async def list_sample_transfers(sample_id: str):
     """查询样品流转记录。"""
     store: SampleStore = app.state.sample_store
@@ -12456,18 +12671,18 @@ async def dashboard_resources(
             "supplier": m.supplier,
             # D4(P2-004)：告警附上下文解释与建议动作，避免只看数字无法行动
             "context": (
-                f"当前库存 {m.inventory_quantity}{m.inventory_unit or 'kg'}，"
+                f"当前库存 {(m.inventory_quantity or 0)}{m.inventory_unit or 'kg'}，"
                 f"低于阈值 {_MATERIAL_LOW_STOCK_THRESHOLD}{m.inventory_unit or 'kg'}，"
                 f"可能影响进行中的实验/配方投料。"
             ),
             "action": (
                 f"联系供应商{m.supplier or '（未登记）'}补充采购，"
-                f"或核对现有{int(_MATERIAL_LOW_STOCK_THRESHOLD) - int(m.inventory_quantity)}"
+                f"或核对现有{int(_MATERIAL_LOW_STOCK_THRESHOLD) - int(m.inventory_quantity or 0)}"
                 f"{m.inventory_unit or 'kg'}缺口并在物料规格库登记到货。"
             ),
         }
         for m in materials
-        if m.inventory_quantity < _MATERIAL_LOW_STOCK_THRESHOLD
+        if (m.inventory_quantity or 0) < _MATERIAL_LOW_STOCK_THRESHOLD
     ]
     # D4(P2-004)：按 material_id 去重，避免看板出现重复预警条目
     _seen: set[str] = set()
@@ -14122,7 +14337,7 @@ async def list_control_plane_runs(
             "failed": RunStatus.FAILED,
             "timeout": RunStatus.FAILED,
         }
-        from datetime import datetime
+        from datetime import datetime, timezone
         for er in ecml_runs:
             eid = er.get("run_id")
             if not eid or eid in existing_ids:
@@ -14647,6 +14862,8 @@ async def run_coe_audit(data: dict | None = None, request: Request = None):
     role = _user_role_from_request(request)
     if role != "admin":
         raise HTTPException(status_code=403, detail="此操作需要 admin 权限")
+    if _coe_auditor is None:
+        raise HTTPException(status_code=503, detail="CoE 审计器未初始化（控制平面未启用）")
     data = data or {}
     try:
         limit = int(data.get("limit", 100))
@@ -15068,7 +15285,7 @@ async def explain_research_run(request_id: str):
         "explanation": explanation,
         "steps": step_explanations,
         "progress": {"completed": completed, "total": total},
-        "risk_summary": latest["risk_summary"],
+        "risk_summary": latest.get("risk_summary") or {},
     }
 
 

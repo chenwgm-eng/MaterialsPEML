@@ -68,6 +68,7 @@
         size="small"
         :row-key="(r) => r.type + '_' + r.id"
         :loading="loading"
+        :scroll="{ x: 900 }"
         class="approval-table"
       >
         <template #bodyCell="{ column, record }">

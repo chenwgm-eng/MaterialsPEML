@@ -185,6 +185,16 @@
   --bg-card: var(--dark-bg-card);
   --bg-hover: var(--dark-bg-card-hover);
 
+  /* —— 浅色系固定变量在暗色下的映射（59 文件 163 处引用，统一随主题切换）——
+     原浅色值（白卡/浅蓝表头/浅灰边框）在暗色下会造成"白底白字"对比度崩塌，
+     此处映射到暗色对应值，一次修复全部组件 */
+  --light-bg: var(--dark-bg);
+  --light-bg-card: var(--dark-bg-card);
+  --light-bg-hover: var(--dark-bg-card-hover);
+  --light-bg-active: var(--dark-bg-lighter);
+  --light-border: var(--dark-border);
+  --light-border-light: var(--dark-border-light);
+
   /* —— 文字颜色：切换到深色底配套的浅色文字 —— */
   --text-primary: var(--text-on-dark);
   --text-secondary: var(--text-on-dark-secondary);
@@ -211,6 +221,19 @@
 
   /* —— 原生表单控件 / 滚动条配色 —— */
   color-scheme: dark;
+}
+
+/* 深色模式下 antd 预设色 Tag：浅色规则里的深字会压在同色系深底上（如红字压深红底仅 2.7:1），
+   此处切换为深底浅字，保证可读 */
+:root[data-theme="dark"] {
+  .ant-tag-green, .ant-tag-success { color: #4ade80 !important; }
+  .ant-tag-orange, .ant-tag-volcano { color: #fb923c !important; }
+  .ant-tag-cyan { color: #22d3ee !important; }
+  .ant-tag-blue, .ant-tag-processing, .ant-tag-geekblue { color: #60a5fa !important; }
+  .ant-tag-red, .ant-tag-error { color: #f87171 !important; }
+  .ant-tag-gold, .ant-tag-warning { color: #fbbf24 !important; }
+  .ant-tag-purple { color: #c084fc !important; }
+  .ant-tag-magenta { color: #f472b6 !important; }
 }
 
 * {
@@ -695,9 +718,16 @@ a:hover {
 /* === 操作台风格增强 === */
 .orchestration-workspace {
   display: grid;
-  grid-template-columns: 1fr 420px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 16px;
   align-items: start;
+}
+
+/* 中等宽度（侧栏已占 284px，内容区变窄）：右侧面板收窄，保证左侧输入区不被挤压 */
+@media (max-width: 1140px) and (min-width: 981px) {
+  .orchestration-workspace {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
 }
 
 .orchestration-left,
@@ -767,7 +797,7 @@ a:hover {
   overflow: hidden;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 980px) {
   .orchestration-workspace {
     grid-template-columns: 1fr;
   }

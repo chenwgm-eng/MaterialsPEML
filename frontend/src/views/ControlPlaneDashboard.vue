@@ -96,6 +96,7 @@
         size="small"
         :row-key="(r) => r.run_id"
         :loading="loading"
+        :scroll="{ x: 800 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'status'">

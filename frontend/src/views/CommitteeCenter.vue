@@ -110,6 +110,7 @@
         size="small"
         :row-key="(r) => r.case_id"
         :loading="loading"
+        :scroll="{ x: 1120 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'committee_type'">

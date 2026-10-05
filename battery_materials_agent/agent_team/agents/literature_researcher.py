@@ -1619,7 +1619,9 @@ class LiteratureResearcherAgent:
             if full_text_available:
                 nodes[node_id]["properties"]["full_text_available"] = True
             # 若已有节点置信度较低，则升级为较高置信度（外部来源优先）
-            if (self._SOURCE_CONFIDENCE.get(nodes[node_id]["properties"]["confidence"], "low") == "low"
+            # 修复：直接比较节点当前置信度等级（此前误用 _SOURCE_CONFIDENCE 查置信度值，恒返回 low）
+            cur_conf = nodes[node_id]["properties"].get("confidence")
+            if (cur_conf not in (self.CONFIDENCE_HIGH, self.CONFIDENCE_MEDIUM)
                     and confidence in (self.CONFIDENCE_HIGH, self.CONFIDENCE_MEDIUM)):
                 nodes[node_id]["properties"]["confidence"] = confidence
 

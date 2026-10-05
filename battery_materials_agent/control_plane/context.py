@@ -162,7 +162,7 @@ class ExecutionContext(BaseModel):
         parent_expires = _ensure_aware_utc(parent_context.expires_at)
         child_expires = min(parent_expires, now + timedelta(seconds=ttl_seconds))
         signer = parent_context.agent_id or parent_context.user_id or "unknown"
-        return cls(
+        child = cls(
             correlation_id=str(uuid4()),
             trace_id=parent_context.trace_id,
             project_id=parent_context.project_id,
@@ -178,6 +178,9 @@ class ExecutionContext(BaseModel):
             issued_at=now,
             expires_at=child_expires,
         )
+        # 修复：sign() 必须补签名（此前 child 签名恒空，下游 verify_signature 必失败）
+        child.signature = child.compute_signature(_load_signing_key())
+        return child
 
     def child(
         self,

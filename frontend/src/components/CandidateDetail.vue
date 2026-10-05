@@ -126,7 +126,7 @@
               <template v-if="column.key === 'value'">
                 <span class="prop-value" :class="{ 'prop-predicted': record.predicted }">
                   {{ record.value }}
-                  <a-tag v-if="record.predicted" color="orange" size="small">预测</a-tag>
+                  <EvidenceBadge :level="record.level" />
                   <a-tag v-if="record.evidence" color="blue" size="small">{{ record.evidence }}</a-tag>
                   <a-tooltip v-if="record.confidence != null" :title="`置信度 ${(record.confidence * 100).toFixed(1)}%`">
                     <a-tag :color="confidenceColor(record.confidence)" size="small">
@@ -555,7 +555,8 @@ import AIOutputMeta from './AIOutputMeta.vue'
 import CrossScaleDrawer from './candidate/CrossScaleDrawer.vue'
 import SynthesisDrawer from './candidate/SynthesisDrawer.vue'
 import MaterialKnowledgeCard from './MaterialKnowledgeCard.vue'
-import { formatNumber, formatSci } from '@/utils/format'
+import EvidenceBadge from './EvidenceBadge.vue'
+import { formatNumber } from '@/utils/format'
 import { planSynthesisAsync, getSynthesisTask } from '@/api/synthesis'
 import client from '@/api/client'
 import { useUnitSymbols } from '@/utils/mdmDict'
@@ -705,6 +706,9 @@ const propColumns = [
 
 const propRows = computed(() => {
   const c = props.candidate
+  // ADR-0001：工程塑料候选属性来自查表估算 → 徽标"工程估算"；跨尺度模型 → "模型预测"
+  const data = c.data || {}
+  const estLevel = data.property_source ? 'estimated' : 'predicted'
   const rows = []
   if (c.tensile_strength != null)
     rows.push({
@@ -712,7 +716,8 @@ const propRows = computed(() => {
       name: '拉伸强度',
       value: formatNumber(c.tensile_strength, 4),
       unit: 'MPa',
-      source: c.tensile_strength_source || 'ML 预测',
+      source: c.tensile_strength_source || data.property_source || (estLevel === 'estimated' ? '工程估算' : 'ML 预测'),
+      level: estLevel,
       predicted: true,
     })
   if (c.flexural_modulus != null)
@@ -721,7 +726,8 @@ const propRows = computed(() => {
       name: '弯曲模量',
       value: formatNumber(c.flexural_modulus, 4),
       unit: 'MPa',
-      source: c.flexural_modulus_source || 'ML 预测',
+      source: c.flexural_modulus_source || data.property_source || (estLevel === 'estimated' ? '工程估算' : 'ML 预测'),
+      level: estLevel,
       predicted: true,
     })
   if (c.impact_strength != null)
@@ -730,7 +736,8 @@ const propRows = computed(() => {
       name: '冲击强度',
       value: formatNumber(c.impact_strength, 4),
       unit: 'kJ/m²',
-      source: c.impact_strength_source || 'ML 预测',
+      source: c.impact_strength_source || data.property_source || (estLevel === 'estimated' ? '工程估算' : 'ML 预测'),
+      level: estLevel,
       predicted: true,
     })
   if (c.heat_deflection_temp != null)
@@ -739,7 +746,8 @@ const propRows = computed(() => {
       name: '热变形温度',
       value: formatNumber(c.heat_deflection_temp, 4),
       unit: '°C',
-      source: c.heat_deflection_temp_source || 'ML 预测',
+      source: c.heat_deflection_temp_source || data.property_source || (estLevel === 'estimated' ? '工程估算' : 'ML 预测'),
+      level: estLevel,
       predicted: true,
     })
   if (c.melt_flow_index != null)
@@ -748,7 +756,8 @@ const propRows = computed(() => {
       name: '熔体流动速率',
       value: formatNumber(c.melt_flow_index, 4),
       unit: 'g/10min',
-      source: c.melt_flow_index_source || 'ML 预测',
+      source: c.melt_flow_index_source || data.property_source || (estLevel === 'estimated' ? '工程估算' : 'ML 预测'),
+      level: estLevel,
       predicted: true,
     })
   if (c.multi_objective_score != null)

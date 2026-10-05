@@ -140,7 +140,7 @@
       </div>
     </div>
 
-    <a-layout>
+    <a-layout class="main-body">
       <a-layout-header class="top-header">
         <div class="header-left">
           <!-- Step E：navShell 开启时精简 Header（新建入口由 ContextColumn 提供），隐藏旧 Header 残留 -->
@@ -834,6 +834,13 @@ onMounted(async () => {
   /* 三栏重构：nav-shell 替代 a-layout-sider 后，外层须显式行布局，
      否则 antd Layout 默认 column 会把 header+内容区挤到视口下方（右侧空白） */
   flex-direction: row;
+}
+
+/* 三栏中承载 header+内容区的内层 Layout：必须允许横向收缩（min-width:0）。
+   否则 flex 默认 min-width:auto 会按内容宽度撑开，窄视口下整页横向溢出错位 */
+.main-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .skip-link {

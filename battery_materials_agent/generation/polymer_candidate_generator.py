@@ -28,6 +28,7 @@ class PolymerCandidate(BaseModel):
     monomer_smiles: list[str] = Field(default_factory=list)
     source: str = ""
     description: str = ""
+    material_type: str = "polymer"  # 供 BO/下游按材料类型分派描述符（v4.1 补齐）
     predicted_ionic_conductivity: float = 0.0
     molecular_weight: float = 0.0
     multi_objective_score: float = 0.0  # 多目标加权综合评分（0-1）
@@ -91,7 +92,7 @@ def _apply_polymer_multi_objective(
     v4.1（ADR-0003）：归一化采用**绝对规格基准**（material_properties.REFERENCE_RANGES），
     与后端补算 `_backfill_multi_objective_scores` 同源，分数跨列表/轮次可比。
     """
-    from ..material_properties import REFERENCE_RANGES
+    from ..material_properties import REFERENCE_RANGES, normalize_by_reference
 
     if not candidates:
         return candidates
@@ -134,24 +135,22 @@ def _apply_polymer_multi_objective(
     if not filtered:
         return filtered
 
-    # 2. 绝对规格基准归一化 + 加权求和（ADR-0003）
+    # 2. 绝对规格基准归一化 + 加权求和（ADR-0003，公式唯一实现在
+    #    material_properties.normalize_by_reference）
     total_weight = sum(cfg["weight"] for cfg in configs) or 1.0
+    # 防累加：进入前清零（与晶体 _apply_multi_objective 同坑位防护，
+    # 避免"agent 回填后复评分"场景下分数重复累加）
+    for c in filtered:
+        c.multi_objective_score = 0.0
     for cfg in configs:
         ref = REFERENCE_RANGES.get(cfg["property"])
         for c in filtered:
             v = _POLY_PROPERTY_GETTERS[cfg["property"]](c)
-            if ref is not None:
-                lo, hi, _unit, _src = ref
-                rng = (hi - lo) if hi > lo else 1.0
-                normalized = max(0.0, min(1.0, (v - lo) / rng))
-            else:
+            pool_vals = None
+            if ref is None:
                 # 无参考范围的属性回退池内相对
-                vals = [_POLY_PROPERTY_GETTERS[cfg["property"]](x) for x in filtered]
-                v_min, v_max = min(vals), max(vals)
-                rng = (v_max - v_min) if v_max > v_min else 1.0
-                normalized = (v - v_min) / rng
-            if cfg["direction"] == "minimize":
-                normalized = 1.0 - normalized
+                pool_vals = [_POLY_PROPERTY_GETTERS[cfg["property"]](x) for x in filtered]
+            normalized = normalize_by_reference(v, ref, direction=cfg["direction"], pool_values=pool_vals)
             c.multi_objective_score += (cfg["weight"] / total_weight) * normalized
 
     filtered.sort(key=lambda c: c.multi_objective_score, reverse=True)
@@ -285,7 +284,7 @@ class PolymerDesignRules:
             "LCP":  (100, 5000, 3,  50),
             "PPS":  (100, 7000, 4,  60),
             "PPSU": (50,  3000, -3, 20),
-            "POM ": (40,  5000, 1,  60),
+            "POM":  (40,  5000, 1,  60),
             "*":    (60,  3500, 3,  40),
         },
         "CF": {
@@ -486,30 +485,6 @@ class PolymerCandidateGenerator:
         if loop is not None:
             raise RuntimeError("cannot run LLM call from a running event loop")
         return asyncio.run(asyncio.wait_for(async_fn(*args), timeout=POLYMER_LLM_TIMEOUT))
-
-    def generate_derivatives(self, base_polymer: PolymerCandidate, num_variants: int = 5) -> list[PolymerCandidate]:
-        variants = []
-        modifications = [
-            ("with glass fiber", "GF30 玻纤增强"),
-            ("with carbon fiber", "CF20 碳纤增强"),
-            ("with flame retardant", "阻燃改性"),
-            ("with impact modifier", "增韧改性"),
-            ("with coupling agent", "偶联剂改性"),
-        ]
-        for suffix, desc in modifications[:num_variants]:
-            variants.append(PolymerCandidate(
-                name=f"{base_polymer.name} {suffix}",
-                psmiles=base_polymer.psmiles,
-                smiles=base_polymer.smiles,
-                monomer_smiles=list(base_polymer.monomer_smiles),
-                source="derivative",
-                description=f"{base_polymer.description} - {desc}",
-                data={
-                    **(base_polymer.data or {}),
-                    "tensile_strength": float(base_polymer.data.get("tensile_strength") or 50.0) + 30,
-                },
-            ))
-        return variants
 
     def filter_by_rules(self, candidates: list[PolymerCandidate], rules: dict) -> list[PolymerCandidate]:
         filtered = []

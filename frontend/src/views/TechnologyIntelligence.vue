@@ -212,17 +212,19 @@
               </a-list>
             </a-spin>
 
-            <a-spin :spinning="savedDetailLoading" class="saved-detail">
-              <KnowledgeGraph
-                v-if="currentSavedNodes.length"
-                :nodes="currentSavedNodes"
-                :edges="currentSavedEdges"
-              />
-              <div v-else class="saved-detail-empty">
-                <InboxOutlined aria-hidden="true" />
-                <span>选择左侧图谱查看详情</span>
-              </div>
-            </a-spin>
+            <div class="saved-detail">
+              <a-spin :spinning="savedDetailLoading">
+                <KnowledgeGraph
+                  v-if="currentSavedNodes.length"
+                  :nodes="currentSavedNodes"
+                  :edges="currentSavedEdges"
+                />
+                <div v-else class="saved-detail-empty">
+                  <InboxOutlined aria-hidden="true" />
+                  <span>选择左侧图谱查看详情</span>
+                </div>
+              </a-spin>
+            </div>
           </div>
         </a-card>
       </a-tab-pane>
@@ -543,7 +545,7 @@ async function onSaveGraph() {
 .paper-card,
 .graph-card {
   border-radius: 8px;
-  height: 600px;
+  height: 440px;
   overflow: hidden;
 }
 
@@ -554,13 +556,13 @@ async function onSaveGraph() {
 }
 
 .paper-card :deep(.ant-card-body) {
-  height: calc(600px - 44px);
+  height: calc(440px - 44px);
   overflow-y: auto;
   padding: 12px 16px;
 }
 
 .graph-card :deep(.ant-card-body) {
-  height: calc(600px - 44px);
+  height: calc(440px - 44px);
   overflow: hidden;
   padding: 0;
 }
@@ -572,7 +574,7 @@ async function onSaveGraph() {
 
 .graph-wrap :deep(.kg-chart),
 .graph-wrap :deep(.kg-empty) {
-  height: calc(600px - 44px);
+  height: calc(440px - 44px);
 }
 
 /* ── 文献列表 ── */
@@ -699,12 +701,12 @@ async function onSaveGraph() {
 .saved-body {
   display: flex;
   gap: 16px;
-  height: 520px;
+  height: 440px;
   overflow: hidden;
 }
 
 .saved-list {
-  width: 360px;
+  width: 340px;
   flex-shrink: 0;
   height: 100%;
   overflow-y: auto;
@@ -799,7 +801,7 @@ async function onSaveGraph() {
 
 .saved-detail :deep(.kg-chart),
 .saved-detail :deep(.kg-empty) {
-  height: 518px;
+  height: 418px;
 }
 
 /* 响应式 */
@@ -807,13 +809,13 @@ async function onSaveGraph() {
   .paper-card,
   .graph-card {
     height: auto;
-    min-height: 420px;
+    min-height: 380px;
   }
 
   .graph-card :deep(.ant-card-body),
   .graph-wrap :deep(.kg-chart),
   .graph-wrap :deep(.kg-empty) {
-    height: 420px;
+    height: 380px;
   }
 
   .saved-body {

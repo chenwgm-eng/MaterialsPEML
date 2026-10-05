@@ -102,7 +102,7 @@
               v-model:value="templateValues[field.key]"
               style="width: 100%"
               :placeholder="resolvedUnit(field) ? `单位: ${resolvedUnit(field)}（支持科学计数法，如 1.2e-3）` : '请输入数值（支持科学计数法，如 1.2e-3）'"
-              @change="onNumericFieldChange(field)"
+              @change="onNumericFieldChange(field); onFieldChange()"
             >
               <template v-if="resolvedUnit(field)" #addonAfter>{{ resolvedUnit(field) }}</template>
             </a-input>
@@ -361,8 +361,8 @@ function onNumericFieldChange(field) {
 }
 
 // ======== 数据合理性校验 ========
-function onFieldChange(field) {
-  warnings.value = []
+// 数值字段变更即触发全量范围校验（拉伸强度≤2000、冲击强度≤500 等 13 项白名单）
+function onFieldChange() {
   validateAllFields()
 }
 
@@ -381,32 +381,34 @@ function validateTemperature() {
 
 function validateAllFields() {
   warnings.value = []
-  // 拉伸强度校验
-  const ts = templateValues['tensile_strength']
-  if (ts !== null && ts !== undefined && ts !== '') {
-    const num = Number(ts)
-    if (num < 0) {
-      warnings.value.push('拉伸强度不应为负数，请检查数值')
-    } else if (num > 500) {
-      warnings.value.push(`拉伸强度 ${num} MPa 超出常规范围（通常 < 500 MPa），请确认数据正确`)
-    }
+  // 数值范围校验表（与后端 _PROPERTY_VALUE_RANGES 白名单对齐；缺省仅 NaN 检查）
+  const ranges = {
+    tensile_strength: { max: 2000, unit: 'MPa', label: '拉伸强度' },
+    tensile_modulus: { max: 50000, unit: 'MPa', label: '拉伸模量' },
+    flexural_modulus: { max: 50000, unit: 'MPa', label: '弯曲模量' },
+    flexural_strength: { max: 2000, unit: 'MPa', label: '弯曲强度' },
+    impact_strength: { max: 500, unit: 'kJ/m²', label: '冲击强度' },
+    heat_deflection_temp: { max: 500, unit: '°C', label: '热变形温度' },
+    melt_flow_index: { max: 500, unit: 'g/10min', label: '熔体流动速率' },
+    elongation_at_break: { max: 1500, unit: '%', label: '断裂伸长率' },
+    melting_point: { max: 600, unit: '°C', label: '熔点' },
+    thermal_stability: { max: 900, unit: '°C', label: '热稳定温度' },
+    weight_loss: { max: 100, unit: '%', label: '失重率' },
+    residual_mass: { max: 100, unit: '%', label: '残余质量' },
+    crystallinity: { max: 100, unit: '%', label: '结晶度' },
   }
-  // 热变形温度校验
-  const hdt = templateValues['heat_deflection_temp']
-  if (hdt !== null && hdt !== undefined && hdt !== '') {
-    const num = Number(hdt)
-    if (num < 0) {
-      warnings.value.push('热变形温度不应为负数')
-    } else if (num > 400) {
-      warnings.value.push(`热变形温度 ${num} °C 超出常规范围，请确认数据正确`)
+  for (const [key, cfg] of Object.entries(ranges)) {
+    const v = templateValues[key]
+    if (v === null || v === undefined || v === '') continue
+    const num = Number(v)
+    if (!Number.isFinite(num)) {
+      warnings.value.push(`${cfg.label} 不是有效数值，请检查`)
+      continue
     }
-  }
-  // 结晶度校验
-  const cy = templateValues['crystallinity']
-  if (cy !== null && cy !== undefined && cy !== '') {
-    const num = Number(cy)
-    if (num < 0 || num > 100) {
-      warnings.value.push(`结晶度 ${num}% 超出 0-100% 范围，请检查数值`)
+    if (num < 0) {
+      warnings.value.push(`${cfg.label} 不应为负数，请检查数值`)
+    } else if (num > cfg.max) {
+      warnings.value.push(`${cfg.label} ${num} ${cfg.unit} 超出常规范围（通常 < ${cfg.max} ${cfg.unit}），请确认数据正确`)
     }
   }
   // 温度校验
@@ -458,12 +460,17 @@ onMounted(() => {
 })
 
 // 当 order 变化时尝试自动匹配实验类型
+// 修复：切换订单必须重置模板与值（抽屉 destroy-on-close=false 时组件不重建，
+// 不重置会把上一订单的模板值带到新订单，录错模板）
 watch(() => props.order, (newOrder) => {
+  experimentType.value = ''
+  // 清空 reactive 模板值（reactive 无 .value，用 delete 逐个清除）
+  Object.keys(templateValues).forEach((k) => { delete templateValues[k] })
   if (newOrder?.required_results?.length > 0) {
     // 尝试从 required_results 推断实验类型
     const knownTypes = Object.keys(EXPERIMENT_TYPE_LABELS)
     const matched = newOrder.required_results.find(r => knownTypes.includes(r))
-    if (matched && !experimentType.value) {
+    if (matched) {
       experimentType.value = matched
       onExperimentTypeChange(matched)
     }

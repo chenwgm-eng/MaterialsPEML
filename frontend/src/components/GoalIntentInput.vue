@@ -6,7 +6,7 @@
       :placeholder="placeholder"
       class="goal-textarea"
       @input="onInput"
-      @keydown.enter.prevent="onParse"
+      @keydown="onKeydown"
     />
     <div class="goal-actions">
       <div class="goal-templates">
@@ -105,6 +105,14 @@ const hasRecognized = computed(() => {
 function onInput(e) {
   emit('update:modelValue', e.target.value)
   parsedResult.value = null
+}
+
+// Ctrl/Cmd+Enter 触发解析；普通 Enter 保留换行（长目标可多行输入）
+function onKeydown(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    onParse()
+  }
 }
 
 function applyTemplate(t) {

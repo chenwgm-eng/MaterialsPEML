@@ -11,9 +11,20 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 import logging
 
-from ..db import get_engine
+from ..db import get_engine, get_tenant, tenant_filter
 
 logger = logging.getLogger(__name__)
+
+# 原料库存扣减器注入点：由应用启动时（api.py startup）调用 set_raw_material_db 注入，
+# 领域层不反向 import API 单体（否则 api ↔ experiment 形成运行时循环依赖）
+_raw_material_db_provider: list = []
+
+
+def set_raw_material_db(db) -> None:
+    """启动时注入 raw_material_db；传 None 表示清空（用于测试隔离）。"""
+    _raw_material_db_provider.clear()
+    if db is not None:
+        _raw_material_db_provider.append(db)
 
 
 class ExperimentStatus(str, Enum):
@@ -612,20 +623,22 @@ class ExperimentDataStore:
             raise ValueError(f"任务 {order_id} 已存在实验数据，禁止删除")
         with self.engine.begin() as conn:
             conn.execute(
-                text("DELETE FROM experiment.experiment_orders WHERE order_id = :order_id"),
-                {"order_id": order_id},
+                text(f"DELETE FROM experiment.experiment_orders "
+                     f"WHERE order_id = :order_id AND {tenant_filter()}"),
+                {"order_id": order_id, "tenant_id": get_tenant()},
             )
         return True
 
     def save_order(self, order: "ExperimentOrder"):
         with self.engine.begin() as conn:
             conn.execute(
-                text("""INSERT INTO experiment.experiment_orders
+                text(f"""INSERT INTO experiment.experiment_orders
                 (order_id, project_id, rd_package_id, candidate_id, process_id, formulation_version,
                  process_version, test_protocol_version, execution_mode, priority, assignee,
                  material_requirements, procedure, required_results, acceptance_criteria,
                  status, created_at, approved_by, approved_at, notes, protocol_provenance,
-                 ai_draft, provenance, scenario_id, bom_id, task_id, idempotency_key)
+                 ai_draft, provenance, scenario_id, bom_id, task_id, idempotency_key,
+                 tenant_id)
                 VALUES (:order_id, :project_id, :rd_package_id, :candidate_id, :process_id, :formulation_version,
                  :process_version, :test_protocol_version, :execution_mode, :priority, :assignee,
                  CAST(:material_requirements AS JSONB), :procedure,
@@ -633,7 +646,8 @@ class ExperimentDataStore:
                  :status, :created_at, :approved_by, :approved_at, :notes,
                  CAST(:protocol_provenance AS JSONB),
                  :ai_draft, CAST(:provenance AS JSONB), :scenario_id,
-                 :bom_id, :task_id, :idempotency_key)
+                 :bom_id, :task_id, :idempotency_key,
+                 :tenant_id)
                 ON CONFLICT (order_id) DO UPDATE SET
                     project_id = EXCLUDED.project_id,
                     rd_package_id = EXCLUDED.rd_package_id,
@@ -691,6 +705,8 @@ class ExperimentDataStore:
                     "bom_id": order.bom_id or None,
                     "task_id": order.task_id or None,
                     "idempotency_key": order.idempotency_key or None,
+                    # 多租户隔离（0050）：写入当前上下文租户；upsert 不改租户（防跨租户搬移）
+                    "tenant_id": get_tenant(),
                 },
             )
 
@@ -698,8 +714,9 @@ class ExperimentDataStore:
         with self.engine.connect() as conn:
             row = conn.execute(
                 text(f"SELECT {self._EXPERIMENT_ORDER_COLS} "
-                     "FROM experiment.experiment_orders WHERE order_id = :order_id"),
-                {"order_id": order_id},
+                     f"FROM experiment.experiment_orders "
+                     f"WHERE order_id = :order_id AND {tenant_filter()}"),
+                {"order_id": order_id, "tenant_id": get_tenant()},
             ).fetchone()
         if row is None:
             return None
@@ -730,9 +747,9 @@ class ExperimentDataStore:
             return None
         with self.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT order_id FROM experiment.experiment_orders "
-                     "WHERE idempotency_key = :key"),
-                {"key": key},
+                text(f"SELECT order_id FROM experiment.experiment_orders "
+                     f"WHERE idempotency_key = :key AND {tenant_filter()}"),
+                {"key": key, "tenant_id": get_tenant()},
             ).fetchone()
         if row is None:
             return None
@@ -743,8 +760,8 @@ class ExperimentDataStore:
         """查询实验任务单列表，支持按 status / project_id / task_id 过滤。"""
         with self.engine.connect() as conn:
             query = f"SELECT {self._EXPERIMENT_ORDER_COLS} FROM experiment.experiment_orders"
-            conditions = []
-            params: dict[str, str] = {}
+            conditions = [tenant_filter()]
+            params: dict[str, str] = {"tenant_id": get_tenant()}
             if status:
                 conditions.append("status = :status")
                 params["status"] = status
@@ -798,17 +815,17 @@ class ExperimentDataStore:
         try:
             with self.engine.begin() as conn:
                 conn.execute(
-                    text("""INSERT INTO experiment.experiment_result_records
+                    text(f"""INSERT INTO experiment.experiment_result_records
                     (result_id, experiment_order_id, sample_id, sample_batch_id, source_type,
                      source_system, uploaded_by, uploaded_at, property_name, value, unit,
                      test_method, test_conditions, instrument_id, raw_file_uri, qc_status,
                      qc_issues, reviewed_by, reviewed_at, learning_eligible, scenario_id,
-                     test_task_id, data_quality, provenance)
+                     test_task_id, data_quality, provenance, tenant_id)
                     VALUES (:result_id, :experiment_order_id, :sample_id, :sample_batch_id, :source_type,
                      :source_system, :uploaded_by, :uploaded_at, :property_name, :value, :unit,
                      :test_method, CAST(:test_conditions AS JSONB), :instrument_id, :raw_file_uri, :qc_status,
                      CAST(:qc_issues AS JSONB), :reviewed_by, :reviewed_at, :learning_eligible, :scenario_id,
-                     :test_task_id, :data_quality, CAST(:provenance AS JSONB))
+                     :test_task_id, :data_quality, CAST(:provenance AS JSONB), :tenant_id)
                     ON CONFLICT (result_id) DO UPDATE SET
                         experiment_order_id = EXCLUDED.experiment_order_id,
                         sample_id = EXCLUDED.sample_id,
@@ -862,16 +879,20 @@ class ExperimentDataStore:
                         "data_quality": record.data_quality or "estimated",
                         # ADR-0002：溯源 JSONB（无则 NULL）
                         "provenance": json.dumps(record.provenance, ensure_ascii=False) if record.provenance else None,
+                        # 多租户隔离（0050）：写入当前上下文租户；upsert 不改租户（防跨租户搬移）
+                        "tenant_id": get_tenant(),
                     },
                 )
         except IntegrityError as e:
-            raise ValueError("该样品的此属性在此时间点已有实验结果记录") from e
+            # 错误消息保留真实约束原因（此前统一文案掩盖了 FK/唯一约束的真实来源，排查困难）
+            raise ValueError(f"实验记录写入失败（约束冲突）: {e.orig}") from e
 
     def get_result_record(self, result_id: str) -> "ExperimentResultRecord | None":
         with self.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT * FROM experiment.experiment_result_records WHERE result_id = :result_id"),
-                {"result_id": result_id},
+                text(f"SELECT * FROM experiment.experiment_result_records "
+                     f"WHERE result_id = :result_id AND {tenant_filter()}"),
+                {"result_id": result_id, "tenant_id": get_tenant()},
             ).fetchone()
         if row is None:
             return None
@@ -899,8 +920,8 @@ class ExperimentDataStore:
         """查询实验结果记录，支持按 qc_status / order_id / sample_id / test_task_id 过滤。"""
         with self.engine.connect() as conn:
             query = "SELECT * FROM experiment.experiment_result_records"
-            conditions = []
-            params: dict[str, str] = {}
+            conditions = [tenant_filter()]
+            params: dict[str, str] = {"tenant_id": get_tenant()}
             if qc_status:
                 conditions.append("qc_status = :qc_status")
                 params["qc_status"] = qc_status
@@ -942,15 +963,16 @@ class ExperimentDataStore:
         with self.engine.connect() as conn:
             if order_id:
                 row = conn.execute(
-                    text("SELECT COUNT(*) FROM experiment.experiment_result_records "
-                         "WHERE experiment_order_id = :order_id"),
-                    {"order_id": order_id},
+                    text(f"SELECT COUNT(*) FROM experiment.experiment_result_records "
+                         f"WHERE experiment_order_id = :order_id AND {tenant_filter()}"),
+                    {"order_id": order_id, "tenant_id": get_tenant()},
                 ).fetchone()
                 return row[0] if row else 0
 
             rows = conn.execute(
-                text("SELECT experiment_order_id, COUNT(*) FROM experiment.experiment_result_records "
-                     "GROUP BY experiment_order_id")
+                text(f"SELECT experiment_order_id, COUNT(*) FROM experiment.experiment_result_records "
+                     f"WHERE {tenant_filter()} GROUP BY experiment_order_id"),
+                {"tenant_id": get_tenant()},
             ).fetchall()
         return {oid or "": count for oid, count in rows}
 
@@ -960,11 +982,11 @@ class ExperimentDataStore:
         # 评测修复 P2-5：QC 审批通过时可一并更新 data_quality（如 verified）
         with self.engine.begin() as conn:
             conn.execute(
-                text("""UPDATE experiment.experiment_result_records
+                text(f"""UPDATE experiment.experiment_result_records
                 SET qc_status = :qc_status, qc_issues = CAST(:qc_issues AS JSONB),
                     reviewed_by = :reviewed_by, learning_eligible = :learning_eligible,
                     data_quality = COALESCE(:data_quality, data_quality)
-                WHERE result_id = :result_id"""),
+                WHERE result_id = :result_id AND {tenant_filter()}"""),
                 {
                     "qc_status": qc_status,
                     "qc_issues": json.dumps(qc_issues),
@@ -972,6 +994,7 @@ class ExperimentDataStore:
                     "learning_eligible": learning_eligible,
                     "data_quality": data_quality,
                     "result_id": result_id,
+                    "tenant_id": get_tenant(),
                 },
             )
 
@@ -1021,9 +1044,9 @@ class ExperimentDataStore:
         # SELECT FOR UPDATE 防止两个并发请求读到相同旧状态后分别通过校验造成迁移覆盖
         with self.engine.begin() as conn:
             row = conn.execute(
-                text("SELECT status FROM experiment.experiment_orders "
-                     "WHERE order_id = :order_id FOR UPDATE"),
-                {"order_id": order_id},
+                text(f"SELECT status FROM experiment.experiment_orders "
+                     f"WHERE order_id = :order_id AND {tenant_filter()} FOR UPDATE"),
+                {"order_id": order_id, "tenant_id": get_tenant()},
             ).fetchone()
 
             if row is None:
@@ -1091,27 +1114,43 @@ class ExperimentDataStore:
 
         # 状态变为 COMPLETED 时自动触发库存扣减
         if normalized_target == ExperimentOrderStatus.COMPLETED.value:
-            if raw_material_db is None:
-                # 调用方未传入 raw_material_db 时，尝试从已初始化的 agent 实例自动获取
-                try:
-                    from .. import api as _api_module
-                    _agent_instance = getattr(_api_module, "agent", None)
-                    if _agent_instance is not None:
-                        raw_material_db = getattr(_agent_instance, "raw_material_db", None)
-                except Exception:
-                    pass
+            if raw_material_db is None and _raw_material_db_provider:
+                # 调用方未显式传入时使用启动时注入的库存扣减器（见 set_raw_material_db）
+                raw_material_db = _raw_material_db_provider[0]
             if raw_material_db is not None:
                 order = self.get_order(order_id)
                 if order and order.material_requirements:
+                    # 补偿通知收件人：优先订单审批人，兜底 admin
+                    _assignee = getattr(order, "approved_by", None) or "admin"
                     for item in order.material_requirements:
                         mid = item.get("material_id", "")
                         qty = item.get("required_quantity", 1.0)
+                        # 数值防御：非法字符串不得进入扣减（此前 float 比较异常被吞，扣减静默失败）
                         if mid:
                             try:
-                                raw_material_db.deduct_inventory(mid, qty)
-                                logger.info("库存扣减: material_id=%s, amount=%s", mid, qty)
+                                qty_num = float(qty)
+                            except (TypeError, ValueError):
+                                logger.warning("库存扣减跳过：required_quantity 非数值 material_id=%s qty=%r", mid, qty)
+                                # 补偿留痕：跳过即"订单完成而原料未扣"，必须对操作员可见而非仅日志
+                                self.save_notification(
+                                    order_id,
+                                    assignee=_assignee,
+                                    message=(f"库存扣减跳过需人工处理：订单 {order_id} 物料 {mid} 的 "
+                                             f"required_quantity 非数值（{qty!r}），未扣减"),
+                                )
+                                continue
+                            try:
+                                raw_material_db.deduct_inventory(mid, qty_num)
+                                logger.info("库存扣减: material_id=%s, amount=%s", mid, qty_num)
                             except Exception as e:
                                 logger.warning("库存扣减失败: material_id=%s, error=%s", mid, e)
+                                # 补偿留痕：订单已 COMPLETED 而原料未扣减，写通知使差异可追踪、可人工补扣
+                                self.save_notification(
+                                    order_id,
+                                    assignee=_assignee,
+                                    message=(f"库存扣减失败需人工补偿：订单 {order_id} 物料 {mid} "
+                                             f"数量 {qty_num}，原因：{e}"),
+                                )
 
     def save_notification(self, order_id: str, assignee: str, message: str) -> str:
         """记录一条通知到 notifications 表，返回 notification_id。"""
@@ -1465,13 +1504,24 @@ class ExperimentController:
         import numpy as np
         h = int(hashlib.md5(json.dumps(recipe, sort_keys=True).encode()).hexdigest()[:8], 16)
         rng = np.random.default_rng(h)
-        # 使用 [0,1) 区间均匀分布生成更合理的模拟测量值
         u = rng.random()
         u2 = rng.random()
         u3 = rng.random()
 
+        # v4.1：模拟测量值围绕候选估算值（recipe.estimated）+ 确定性相对噪声（±10%）。
+        # 使 demo 闭环的"估算 vs 模拟实测"偏差分析有意义（预测 120 MPa 的候选不会"实测"出 40 MPa）。
+        # 无估算值时回退常规范围均匀分布。
+        est = recipe.get("estimated") or {}
+        est_noise = 0.10  # ±10% 测量噪声（模拟）
+
+        def _around(key, fallback):
+            v = est.get(key)
+            if isinstance(v, (int, float)) and v > 0:
+                return float(v) * (1.0 + (u - 0.5) * 2 * est_noise)
+            return fallback
+
         if exp_type == ExperimentType.IONIC_CONDUCTIVITY:
-            base_conductivity = 1e-4 + u * 1e-3
+            base_conductivity = _around("ionic_conductivity", 1e-4 + u * 1e-3)
             return {
                 "ionic_conductivity_S_cm": base_conductivity,
                 "activation_energy_eV": 0.2 + u2 * 0.3,
@@ -1479,28 +1529,28 @@ class ExperimentController:
                 "frequency_Hz": 1e6,
             }
         elif exp_type == ExperimentType.TENSILE:
-            # v4.1 改性塑料：拉伸性能模拟（数值接近工程塑料常规范围）
+            # v4.1 改性塑料：拉伸性能模拟（围绕估算值，无估算时回退常规范围）
             return {
-                "tensile_strength_MPa": 40.0 + u * 140.0,
-                "elongation_at_break_pct": 5.0 + u2 * 120.0,
-                "tensile_modulus_MPa": 1500.0 + u3 * 3500.0,
+                "tensile_strength_MPa": _around("tensile_strength", 40.0 + u * 140.0),
+                "elongation_at_break_pct": _around("elongation_at_break", 5.0 + u2 * 120.0),
+                "tensile_modulus_MPa": _around("tensile_modulus", 1500.0 + u3 * 3500.0),
             }
         elif exp_type == ExperimentType.FLEXURAL:
             return {
-                "flexural_modulus_MPa": 2000.0 + u * 10000.0,
-                "flexural_strength_MPa": 60.0 + u2 * 160.0,
+                "flexural_modulus_MPa": _around("flexural_modulus", 2000.0 + u * 10000.0),
+                "flexural_strength_MPa": _around("flexural_strength", 60.0 + u2 * 160.0),
             }
         elif exp_type == ExperimentType.IMPACT:
             return {
-                "impact_strength_kJ_m2": 5.0 + u * 45.0,
+                "impact_strength_kJ_m2": _around("impact_strength", 5.0 + u * 45.0),
             }
         elif exp_type == ExperimentType.HDT:
             return {
-                "heat_deflection_temp_C": 80.0 + u * 160.0,
+                "heat_deflection_temp_C": _around("heat_deflection_temp", 80.0 + u * 160.0),
             }
         elif exp_type == ExperimentType.MFI:
             return {
-                "melt_flow_index_g_10min": 4.0 + u * 40.0,
+                "melt_flow_index_g_10min": _around("melt_flow_index", 4.0 + u * 40.0),
             }
         elif exp_type == ExperimentType.EIS:
             return {
@@ -1516,15 +1566,15 @@ class ExperimentController:
                 "coulombic_efficiency": 0.95 + u * 0.05,
             }
         elif exp_type == ExperimentType.XRD:
+            # measured_values 为 dict[str, float]——列表/字符串值会触发 pydantic 校验失败，
+            # 取首个峰位/强度标量，其余细节放 metadata（由 execute_experiment 组装）
             return {
-                "peak_2theta_deg": [18.5, 20.3, 23.8, 27.1, 31.5],
-                "peak_intensity_counts": [1000 + int(u * 500), 800 + int(u2 * 300), 600 + int(u3 * 200), 400 + int(u * 100), 200 + int(u2 * 50)],
+                "peak_2theta_deg": 18.5 + u * 2.0,
                 "crystallinity_percent": 45.0 + u * 30,
             }
         elif exp_type == ExperimentType.SEM:
             return {
                 "particle_size_nm": 500 + int(u * 5000),
-                "morphology": "spherical" if h % 2 == 0 else "irregular",
                 "surface_area_m2_g": 1.0 + u2 * 10,
             }
         elif exp_type == ExperimentType.DSC:

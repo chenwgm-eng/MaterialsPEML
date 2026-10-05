@@ -139,7 +139,7 @@
           </a-col>
           <a-col :span="12">
             <a-form-item label="化学式">
-              <a-input v-model:value="form.chemical_formula" name="chemical_formula" placeholder="如 Li6PS5Cl…" autocomplete="off" :spellcheck="false" />
+              <a-input v-model:value="form.chemical_formula" name="chemical_formula" placeholder="如 PA6、PC/ABS、玻纤增强 PP" autocomplete="off" :spellcheck="false" />
             </a-form-item>
           </a-col>
         </a-row>
@@ -532,7 +532,8 @@ const orderOptions = ref([])
 async function fetchCandidateOptions() {
   try {
     const data = await listCandidates()
-    const list = Array.isArray(data) ? data : (data?.items || [])
+    // 后端 /candidates 返回 {candidates, count, total}（api.py:4010）
+    const list = Array.isArray(data) ? data : (data?.candidates || data?.items || [])
     candidateOptions.value = list.map((c) => ({
       label: c.name || c.formula || c.smiles || c.candidate_id,
       value: c.candidate_id,

@@ -149,7 +149,11 @@
                   >
                     <template #bodyCell="{ column, record }">
                       <template v-if="column.key === 'check'">
-                        <a-checkbox @change="(e) => onToggleField(cat, record, e.target.checked)" />
+                        <a-checkbox
+                          :disabled="!isAdmin"
+                          :checked="isAdmin ? undefined : false"
+                          @change="(e) => onToggleField(cat, record, e.target.checked)"
+                        />
                       </template>
                       <template v-else-if="column.key === 'key'">
                         <code class="field-key">{{ record.key }}</code>
@@ -201,8 +205,10 @@
                       type="primary"
                       size="small"
                       :loading="addingCustom[cat.key]"
+                      :disabled="!isAdmin"
                       @click="onAddCustom(cat)"
                     >添加</a-button>
+                    <span v-if="!isAdmin" class="text-muted" style="font-size: 11px">（仅管理员可编辑模板）</span>
                   </div>
                 </div>
               </a-tab-pane>
@@ -244,6 +250,7 @@ import {
 } from '@/constants/materialTypes'
 import { useMdmDict } from '@/utils/mdmDict'
 import EmptyState from '@/components/EmptyState.vue'
+import { useAuth } from '@/composables/useAuth'
 
 
 const iconMap = {
@@ -272,6 +279,9 @@ const typeFilter = ref('')
 // 物料类型：从主数据加载（MDM classifications domain='material'），DEFAULT 兜底
 const materialTypes = ref([...DEFAULT_INDUSTRIAL_CATEGORIES])
 const selectedMaterialType = ref('')
+
+// 自定义字段/模板编辑为管理员操作（后端 addCustomField/updateMaterialTypeTemplate 为 ADMIN only）
+const { isAdmin } = useAuth()
 
 // 模板：{ [material_type]: field_keys[] }，响应式对象
 const templateMap = reactive({})

@@ -25,11 +25,19 @@ logger = logging.getLogger(__name__)
 
 
 def _state_secret() -> bytes:
-    """state 签名密钥（进程级，重启后失效；生产建议配置 AUTH_TOKEN_SECRET 复用）。"""
+    """state 签名密钥（进程级，重启后失效；生产建议配置 AUTH_TOKEN_SECRET 复用）。
+
+    生产模式（RUN_MODE=production）下未配置密钥直接拒绝 SSO（与 auth/tokens.py
+    的硬失败策略一致），杜绝硬编码弱密钥被伪造 state。
+    """
     import os
     configured = os.getenv("AUTH_TOKEN_SECRET", "")
     if configured:
         return configured.encode("utf-8")
+    if os.getenv("RUN_MODE", "").lower() == "production":
+        raise RuntimeError(
+            "SSO state 签名密钥缺失：生产模式必须配置 AUTH_TOKEN_SECRET（与登录 token 同源）"
+        )
     return b"insecure-sso-state"
 
 
@@ -109,7 +117,11 @@ def _decode_part(part: str) -> dict:
 
 
 def _extract_claims(cfg: SSOConfig, token_resp: dict) -> dict:
-    """从 token 响应提取用户 claims（优先 ID token，其次 userinfo 或 access 解析）。"""
+    """从 token 响应提取用户 claims（优先 ID token，其次 userinfo 或 access 解析）。
+
+    注：仅解码 payload，不校验签名/JWKS——生产接入真实 IdP 时必须在网关/IdP 侧
+    保证 token 端点经 TLS 且 code 交换安全；当前主要用于受信任 IdP 会话中继场景。
+    """
     id_token = token_resp.get("id_token")
     if id_token:
         try:

@@ -2,7 +2,7 @@
   <!-- P1-2：统一 AI 输出元信息条（置信度/假设/证据/人工复核），不可隐藏 -->
   <div class="ai-output-meta" :class="{ compact }">
     <div class="meta-line">
-      <a-tooltip :title="`置信度：${confidencePct}%（${confidenceLevelText}）`">
+      <a-tooltip v-if="confidencePct != null" :title="`置信度：${confidencePct}%（${confidenceLevelText}）`">
         <span class="conf-wrap">
           <span class="conf-label">置信度</span>
           <a-progress
@@ -15,6 +15,7 @@
           <a-tag :color="confidenceColor" class="conf-tag">{{ confidencePct }}%</a-tag>
         </span>
       </a-tooltip>
+      <span v-else class="conf-label">置信度未知</span>
       <a-tag v-if="agentName" color="orange" size="small">{{ agentName }}</a-tag>
       <a-tag v-if="model" size="small">{{ model }}</a-tag>
       <a-tag v-if="strategy" size="small">{{ strategy }}</a-tag>

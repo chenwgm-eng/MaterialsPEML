@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
 
 from ..db import get_engine
 from ..mdm.reference_dict import ReferenceDictStore
-from .models import ReleaseCard
+from .models import ReleaseCard, _default_human_responsibility
 
 
-# 放行卡状态迁移图（Q10/审查补强）：draft 可提交或直接裁决，decided 为终态
+# 放行卡状态迁移图（Q10/审查补强）：与 mdm.status_codes(release_card) 对齐
+# （draft / pending_review / decided）；draft 可提交或直接裁决，decided 为终态
 RELEASE_CARD_TRANSITIONS: dict[str, set[str]] = {
-    "draft": {"pending", "decided"},
-    "pending": {"decided"},
+    "draft": {"pending_review", "decided"},
+    "pending_review": {"decided"},
     "decided": set(),
+    # 兼容历史数据中的旧值（若有存量 pending 记录）
+    "pending": {"decided"},
 }
 
 
@@ -117,6 +121,53 @@ class ReleaseCardStore:
                     "candidate_id": card.candidate_id,
                     "title": card.title,
                     "recommendation": card.recommendation,
+                    "status": card.status,
+                    "card_json": self._serialize(card),
+                    "updated_at": card.updated_at.isoformat(),
+                    "card_id": card.card_id,
+                },
+            )
+        return card
+
+    def rollback_decided(self, card_id: str, reason: str) -> ReleaseCard:
+        """补偿专用：decided → pending_review 的唯一合法回退通道。
+
+        RELEASE_CARD_TRANSITIONS 中 decided 是终态，正常业务路径禁止回退；
+        本方法仅用于审批 agree 后候选回写失败的补偿场景（见 router.review_release_card），
+        绕过状态机直改，并在 provenance.compensations 留痕以便审计。
+        行锁 + 同事务读改写，避免补偿期间的并发裁决。
+        """
+        with self.engine.begin() as conn:
+            row = conn.execute(
+                text("SELECT card_json FROM release_card.release_cards WHERE card_id = :card_id FOR UPDATE"),
+                {"card_id": card_id},
+            ).fetchone()
+            if row is None:
+                raise ValueError(f"放行卡 {card_id} 不存在")
+            card_json = row[0]
+            card = ReleaseCard.model_validate(
+                card_json if isinstance(card_json, dict) else json.loads(card_json)
+            )
+            if card.status != "decided":
+                raise ValueError(
+                    f"放行卡 {card_id} 当前状态为 {card.status}，仅 decided 可补偿回退"
+                )
+            now = datetime.now(timezone.utc)
+            card.status = "pending_review"
+            card.human_responsibility = _default_human_responsibility()
+            card.updated_at = now
+            provenance = dict(card.provenance or {})
+            compensations = list(provenance.get("compensations") or [])
+            compensations.append({"at": now.isoformat(), "reason": reason})
+            provenance["compensations"] = compensations
+            card.provenance = provenance
+            self._validate_status(card.status)
+            conn.execute(
+                text("""UPDATE release_card.release_cards
+                   SET status = :status, card_json = CAST(:card_json AS JSONB),
+                       updated_at = :updated_at
+                   WHERE card_id = :card_id"""),
+                {
                     "status": card.status,
                     "card_json": self._serialize(card),
                     "updated_at": card.updated_at.isoformat(),

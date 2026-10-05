@@ -429,7 +429,8 @@ async function loadUsers() {
     const list = Array.isArray(res) ? res : (res?.users || [])
     userOptions.value = list.map(u => ({
       label: u.display_name || u.username,
-      value: u.user_id,
+      // 与 Projects.vue 一致：id 或 user_id 均可（后端 brief 可能只返回 id）
+      value: u.id || u.user_id,
     }))
   } catch {
     userOptions.value = []
@@ -658,9 +659,9 @@ function onBack() {
   router.push('/projects')
 }
 
-// 嵌入模式下"继续新建下一个"：重置表单回到阶段 1
+// 嵌入模式下"继续新建下一个"：重置表单回到阶段 1（必须保留全部表单键，isFormValid 依赖它们）
 function onResetForEmbedded() {
-  form.value = { name: '', goal: '', end_date: '' }
+  form.value = { name: '', goal: '', target_application: '', owner: '', end_date: '' }
   tasks.value = []
   savedProjectName.value = ''
   transitionName.value = 'slide-prev'

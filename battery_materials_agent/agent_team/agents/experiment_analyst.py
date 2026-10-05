@@ -45,7 +45,9 @@ class ExperimentAnalystAgent:
         main_prop = max(groups.keys(), key=lambda p: len(groups[p]))
         main_records = groups[main_prop]
 
-        values = [float(self._get(r, "value")) for r in main_records if self._get(r, "value") is not None]
+        # 修复：过滤 value=None 时同步过滤记录，避免 zip(records, values) 错位导致异常归因错误
+        main_records = [r for r in main_records if self._get(r, "value") is not None]
+        values = [float(self._get(r, "value")) for r in main_records]
         if not values:
             return self._empty_result(f"属性 {main_prop} 无有效数值")
 

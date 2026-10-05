@@ -25,8 +25,12 @@ export const useProjectContextStore = defineStore('projectContext', () => {
     try {
       const res = await listProjects()
       projectList.value = Array.isArray(res) ? res : (res.projects || res.items || [])
-      // 默认选中第一个项目
-      if (projectList.value.length > 0 && !currentProject.value) {
+      // 默认选中第一个项目；但用户显式选择过「全部项目」时（flag 存在）不自动强切
+      let allFlag = false
+      try {
+        allFlag = localStorage.getItem('currentProjectAll') === '1'
+      } catch { /* ignore */ }
+      if (projectList.value.length > 0 && !currentProject.value && !allFlag) {
         setCurrentProject(projectList.value[0])
       } else if (projectList.value.length > 0 && currentProject.value) {
         // 切换后若旧的项目不在列表中，重置为第一个
@@ -49,6 +53,7 @@ export const useProjectContextStore = defineStore('projectContext', () => {
         localStorage.removeItem('currentProject')
         localStorage.removeItem('currentProjectId')
         localStorage.removeItem('currentProjectName')
+        localStorage.setItem('currentProjectAll', '1')
       } catch {
         /* ignore */
       }
@@ -60,6 +65,7 @@ export const useProjectContextStore = defineStore('projectContext', () => {
       // 保留 id/name 冗余键以兼容旧逻辑读取
       localStorage.setItem('currentProjectId', project.project_id)
       localStorage.setItem('currentProjectName', project.name || '')
+      localStorage.removeItem('currentProjectAll')
     } catch {
       // ignore
     }

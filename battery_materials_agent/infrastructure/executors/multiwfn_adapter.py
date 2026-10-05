@@ -386,8 +386,8 @@ class MultiwfnAdapter(ExecutionAdapter):
     def _run_multiwfn_esp_surface(self, input_file: str, file_format: str, surface_type: str) -> dict[str, Any]:
         """通过 Multiwfn stdin 管道驱动 ESP 表面统计。
 
-        实际实现中此处会构造 Multiwfn 输入序列并解析输出。
-        占位版本返回模拟数据。
+        注意：当前为占位版本（返回模拟数据），调用方必须按 ADR-0001 语义
+        将结果标记为 estimated/degraded，不得以真实计算置信度呈现。
         """
         return {
             "min": -25.4,
@@ -396,6 +396,9 @@ class MultiwfnAdapter(ExecutionAdapter):
             "variance": 120.5,
             "positive_area_pct": 32.1,
             "negative_area_pct": 67.9,
+            # ADR-0001：占位模拟，非真实 Multiwfn 输出
+            "simulated_placeholder": True,
+            "note": "Multiwfn 真实执行尚未接入，当前为占位模拟值",
         }
 
     def _run_multiwfn_esp_area(self, input_file: str, file_format: str, surface_type: str, bins: int) -> dict[str, Any]:

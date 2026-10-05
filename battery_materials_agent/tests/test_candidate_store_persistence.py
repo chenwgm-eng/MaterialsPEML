@@ -98,6 +98,29 @@ class CandidateStorePersistenceTest(unittest.TestCase):
         found = self.store.find_by_origin_temp_id("no-such-" + uuid.uuid4().hex[:8])
         self.assertIsNone(found)
 
+    # ── MINOR#7：冲突 upsert 不得回卷已推进的候选状态 ──
+    def test_upsert_conflict_preserves_workflow_status(self):
+        """重复 save 同一 candidate_id（默认 screening 状态）不得把
+        已推进到 feasible 的候选状态回卷——状态只能经 update_status 状态机迁移。"""
+        from battery_materials_agent.experiment.candidate_store import CandidateStatus
+        target_app = "app-status-" + uuid.uuid4().hex[:8]
+        s1 = self.store.save(self._mk("LiFePO4", target_app), dedup=False)
+        self.assertTrue(self.store.update_status(
+            s1.candidate_id, CandidateStatus.FEASIBLE.value, actor_operation_roles=None,
+        ))
+        # 以全新默认对象重放同一 candidate_id（模拟重复生成/回写路径）
+        replay = CandidateRecord(
+            candidate_id=s1.candidate_id,
+            candidate_type="crystal",
+            name="LiFePO4",
+            smiles="",
+            source="test",
+            data={"formula": "LiFePO4", "target_application": target_app},
+        )
+        self.store.save(replay, dedup=False)
+        rec_after = self.store.get(s1.candidate_id)
+        self.assertEqual(rec_after.status, CandidateStatus.FEASIBLE.value)
+
     def test_find_by_origin_temp_id_empty_returns_none(self):
         self.assertIsNone(self.store.find_by_origin_temp_id(""))
 

@@ -186,7 +186,7 @@
             :total-count="confirmedSteps.length || plan?.steps?.length || 0"
             :completed-count="completedSteps.length"
             :warning-count="warningSteps.length"
-            @view-runs="$router.push('/orchestration/runs')"
+            @view-runs="$router.push('/orchestration')"
             @run-again="onReset"
             @rerun-tool="onRerunTool"
           />
@@ -246,7 +246,7 @@
           <a-collapse
             v-else
             class="team-collapse"
-            :active-key="teamRoleKeys"
+            :default-active-key="teamRoleKeys"
             :bordered="false"
           >
             <a-collapse-panel

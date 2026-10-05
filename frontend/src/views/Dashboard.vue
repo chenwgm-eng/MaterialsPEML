@@ -43,6 +43,21 @@
     <div class="page-container dashboard-body">
       <!-- 研究员首页 -->
       <template v-if="currentRole === 'researcher'">
+        <!-- 首次使用引导（Q12 配套：学习成本趋近 0 的一步说明，关闭后不再显示） -->
+        <a-alert v-if="showOnboarding" type="info" show-icon closable class="onboarding-banner" @close="dismissOnboarding">
+          <template #message>
+            <div class="onboarding-content">
+              <b>从一句话开始：</b>
+              在「研发工作台」输入研发目标（如“开发冲击强度 ≥ 8 kJ/m² 的玻纤增强 PA6”），
+              系统自动解析材料体系与性能约束并生成研发计划；也可直接点击下方入口。
+              <div class="onboarding-actions">
+                <a-button size="small" type="primary" @click="router.push('/research')">研发工作台</a-button>
+                <a-button size="small" @click="router.push('/workbench')">材料设计</a-button>
+                <a-button size="small" @click="router.push('/experiment-workbench')">实验工作台</a-button>
+              </div>
+            </div>
+          </template>
+        </a-alert>
         <div class="role-panel researcher-panel">
           <!-- 最近参与的项目 -->
           <section class="section-block">
@@ -757,8 +772,6 @@ import {
   InboxOutlined,
   ImportOutlined,
   WarningOutlined,
-  DollarOutlined,
-  SafetyOutlined,
   SafetyCertificateOutlined,
   ToolOutlined,
 } from '@ant-design/icons-vue'
@@ -848,6 +861,18 @@ const experimenterData = ref({
 
 // 管理员判断（控制底部指标显示不同视角）+ 当前角色：统一走 useAuth composable
 const { isAdmin, currentRole } = useAuth()
+
+// 首次使用引导（Q12）：研究员首次登录显示一句"从哪开始"，关闭后本地记住
+const ONBOARDING_KEY = 'battery_dashboard:onboarded_v1'
+const showOnboarding = ref(!localStorage.getItem(ONBOARDING_KEY))
+function dismissOnboarding() {
+  showOnboarding.value = false
+  try {
+    localStorage.setItem(ONBOARDING_KEY, '1')
+  } catch {
+    /* localStorage 不可用时仅本次会话隐藏 */
+  }
+}
 
 // 待办与预警：根据角色和现有 stats 数据生成
 const todoItems = computed(() => {
@@ -986,11 +1011,13 @@ async function fetchRecentRuns() {
 }
 
 // ===== 各角色面板独立数据加载 =====
-// 统一从可能为数组或 {items:[...]} 的响应中提取数组
+// 统一从可能为数组或 {items:[...]}/{candidates:[...]}/{budgets:[...]} 的响应中提取数组
 function toArray(resp) {
   if (Array.isArray(resp)) return resp
   if (resp && Array.isArray(resp.items)) return resp.items
   if (resp && Array.isArray(resp.data)) return resp.data
+  if (resp && Array.isArray(resp.candidates)) return resp.candidates
+  if (resp && Array.isArray(resp.budgets)) return resp.budgets
   return []
 }
 
@@ -1165,10 +1192,10 @@ function projectProgress(p) {
   return 0
 }
 
-// 预算使用率
+// 预算使用率（后端 /control-plane/budgets 行字段为 settled/limit，语义=已结算/上限）
 function budgetUsage(b) {
-  const used = b.used_amount ?? b.used ?? 0
-  const total = b.total_amount ?? b.budget ?? b.allocated ?? 0
+  const used = b.settled ?? b.used_amount ?? b.used ?? 0
+  const total = b.limit ?? b.total_amount ?? b.budget ?? b.allocated ?? 0
   if (total <= 0) return 0
   return Math.round((used / total) * 100)
 }
@@ -1274,6 +1301,20 @@ onUnmounted(() => {
   background: var(--light-bg);
   color: var(--text-primary);
   color-scheme: light;
+}
+
+/* 首次使用引导 banner */
+.onboarding-banner {
+  margin-bottom: 16px;
+}
+.onboarding-content {
+  line-height: 1.8;
+}
+.onboarding-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* ===== Hero ===== */

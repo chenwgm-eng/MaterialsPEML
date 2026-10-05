@@ -527,6 +527,8 @@ class AgenticExecutor:
         造成编排执行永久卡死）。
         """
         if self._capability_router is None:
+            # 未配置契约路由的环境（如最小化测试）显式跳过门禁；
+            # 生产路径由 api.py startup 保证 router 注入
             return False
         # 把 tool_name 当作 capability alias 来解析（MCP 工具名与 alias 一致）
         try:
@@ -538,7 +540,14 @@ class AgenticExecutor:
             if candidates and candidates[0].requires_human_review:
                 return True
         except Exception:
-            pass
+            # fail-closed：契约路由存在但评估失败时，无法证明该工具无需人工审查，
+            # 必须按需审查处理而非静默放行（此前 except pass 会跳过高危门禁）
+            import logging
+            logging.getLogger(__name__).warning(
+                "CapabilityRouter evaluate failed for %s; failing closed to human review",
+                tool_name, exc_info=True,
+            )
+            return True
         return False
 
     async def _wait_for_approval(
@@ -686,10 +695,18 @@ class AgenticExecutor:
                         best.contract_status or "unknown", _degraded_info,
                     )
             except Exception as e:
+                # fail-closed：契约门禁评估本身出错时拒绝执行（而非降级直调），
+                # 防止攻击者/故障诱导门禁旁路；需要恢复能力时应修复 Router 而非绕过
                 _cr_logger.warning(
-                    "CapabilityRouter resolve failed for %s: %s (falling back to direct)",
+                    "CapabilityRouter resolve failed for %s: %s (fail-closed, tool blocked)",
                     tool_name, e
                 )
+                return {
+                    "error": f"工具 {tool_name} 契约门禁评估失败，已按安全策略拒绝执行",
+                    "blocked_by": "capability_contract_error",
+                    "tool": tool_name,
+                    "detail": str(e),
+                }
 
         # ── Control Plane gateway routing (with fallback) ──
         if self._cp_tool_gateway is not None:

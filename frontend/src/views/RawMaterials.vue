@@ -859,7 +859,7 @@ const columns = [
   { title: '库存', key: 'inventory_kg', width: 80, className: 'tabular-nums' },
   { title: '单价', key: 'unit_cost', width: 80, className: 'tabular-nums' },
   { title: '供应商', dataIndex: 'supplier', key: 'supplier', width: 80, ellipsis: true },
-  { title: '批次/有效期', key: 'batch_expiry', width: 110, ellipsis: true },
+  { title: '批次/有效期', key: 'batch_expiry', width: 110, ellipsis: true, customRender: ({ record }) => `${record.batch_number || '-'} / ${record.expiry_date || '-'}` },
   { title: 'COA', dataIndex: 'coa_uri', key: 'coa', width: 60 },
   { title: '操作', key: 'action', width: 100, fixed: 'right' },
 ]
@@ -1085,7 +1085,7 @@ async function onSubmitForm() {
   }
 }
 
-// 调用 SCP NameToSMILES 工具，根据物料名称生成 SMILES
+// 根据物料名称生成 SMILES（官方 NameToSMILES 远端故障，已适配为 chemical_structure_analysis skill）
 async function onGenerateSmiles() {
   if (!form.value.name?.trim()) {
     message.warning('请先填写物料名称')
@@ -1093,12 +1093,17 @@ async function onGenerateSmiles() {
   }
   smilesLoading.value = true
   try {
-    const res = await client.post('/scp/tools/NameToSMILES', { name: form.value.name }, { skipErrorNotification: true })
-    const smiles = typeof res === 'string'
-      ? res
-      : (res?.smiles || res?.result || res?.output || '')
-    if (smiles && typeof smiles === 'string') {
-      form.value.smiles = smiles.trim()
+    const res = await client.post('/mcp/tools/chemical_structure_analysis/call', {
+      arguments: { compound_name: form.value.name },
+    }, { skipErrorNotification: true })
+    // skill 输出：output 或 result 中解析 SMILES
+    const output = res?.output || res?.result || res || {}
+    const text = typeof output === 'string'
+      ? output
+      : JSON.stringify(output)
+    const m = text && text.match(/[A-Za-z][A-Za-z0-9@+\-\[\]()\\/.#=~]{2,}/)
+    if (m) {
+      form.value.smiles = m[0].trim()
       message.success('SMILES 生成成功')
     } else {
       message.warning('未获取到 SMILES 结果')

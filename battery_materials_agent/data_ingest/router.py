@@ -236,13 +236,20 @@ def _write_entity(entity_type: str, record: dict) -> str:
         else:
             learning_eligible = bool(raw_learning or False)
 
-        # value 数值解析
-        raw_value = record.get("value") or 0.0
+        # value 数值解析（无法解析时置 None 而非 0.0，避免假 0 数据入库）
+        raw_value = record.get("value")
         try:
-            value_num = float(raw_value)
+            value_num = float(raw_value) if raw_value not in (None, "") else 0.0
         except (TypeError, ValueError):
             value_num = 0.0
 
+        # ADR-0002：property_name 规范化（裸 key → prop.*，FK 保护）+ 溯源
+        from ..api import _normalize_property_name
+        try:
+            prop_canonical = _normalize_property_name(record.get("property_name") or "")
+        except Exception:
+            prop_canonical = ""
+        data_quality = record.get("data_quality") or "estimated"
         result_record = ExperimentResultRecord(
             result_id=result_id,
             experiment_order_id=record.get("experiment_order_id") or "",
@@ -252,7 +259,7 @@ def _write_entity(entity_type: str, record: dict) -> str:
             source_system=record.get("source_system") or "",
             uploaded_by=record.get("uploaded_by") or "",
             uploaded_at=record.get("uploaded_at") or "",
-            property_name=record.get("property_name") or "",
+            property_name=prop_canonical or (record.get("property_name") or ""),
             value=value_num,
             unit=record.get("unit") or "",
             test_method=record.get("test_method") or "",
@@ -265,6 +272,13 @@ def _write_entity(entity_type: str, record: dict) -> str:
             reviewed_at=record.get("reviewed_at") or None,
             learning_eligible=learning_eligible,
             scenario_id=record.get("scenario_id") or "",
+            data_quality=data_quality,
+            provenance=[{
+                "source_type": "data_ingest",
+                "provider": "data_ingest",
+                "model_or_tool": "data_ingest_router",
+                "evidence_level": data_quality,
+            }],
         )
         store.save_result_record(result_record)
         return result_id

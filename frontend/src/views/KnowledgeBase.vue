@@ -200,7 +200,8 @@
                               {{ evidenceLabel(item.evidence_level) }}
                             </a-tag>
                             <span class="confidence">
-                              置信度 {{ (item.confidence * 100).toFixed(0) }}%
+                              <template v-if="item.confidence != null">置信度 {{ (item.confidence * 100).toFixed(0) }}%</template>
+                              <template v-else>置信度 —</template>
                             </span>
                           </div>
                         </div>
@@ -231,7 +232,7 @@
     >
       <a-form layout="vertical">
         <a-form-item label="材料名称" required>
-          <a-input v-model:value="newMaterial.canonical_name" placeholder="如 LLZO、NCM811" />
+          <a-input v-model:value="newMaterial.canonical_name" placeholder="如 PA6、PC/ABS、玻纤增强 PP" />
         </a-form-item>
         <a-form-item label="类别">
           <a-select v-model:value="newMaterial.category" allow-clear>

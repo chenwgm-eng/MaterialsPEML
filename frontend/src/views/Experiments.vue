@@ -179,7 +179,9 @@
                 <span v-else class="text-muted">-</span>
               </template>
               <template v-else-if="column.key === 'source'">
-                <span>{{ sourceTypeLabel(record.source || record.source_type) }}</span>
+                <!-- ADR-0002：按 data_quality/provenance 展示可信度徽标（实测/模拟/估算） -->
+                <EvidenceBadge :level="record.data_quality || (record.provenance && record.provenance[0] && record.provenance[0].evidence_level) || 'estimated'" />
+                <span class="text-muted source-type">{{ sourceTypeLabel(record.source || record.source_type) }}</span>
               </template>
               <template v-else-if="column.key === 'timestamp'">
                 <span class="num">{{ formatDateTime(record.timestamp) }}</span>
@@ -451,6 +453,7 @@ import ResultChart from '@/components/ResultChart.vue'
 import { useMdmDict } from '@/utils/mdmDict'
 import EmptyState from '@/components/EmptyState.vue'
 import SmartLoading from '@/components/SmartLoading.vue'
+import EvidenceBadge from '@/components/EvidenceBadge.vue'
 import { sourceTypeLabel, sourceTypeOptions as ENUM_SOURCE_OPTIONS, qcStatusLabel } from '@/utils/enumLabels'
 
 const experimentsStore = useExperimentsStore()

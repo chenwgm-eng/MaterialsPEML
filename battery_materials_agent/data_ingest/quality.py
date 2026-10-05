@@ -118,10 +118,15 @@ def build_record(row: dict, mapping: dict, entity_type: str) -> tuple[dict, list
         else:
             record[key] = "" if raw is None else str(raw)
     # 单位归一化（有 unit 字段的实体）
+    # v4.1：单位归一化仅对数量类字段（样本/物料数量）强制；实验结果单位（MPa/%/kJ/m2/S/cm 等）
+    # 属于测量值单位，未知时保留原样（后续由实验结果写入路径按 MDM 规范化），不得判 error 拒入
     if "unit" in fields and record.get("unit"):
         normalized = normalize_unit(record["unit"])
         if normalized is None:
-            errors.append(f"单位无法归一化: {record['unit']}")
+            if entity_type == "experiment_result":
+                record["unit"] = str(record["unit"])
+            else:
+                errors.append(f"单位无法归一化: {record['unit']}")
         else:
             record["unit"] = normalized
     return record, errors

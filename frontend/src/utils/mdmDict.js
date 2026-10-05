@@ -57,7 +57,8 @@ async function _load(key, loader) {
       return list
     } catch (e) {
       console.warn(`加载 MDM 字典 ${key} 失败:`, e)
-      _cache[key] = []
+      // 失败不写永久缓存，仅本次返回空；下次调用会重新请求（自愈），
+      // 避免瞬时故障被固化成整会话的空数据导致下拉持续走本地兜底。
       return []
     } finally {
       delete _loading[key]
@@ -83,7 +84,7 @@ async function _loadKeyed(key, subKey, loader) {
       return list
     } catch (e) {
       console.warn(`加载 MDM 字典 ${key} (subKey=${subKey}) 失败:`, e)
-      bucket[subKey] = []
+      // 失败不写永久缓存，仅本次返回空；下次调用会重新请求（自愈）
       return []
     } finally {
       delete _keyedLoading[loadingKey]

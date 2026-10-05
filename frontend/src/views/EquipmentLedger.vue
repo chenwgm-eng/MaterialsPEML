@@ -156,13 +156,13 @@
                 name="name"
                 id="equipment-name-input"
                 autocomplete="off"
-                placeholder="如 电化学工作站…"
+                placeholder="如 万能试验机…"
               />
             </a-form-item>
           </a-col>
           <a-col :span="8">
             <a-form-item label="型号">
-              <a-input v-model:value="form.model" name="model" autocomplete="off" placeholder="如 CHI660E…" :spellcheck="false" />
+              <a-input v-model:value="form.model" name="model" autocomplete="off"                 placeholder="如 万能试验机…" :spellcheck="false" />
             </a-form-item>
           </a-col>
         </a-row>
@@ -280,7 +280,8 @@ const emptyForm = () => ({
   equipment_id: '',
   name: '',
   model: '',
-  category: 'electrochemical',
+  // 与 mdm.classifications 设备分类全码一致（短码会触发 _validate_category 400）
+  category: 'equipment.test',
   serial_number: '',
   location: '',
   status: 'idle',
@@ -292,14 +293,18 @@ const emptyForm = () => ({
 })
 const form = ref(emptyForm())
 
+// 兜底分类：MDM 设备分类全码（equipment.*）
 const categoryOptions = ref([
-  { label: '合成', value: 'synthesis' },
-  { label: '测试', value: 'test' },
-  { label: '分析', value: 'analysis' },
-  { label: '前处理', value: 'pretreatment' },
-  { label: '电化学', value: 'electrochemical' },
-  { label: '表征', value: 'characterization' },
-  { label: '安全', value: 'safety' },
+  { label: '制备设备', value: 'equipment.preparation' },
+  { label: '合成设备', value: 'equipment.synthesis' },
+  { label: '混料设备', value: 'equipment.mixing' },
+  { label: '前处理设备', value: 'equipment.pretreatment' },
+  { label: '涂布设备', value: 'equipment.coating' },
+  { label: '测试设备', value: 'equipment.test' },
+  { label: '表征设备', value: 'equipment.characterization' },
+  { label: '分析设备', value: 'equipment.analysis' },
+  { label: '电化学测试设备', value: 'equipment.electrochemical' },
+  { label: '安全设施', value: 'equipment.safety' },
 ])
 
 const statusOptions = ref([

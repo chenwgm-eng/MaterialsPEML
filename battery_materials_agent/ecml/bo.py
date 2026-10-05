@@ -27,10 +27,14 @@ _DEFAULT_DIRECTION = "maximize"
 
 
 def _direction(property_name: str) -> str:
+    """BO 优化方向：统一引用 material_properties.PROPERTY_DIRECTION（单一可信源）。
+
+    修复：band_gap 此前被误判 minimize，与全局 maximize 矛盾导致推荐方向反。
+    """
+    from ..material_properties import PROPERTY_DIRECTION
+
     p = (property_name or "").lower()
-    if p in ("band_gap", "formation_energy", "energy_above_hull", "stability_gap"):
-        return "minimize"
-    return _DEFAULT_DIRECTION
+    return PROPERTY_DIRECTION.get(p, _DEFAULT_DIRECTION)
 
 
 # ─────────────────────────── 描述符（特征） ───────────────────────────
@@ -151,15 +155,49 @@ def build_descriptors(identifiers: list[str], is_polymer: bool = False) -> np.nd
 
 
 # ─────────────────────────── 材料体系归类 ───────────────────────────
+# v4.1：polymer 族关键词扩展至工程塑料体系（此前仅电池电解质，PP/PA6/PC 会被归类成 P-based）
 _FAMILY_KEYWORDS = [
     ("argyrodite", ["Li6PS5", "LPSCl", "argyrodite"]),
-    ("sulfide", ["Li", "PS", "S", "Li2S", "P2S5"]),
+    # 单字母元素（li/s）不得作关键词：会误匹配任意含该字母的标识（如 "pc/abs" 含 s）
+    ("sulfide", ["li6ps5", "lpscl", "lgps", "li2s", "p2s5", "sulfide"]),
     ("perovskite", ["perovskite", "CsPb", "MAPb"]),
     ("layered_oxide", ["LiCoO2", "LiNi", "NMC", "LiMnO2", "LiFePO4"]),
-    ("polymer", ["PEO", "polym", "PVDF", "PVC", "PAN", "LiTFSI"]),
+    ("polymer", [
+        "PEO", "polym", "PVDF", "PVC", "PAN", "LiTFSI",
+        # v4.1 工程塑料体系
+        "PA6", "PA66", "PA12", "PC", "ABS", "PP", "PBT", "PET", "POM",
+        "PPS", "PPSU", "PEEK", "PLA", "PBAT", "LCP", "TPU", "EVA",
+        "尼龙", "聚酰胺", "聚碳酸酯", "聚丙烯", "聚乙烯", "聚苯乙烯",
+        "聚酯", "玻纤", "碳纤", "阻燃", "增韧", "改性",
+    ]),
     ("spinel", ["spinel", "LiMn2O4", "Li4Ti5O12"]),
     ("halide", ["Li3YCl6", "halide", "Cl6", "Br6"]),
 ]
+
+
+def _is_polymer_candidate(c: dict) -> bool:
+    """判断候选是否为高分子（BO 描述符分派用）。
+
+    优先 material_type 字段；其次按标识特征（psmiles 标记 / 工程塑料关键词）鲁棒兜底，
+    避免工程塑料候选（无 material_type 的历史数据）被错误分派到晶体描述符。
+    """
+    mt = (c.get("material_type") or "").lower()
+    if "polym" in mt or "molecule" in mt:
+        return True
+    ident = (c.get("smiles") or c.get("psmiles") or c.get("formula") or c.get("name") or "").lower()
+    if ident.startswith("polymer(") or "[*]" in ident:
+        return True
+    import re
+    if re.search(
+        r"\b(pa6|pa66|pa12|pc|abs|pp|pbt|pet|pom|pps|ppsu|peek|pla|pbat|lcp|tpu|eva|peo|pvdf|pan|pmma)\b",
+        ident,
+    ):
+        return True
+    polymer_hints = (
+        "尼龙", "聚酰胺", "聚碳酸酯", "聚丙烯", "聚乙烯", "聚苯乙烯",
+        "聚酯", "玻纤", "碳纤", "阻燃", "增韧", "改性塑料", "polym",
+    )
+    return any(h in ident for h in polymer_hints)
 
 
 def classify_family(identifier: str) -> str:
@@ -407,6 +445,10 @@ class BayesianOptimizer:
         from sqlalchemy import text
 
         rows = []
+        # 兼容裸名与 prop.* 前缀（人工/CSV 导入可能未规范化）
+        prop_filter = property_name
+        if not prop_filter.startswith("prop."):
+            prop_filter = f"prop.{prop_filter}"
         with self.engine.connect() as conn:
             # 通过实验任务单关联项目：result_records.experiment_order_id -> experiment_orders.project_id
             sql = text(
@@ -416,14 +458,14 @@ class BayesianOptimizer:
                        r.experiment_order_id, o.project_id AS order_project_id
                 FROM experiment.experiment_result_records r
                 LEFT JOIN experiment.experiment_orders o ON o.order_id = r.experiment_order_id
-                WHERE r.property_name = :prop
+                WHERE (r.property_name = :prop OR r.property_name = :prop_bare)
                   AND (r.material_family = :fam OR r.material_family IS NULL)
                   AND r.value IS NOT NULL
                 ORDER BY r.uploaded_at NULLS LAST
                 """
             )
             rows = conn.execute(
-                sql, {"prop": property_name, "fam": family}
+                sql, {"prop": prop_filter, "prop_bare": property_name, "fam": family}
             ).mappings().all()
 
         proj = (project_id or "").strip()
@@ -515,12 +557,11 @@ class BayesianOptimizer:
 
         # ---- 单目标 ----
         idents = [c.get("smiles") or c.get("psmiles") or c.get("formula") or c.get("name") or "" for c in candidates]
-        is_polymer = any(
-            "polym" in (c.get("material_type") or "")
-            or "polymer" in ((c.get("smiles") or c.get("psmiles") or c.get("formula") or "")).lower()
-            for c in candidates
-        )
-        X = build_descriptors([i for i in idents if i], is_polymer)
+        is_polymer = any(_is_polymer_candidate(c) for c in candidates)
+        # 修复：空标识候选剔除时同步保留下标映射，避免 X 行数与 candidates 错位（IndexError）
+        valid_idx = [i for i, ident in enumerate(idents) if ident]
+        valid_idents = [idents[i] for i in valid_idx]
+        X = build_descriptors(valid_idents, is_polymer)
         X_pool = build_descriptors([p.identifier for p in pool.points], is_polymer)
         if X is None or X_pool is None or X.shape[1] != X_pool.shape[1]:
             return Recommendation(
@@ -541,31 +582,33 @@ class BayesianOptimizer:
         best = float(np.max(y)) if direction == "maximize" else float(np.min(y))
         scores = _acquisition_score(mean, std, best, acquisition, explore, direction)
 
-        # 成本软权重 + 预算硬约束
+        # 成本软权重 + 预算硬约束（下标基于 valid_idx 对齐 X 行）
         cost_col: list[float] = []
-        for c in candidates:
+        for vi in valid_idx:
+            c = candidates[vi]
             v = c.get(cost_field)
             cost_col.append(float(v) if isinstance(v, (int, float)) and v > 0 else 0.0)
         ranking = []
-        for i, cand in enumerate(candidates):
-            cost = cost_col[i]
+        for row, vi in enumerate(valid_idx):
+            cost = cost_col[row]
             if budget is not None and cost > 0 and cost > budget:
                 continue  # 硬约束：超出预算剔除
-            effect = scores[i] / (1.0 + cost) if cost > 0 else scores[i]
-            ranking.append((effect, i))
+            effect = scores[row] / (1.0 + cost) if cost > 0 else scores[row]
+            ranking.append((effect, vi))
         ranking.sort(key=lambda x: x[0], reverse=True)
 
         top = min(max(1, num_candidates), 10, len(ranking))
         rec_candidates: list[dict[str, Any]] = []
         for eff, i in ranking[:top]:
+            row = valid_idx.index(i)
             cand = dict(candidates[i])
-            cand["expected_performance"] = float(mean[i])
-            cand["uncertainty"] = float(std[i])
-            cand["expected_improvement"] = float(max(scores[i], 0.0))
-            cand["strategy"] = "exploration" if std[i] > (np.max(std) if len(std) else 0) * 0.7 else "exploitation"
+            cand["expected_performance"] = float(mean[row])
+            cand["uncertainty"] = float(std[row])
+            cand["expected_improvement"] = float(max(scores[row], 0.0))
+            cand["strategy"] = "exploration" if std[row] > (np.max(std) if len(std) else 0) * 0.7 else "exploitation"
             cand["acquisition_score"] = float(eff)
             cand["recommendation_reason"] = _explain_single(
-                cand, mean[i], std[i], best, direction, cost, len(pool.points)
+                cand, mean[row], std[row], best, direction, cost, len(pool.points)
             )
             rec_candidates.append(cand)
 
@@ -583,12 +626,11 @@ class BayesianOptimizer:
     def _recommend_multi(self, family, candidates, objectives, explore, budget, cost_field, model_family_override, include_cross_project, project_id, num_candidates=10):
         n_obj = len(objectives)
         idents = [c.get("smiles") or c.get("psmiles") or c.get("formula") or c.get("name") or "" for c in candidates]
-        is_polymer = any(
-            "polym" in (c.get("material_type") or "")
-            or "polymer" in ((c.get("smiles") or c.get("psmiles") or c.get("formula") or "")).lower()
-            for c in candidates
-        )
-        X = build_descriptors([i for i in idents if i], is_polymer)
+        is_polymer = any(_is_polymer_candidate(c) for c in candidates)
+        # 修复：空标识候选剔除时同步保留下标映射（与单目标一致），避免行数错位
+        valid_idx = [i for i, ident in enumerate(idents) if ident]
+        valid_idents = [idents[i] for i in valid_idx]
+        X = build_descriptors(valid_idents, is_polymer)
         if X is None:
             return Recommendation(candidates=[], reasoning="候选描述符无法派生，跳过 EHVI。", model={}, acquisition={"name": "ehvi"}, pool={})
 
@@ -623,8 +665,8 @@ class BayesianOptimizer:
             model.fit(X_pool, y)
             fitted.append((obj.property, family_sel, model, X_pool))
 
-        # 待预测候选：每个目标用其自己的代理模型评分
-        predicted = np.zeros((len(candidates), n_obj))
+        # 待预测候选：每个目标用其自己的代理模型评分（行数对齐 valid_idx）
+        predicted = np.zeros((len(valid_idx), n_obj))
         for j, (_, _, model, _) in enumerate(fitted):
             predicted[:, j] = model.predict(X)[0]
 
@@ -651,23 +693,24 @@ class BayesianOptimizer:
         reference = observed_norm.min(axis=0) - 1.0
         scores = _ehvi_scores(predicted_norm, observed_norm, reference)
 
-        cost_col = [float(c.get(cost_field)) if isinstance(c.get(cost_field), (int, float)) and c.get(cost_field) > 0 else 0.0 for c in candidates]
+        cost_col = [float(c.get(cost_field)) if isinstance(c.get(cost_field), (int, float)) and c.get(cost_field) > 0 else 0.0 for vi in valid_idx for c in [candidates[vi]]]
         ranking = []
-        for i, cand in enumerate(candidates):
-            cost = cost_col[i]
+        for row, vi in enumerate(valid_idx):
+            cost = cost_col[row]
             if budget is not None and cost > 0 and cost > budget:
                 continue
-            ranking.append((scores[i] / (1.0 + cost), i))
+            ranking.append((scores[row] / (1.0 + cost), vi))
         ranking.sort(key=lambda x: x[0], reverse=True)
 
         model_meta = [{"property": prop, "family": fam, "n_samples": len(pools[prop].points)} for prop, fam, _, _ in fitted]
         rec = []
         for eff, i in ranking[:min(max(1, num_candidates), 10)]:
+            row = valid_idx.index(i)
             cand = dict(candidates[i])
-            cand["expected_improvement"] = float(max(scores[i], 0.0))
+            cand["expected_improvement"] = float(max(scores[row], 0.0))
             cand["acquisition_score"] = float(eff)
-            cand["predicted_objectives"] = {obj.property: float(predicted[i, j]) for j, obj in enumerate(objectives)}
-            cand["recommendation_reason"] = _explain_multi(cand, objectives, predicted[i])
+            cand["predicted_objectives"] = {obj.property: float(predicted[row, j]) for j, obj in enumerate(objectives)}
+            cand["recommendation_reason"] = _explain_multi(cand, objectives, predicted[row])
             rec.append(cand)
         return Recommendation(
             candidates=rec,

@@ -51,24 +51,45 @@
       </div>
     </a-card>
 
-    <!-- 阶段 1：目标输入 -->
+    <!-- 阶段 1：目标输入（双栏布局：左侧研发目标，右侧配置参数） -->
     <a-card v-if="phase === 'input'" :bordered="false" class="phase-card">
       <div class="phase-badge">阶段 1 · 目标输入</div>
 
-      <a-form layout="vertical" size="small">
-        <a-form-item label="研发目标" required>
-          <!-- Q12 智能目标框：一句话目标 + 场景模板 + 智能解析回填 -->
-          <GoalIntentInput
-            id="rw-goal-input"
-            v-model="form.goal"
-            :rows="3"
-            @parsed="onGoalParsed"
-          />
-          <div class="form-help">描述越具体，生成的计划越贴合需求；可包含期望性能、应用场景等。</div>
-        </a-form-item>
+      <div class="input-layout">
+        <!-- 左栏：研发目标（核心输入） -->
+        <div class="input-layout-left">
+          <a-form layout="vertical" size="small">
+            <a-form-item label="研发目标" required>
+              <GoalIntentInput
+                id="rw-goal-input"
+                v-model="form.goal"
+                :rows="3"
+                @parsed="onGoalParsed"
+              />
+              <div class="form-help">描述越具体，生成的计划越贴合需求；可包含期望性能、应用场景等。</div>
+            </a-form-item>
 
-        <a-row :gutter="16">
-          <a-col :span="8">
+            <a-form-item>
+              <a-button
+                id="rw-generate-btn"
+                type="primary"
+                size="large"
+                block
+                :loading="submitting"
+                :disabled="!form.goal.trim()"
+                @click="onGeneratePlan"
+              >
+                <template #icon><ThunderboltOutlined /></template>
+                {{ submitting ? 'AI 正在生成计划…' : '生成研发计划' }}
+              </a-button>
+              <span v-if="submitting" class="app-loading-hint">AI 正在分析目标并匹配工具链，通常需要 10-30 秒</span>
+            </a-form-item>
+          </a-form>
+        </div>
+
+        <!-- 右栏：配置参数 -->
+        <div class="input-layout-right">
+          <a-form layout="vertical" size="small">
             <a-form-item label="材料体系">
               <a-select
                 id="rw-scope-select"
@@ -82,10 +103,21 @@
                   :value="opt.value"
                 >{{ opt.label }}</a-select-option>
               </a-select>
-              <div class="form-help">体系由系统设置中的默认研发领域驱动（系统设置 → 研发领域）。</div>
             </a-form-item>
-          </a-col>
-          <a-col :span="8">
+
+            <a-form-item label="关联项目">
+              <a-select
+                id="rw-project-select"
+                v-model:value="form.project_id"
+                placeholder="选择项目"
+                :loading="projectContextStore.loading"
+                show-search
+                :filter-option="filterProjectOption"
+                :options="projectOptions"
+                @change="onProjectChange"
+              />
+            </a-form-item>
+
             <a-form-item label="执行偏好">
               <a-radio-group
                 id="rw-preference-radio"
@@ -107,15 +139,12 @@
                 class="preference-alert"
               />
             </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="项目 ID">
-              <!-- 项目 ID 自动从全局当前项目上下文获取（ProjectContextBar 中切换项目即同步） -->
-              <a-input :value="currentProjectDisplay" readonly placeholder="未选择项目" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+          </a-form>
+        </div>
+      </div>
 
+      <!-- 目标属性：跨整行，属性编辑器需要较宽空间 -->
+      <a-form layout="vertical" size="small" class="props-form">
         <a-form-item label="目标属性">
           <div class="prop-editor">
             <div class="prop-row prop-header">
@@ -134,7 +163,7 @@
                 show-search
                 :options="propOptions"
                 :filter-option="filterPropOption"
-                placeholder="从属性字典选择"
+                placeholder="选择"
                 class="prop-name"
                 aria-label="属性名"
               />
@@ -169,23 +198,56 @@
               添加目标属性
             </a-button>
           </div>
-          <div class="form-help">属性名统一取自属性字典（材料属性）；方向和阈值用于筛选与排序候选材料。最小/最大值支持科学计数法（如 1e-3 表示 1×10⁻³）。</div>
-        </a-form-item>
-
-        <a-form-item>
-          <a-button
-            id="rw-generate-btn"
-            type="primary"
-            :loading="submitting"
-            :disabled="!form.goal.trim()"
-            @click="onGeneratePlan"
-          >
-            <template #icon><ThunderboltOutlined /></template>
-            {{ submitting ? 'AI 正在生成计划…' : '生成研发计划' }}
-          </a-button>
-          <span v-if="submitting" class="app-loading-hint">AI 正在分析目标并匹配工具链，通常需要 10-30 秒</span>
+          <div class="form-help">属性名取自属性字典；方向和阈值用于筛选候选材料。</div>
         </a-form-item>
       </a-form>
+    </a-card>
+
+    <!-- 历史研发记录：进入页面即展示过往研发请求与结果，点击可恢复 -->
+    <a-card v-if="phase === 'input'" :bordered="false" class="phase-card history-card">
+      <SectionHeader title="历史研发记录">
+        <template #extra>
+          <a-button size="small" type="link" :loading="historyLoading" @click="loadHistory">刷新</a-button>
+        </template>
+      </SectionHeader>
+      <a-spin :spinning="historyLoading">
+        <a-list
+          v-if="researchHistory.length"
+          :data-source="researchHistory"
+          size="small"
+          :split="false"
+          class="history-list"
+        >
+          <template #renderItem="{ item }">
+            <a-list-item
+              class="history-item"
+              role="button"
+              tabindex="0"
+              :aria-label="`查看研发记录 ${item.goal}`"
+              @click="onRestoreRequest(item)"
+              @keydown.enter.prevent="onRestoreRequest(item)"
+            >
+              <div class="history-main">
+                <div class="history-goal">{{ item.goal }}</div>
+                <div class="history-meta">
+                  <a-tag size="small" :color="planStatusColor(item.status)">{{ planStatusLabel(item.status) }}</a-tag>
+                  <span v-if="item.material_system" class="history-chip">{{ item.material_system }}</span>
+                  <span v-if="item.project_id" class="history-chip">项目 {{ item.project_id }}</span>
+                  <span class="history-time">{{ formatHistoryDate(item.created_at) }}</span>
+                </div>
+              </div>
+              <a-tag size="small" color="blue" class="history-restore">查看</a-tag>
+            </a-list-item>
+          </template>
+        </a-list>
+        <EmptyAction
+          v-else
+          title="暂无历史研发记录"
+          description="完成一次研发后，这里会沉淀该请求的目标、计划与结果，可随时恢复。"
+          action-text=""
+          :icon="markRaw(InboxOutlined)"
+        />
+      </a-spin>
     </a-card>
 
     <!-- 阶段 2：系统计划卡 -->
@@ -510,10 +572,22 @@ watch(
   { immediate: true },
 )
 
-const currentProjectDisplay = computed(() => {
-  const p = projectContextStore.currentProject
-  return p?.name || p?.project_id || ''
-})
+// 关联项目下拉：以项目名称为选项，value 为 project_id
+const projectOptions = computed(() =>
+  projectContextStore.projectList.map((p) => ({
+    value: p.project_id,
+    label: p.name || p.project_id,
+  })),
+)
+function filterProjectOption(input, option) {
+  return (option.label || '').toLowerCase().includes((input || '').toLowerCase())
+}
+// 用户在下拉选择项目后，同步全局项目上下文（供下游模块/派生路由共用）
+function onProjectChange(pid) {
+  if (!pid) return
+  const p = projectContextStore.projectList.find((x) => x.project_id === pid)
+  if (p) projectContextStore.setCurrentProject(p)
+}
 
 const currentPreferenceDescription = computed(() => {
   const mode = EXECUTION_PREFERENCE_MODES.find((m) => m.value === form.value.preference)
@@ -599,6 +673,12 @@ onMounted(() => {
   loadPropDictionary()
   loadMaterialSystems()
   loadDomainPacks()
+  // 关联项目下拉需要项目列表（导航栏若已加载则复用）
+  if (!projectContextStore.projectList.length) {
+    projectContextStore.fetchProjects()
+  }
+  // 进入页面即加载历史研发记录，展示过往研发成果
+  loadHistory()
 })
 
 onUnmounted(() => {
@@ -746,6 +826,7 @@ async function onConfirmExecute() {
         }
       } catch (err) {
         executing.value = false
+        phase.value = 'confirm' // 轮询失败回退确认页，避免停留空执行态
         message.error('轮询失败，请稍后重试或联系管理员')
         taskStore.updateTask(taskId, { status: 'failed', detail: err.message || '' })
         taskStore.prune()
@@ -758,6 +839,7 @@ async function onConfirmExecute() {
     pollTimer = setTimeout(poll, 1000) // 1 秒后开始首次轮询
   } catch (err) {
     executing.value = false
+    phase.value = 'confirm' // 启动失败回退确认页
     message.error('启动失败，请稍后重试或联系管理员')
     taskStore.updateTask(taskId, { status: 'failed', detail: err.message || '' })
     taskStore.prune()
@@ -804,6 +886,68 @@ function onReset() {
   explainData.value = null
   requestId.value = ''
   scenarioId.value = ''
+}
+
+// ── 历史研发记录：进入页面展示过往请求，点击恢复 ──
+const researchHistory = ref([])
+const historyLoading = ref(false)
+
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    const res = await researchApi.listRequests(20)
+    researchHistory.value = res?.requests || []
+  } catch {
+    researchHistory.value = []
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function onRestoreRequest(item) {
+  try {
+    const res = await researchApi.getRequest(item.request_id)
+    const req = res?.request
+    if (!req) return
+    // 回填表单（目标 / 材料体系 / 目标属性 / 偏好 / 项目）
+    form.value.goal = req.goal || ''
+    if (req.material_system) form.value.material_system = req.material_system
+    if (req.material_scope === 'polymer' || req.material_scope === 'crystal') {
+      form.value.material_scope = req.material_scope
+    }
+    if (Array.isArray(req.target_properties) && req.target_properties.length) {
+      form.value.target_properties = req.target_properties.map((p) => ({
+        name: p.name || '',
+        direction: p.direction || 'maximize',
+        min: p.min ?? null,
+        max: p.max ?? null,
+        weight: p.weight ?? 0.5,
+        _minText: '',
+        _maxText: '',
+      }))
+    }
+    if (req.preference) form.value.preference = req.preference
+    if (req.project_id) form.value.project_id = req.project_id
+    requestId.value = item.request_id
+    scenarioId.value = req.scenario_id || ''
+    // 恢复最新计划并跳转到系统计划阶段
+    const plans = res?.plans || []
+    plan.value = plans.length ? plans[plans.length - 1] : null
+    runResult.value = null
+    explainData.value = null
+    executing.value = false
+    phase.value = 'confirm'
+    message.success('已恢复该研发请求，可查看计划或重新执行')
+  } catch {
+    // 拦截器已提示
+  }
+}
+
+function formatHistoryDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString('zh-CN', { hour12: false })
 }
 
 // ── P3-2：派生子任务入口 ──
@@ -997,6 +1141,88 @@ function shortTime(ts) {
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-card);
+}
+
+/* 历史研发记录 */
+.history-card {
+  margin-top: var(--space-md);
+}
+.history-list {
+  padding: 0 4px;
+}
+.history-item {
+  cursor: pointer;
+  padding: 10px 12px !important;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent !important;
+  transition: background 0.2s;
+}
+.history-item:hover {
+  background: var(--light-bg-hover);
+}
+.history-main {
+  flex: 1;
+  min-width: 0;
+}
+.history-goal {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.history-chip {
+  background: var(--light-bg-hover);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.history-time {
+  font-variant-numeric: tabular-nums;
+}
+.history-restore {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* 阶段 1 双栏布局：左栏研发目标（主），右栏配置参数 */
+.input-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+.input-layout-left {
+  flex: 1.618;
+  min-width: 0;
+}
+.input-layout-right {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-md);
+  background: var(--light-bg-hover);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+}
+/* 目标属性区跨整行，与上方双栏区用分隔线隔开 */
+.props-form {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border-light);
+}
+@media (max-width: 860px) {
+  .input-layout {
+    flex-direction: column;
+  }
 }
 
 /* B1：全流程可视化导航条 */

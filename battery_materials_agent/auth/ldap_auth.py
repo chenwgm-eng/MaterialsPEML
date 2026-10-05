@@ -24,6 +24,22 @@ def _ldap3():
         ) from e
 
 
+# RFC4515 搜索过滤器特殊字符转义，防过滤器注入（如 `*)(uid=*))(|(uid=`）
+def _escape_filter_value(value: str) -> str:
+    return "".join(
+        f"\\{ord(ch):02x}" if ch in "*()\\\x00" else ch
+        for ch in value
+    )
+
+
+# RFC4514 DN 特殊字符转义，防用户名拼接 DN 时绑定到非预期条目
+def _escape_dn_value(value: str) -> str:
+    return "".join(
+        f"\\{ch}" if ch in ',+"\\<>;=#' or (idx == 0 and ch in " #") or (idx == len(value) - 1 and ch == " ") else ch
+        for idx, ch in enumerate(value)
+    )
+
+
 def authenticate(cfg: LDAPConfig, username: str, password: str) -> dict | None:
     """LDAP 绑定认证。成功返回规范化身份 dict，失败返回 None。
 
@@ -39,7 +55,9 @@ def authenticate(cfg: LDAPConfig, username: str, password: str) -> dict | None:
     if cfg.bind_dn:
         conn = Connection(server, user=cfg.bind_dn, password=cfg.bind_password, auto_bind=True)
         try:
-            search_filter = (cfg.search_filter or "(uid={username})").format(username=username)
+            search_filter = (cfg.search_filter or "(uid={username})").format(
+                username=_escape_filter_value(username)
+            )
         except KeyError:
             search_filter = cfg.search_filter or "(uid={username})"
         conn.search(cfg.search_base, search_filter, attributes=["mail", "cn", "uid"])
@@ -53,7 +71,7 @@ def authenticate(cfg: LDAPConfig, username: str, password: str) -> dict | None:
         conn.unbind()
     else:
         # 无服务账号：直接尝试用户 DN 绑定（需配置 bind_dn 模板）
-        user_dn = (cfg.bind_dn or "").format(username=username)
+        user_dn = (cfg.bind_dn or "").format(username=_escape_dn_value(username))
         mail, cn = "", ""
 
     # 2. 用用户密码绑定校验

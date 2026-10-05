@@ -4,19 +4,19 @@
       <h1 class="page-title">评估中心</h1>
       <p class="page-subtitle">对 AI 生成结果进行自动化评估，跟踪评估运行与结论</p>
     </div>
-    <!-- Start New Eval -->
+    <!-- 发起新评估 + 按 ID 查询（同一卡片） -->
     <a-card size="small" :body-style="{ padding: '12px' }" class="section-card">
       <template #title>
         <span class="card-title-text">发起新评估</span>
       </template>
-      <a-form layout="inline" size="small">
+      <a-form layout="inline" size="small" class="eval-form">
         <a-form-item label="目标类型">
-          <a-select v-model:value="form.target_type" style="width: 140px" placeholder="选择类型" :options="targetTypeOptions" />
+          <a-select v-model:value="form.target_type" style="width: 130px" placeholder="选择类型" :options="targetTypeOptions" />
         </a-form-item>
         <a-form-item label="目标 ID">
           <a-select
             v-model:value="form.target_id"
-            style="width: 200px"
+            style="width: 170px"
             placeholder="请选择目标"
             show-search
             :options="targetIdOptions"
@@ -26,21 +26,32 @@
           />
         </a-form-item>
         <a-form-item label="版本">
-          <a-input v-model:value="form.version" style="width: 120px" placeholder="版本" />
+          <a-input v-model:value="form.version" style="width: 100px" placeholder="版本" />
         </a-form-item>
         <a-form-item label="数据集">
           <a-select
             v-model:value="form.datasets"
             mode="multiple"
-            style="min-width: 200px"
+            style="min-width: 180px"
             placeholder="选择数据集"
             :options="datasetOptions"
           />
         </a-form-item>
-        <a-form-item>
+        <a-form-item class="form-action">
           <a-button type="primary" @click="startEval" :loading="starting">
             <PlayCircleOutlined /> 开始评估
           </a-button>
+        </a-form-item>
+        <a-form-item class="lookup-item">
+          <a-input-search
+            v-model:value="lookupId"
+            placeholder="按评估运行 ID 查询"
+            enter-button="查看"
+            size="small"
+            style="min-width: 220px"
+            @search="lookupEval"
+            :loading="detailLoading"
+          />
         </a-form-item>
       </a-form>
     </a-card>
@@ -62,6 +73,7 @@
         size="small"
         :row-key="(r) => r.eval_run_id"
         :loading="false"
+        :scroll="{ x: 900 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'status'">
@@ -217,19 +229,6 @@
         <EmptyState v-else type="data" description="无失败用例" />
       </a-spin>
     </a-card>
-
-    <!-- Lookup by ID -->
-    <a-card size="small" :body-style="{ padding: '12px' }" class="section-card">
-      <a-input-search
-        v-model:value="lookupId"
-        placeholder="输入评估运行 ID 查看详情"
-        enter-button="查看"
-        size="small"
-        style="max-width: 400px"
-        @search="lookupEval"
-        :loading="detailLoading"
-      />
-    </a-card>
   </div>
 </template>
 
@@ -301,21 +300,24 @@ async function loadTargetIdOptions(targetType) {
     let options = []
     if (targetType === 'agent') {
       const resp = await listAgents()
-      const agents = resp?.data || resp || []
+      // 后端 /agents 返回 {agents:[...]}（api.py:7237）
+      const agents = resp?.agents || resp?.data || resp || []
       options = (Array.isArray(agents) ? agents : []).map(a => ({
         label: a.agent_name || a.name || a.agent_id,
         value: a.agent_id,
       }))
     } else if (targetType === 'committee') {
       const resp = await getCommitteeCases({})
-      const cases = resp?.data?.items || resp?.data || resp?.items || []
+      // 后端 /committees/cases 返回 {cases:[...]}（api.py:13744）
+      const cases = resp?.cases || resp?.data?.cases || resp?.items || []
       options = (Array.isArray(cases) ? cases : []).map(c => ({
         label: c.case_id,
         value: c.case_id,
       }))
     } else if (targetType === 'tool') {
       const resp = await getTools()
-      const tools = resp?.data || resp || []
+      // 后端 /tools 返回 {tools:[...]}（api.py:5438）
+      const tools = resp?.tools || resp?.data || resp || []
       options = (Array.isArray(tools) ? tools : []).map(t => ({
         label: t.display_name || t.name || t.tool_name,
         value: t.name || t.tool_name,
@@ -617,10 +619,18 @@ onMounted(async () => {
 
   const { dimensionOptions, statusOptions } = useMdmDict()
   let hasFallback = false
+  // 目标类型是固定枚举（model/agent/committee/tool/policy），
+  // 不得用 MDM version_type 维度覆盖（该维度是材料/工作流/知识/配方版本，语义不符）
   try {
     const typeOpts = await dimensionOptions('version_type')
     if (typeOpts && typeOpts.length > 0) {
-      targetTypeOptions.value = typeOpts
+      const supported = ['model', 'agent', 'committee', 'tool', 'policy']
+      const filtered = typeOpts.filter((o) => supported.includes(o.value))
+      if (filtered.length > 0) {
+        targetTypeOptions.value = filtered
+      } else {
+        throw new Error('empty')
+      }
     } else {
       throw new Error('empty')
     }
@@ -653,6 +663,18 @@ onMounted(async () => {
 /* Section Card */
 .section-card {
   margin-bottom: 16px;
+}
+
+/* 发起新评估表单：字段自动换行，查询框右对齐 */
+.eval-form {
+  row-gap: 8px;
+}
+.eval-form .lookup-item {
+  margin-left: auto;
+  margin-right: 0;
+}
+.eval-form .ant-form-item {
+  margin-bottom: 8px;
 }
 
 .card-title-row {

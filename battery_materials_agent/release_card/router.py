@@ -1,7 +1,8 @@
-﻿"""实验放行卡 API 路由。"""
+"""实验放行卡 API 路由。"""
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +10,8 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..auth import UserRole, require_role
+from ..audit import AuditEntry, get_audit_logger
+from ..auth import User, UserRole, get_current_user, require_role
 from pydantic import BaseModel
 
 from ..committee.repository import CommitteeRepository
@@ -18,12 +20,22 @@ from .metrics import compute_metrics_summary
 from .models import EVIDENCE_CATEGORIES, ReleaseCard
 from .store import ReleaseCardStore
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 _store: ReleaseCardStore | None = None
 _committee_repo: CommitteeRepository | None = None
+# 候选存储注入点：由应用启动时注入（api.py startup），
+# 替代反向 `from .. import api` 取 app.state（领域路由不得依赖 API 单体）
+_candidate_store_provider = None
+
+
+def set_candidate_store(store) -> None:
+    global _candidate_store_provider
+    _candidate_store_provider = store
 
 
 def _get_store() -> ReleaseCardStore:
@@ -152,12 +164,18 @@ async def get_release_card(card_id: str):
 # ── POST /release-cards/{card_id}/review ──
 
 @router.post("/release-cards/{card_id}/review", dependencies=[Depends(require_role(UserRole.RESEARCHER))])
-async def review_release_card(card_id: str, req: ReleaseCardReviewRequest):
+async def review_release_card(
+    card_id: str,
+    req: ReleaseCardReviewRequest,
+    current: User | None = Depends(get_current_user),
+):
     """人工复核：写入复核人/意见/最终裁决，并将状态置为 decided。"""
     store = _get_store()
     card = store.get(card_id)
     if card is None:
         raise HTTPException(status_code=404, detail=f"放行卡 {card_id} 不存在")
+    # 审计操作者绑定登录身份，请求体 reviewer 仅作展示用途（防伪造审计主体）
+    operator = (current.username if current else "") or req.reviewer or "unknown"
 
     now = datetime.now(timezone.utc)
     card.human_responsibility = {
@@ -173,6 +191,28 @@ async def review_release_card(card_id: str, req: ReleaseCardReviewRequest):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # 裁决即审计：放行/否决是解除或维持实验阻断的核心合规动作，
+    # 无论后续候选回写成败都必须留痕
+    try:
+        get_audit_logger().log(AuditEntry(
+            event_type="decision",
+            module="release_card",
+            action=f"review_{req.final_decision}",
+            detail={
+                "card_id": card_id,
+                "candidate_id": card.candidate_id,
+                "final_decision": req.final_decision,
+                "reviewer_declared": req.reviewer,
+                "review_opinion": req.review_opinion,
+            },
+            operator=operator,
+            confirmed=True,
+            resource_type="release_card",
+            resource_id=card_id,
+        ))
+    except Exception:
+        logger.warning("放行卡 %s 裁决审计写入失败", card_id, exc_info=True)
+
     # 放行门禁闭环：agree 时回写候选 release_card_approved=True，
     # 解除实验任务创建阻断；reject/modify 不解除
     if req.final_decision == "agree" and card.candidate_id:
@@ -180,8 +220,9 @@ async def review_release_card(card_id: str, req: ReleaseCardReviewRequest):
             # 通过 candidate_store 回写审批状态。
             # 注意：save 默认按 content_hash 去重，可能短路丢弃 data 更新（返回已存在候选），
             # 必须 dedup=False 走完整 upsert 才能把 release_card_approved 落库。
-            from .. import api as _api_module
-            candidate_store = _api_module.app.state.candidate_store
+            candidate_store = _candidate_store_provider
+            if candidate_store is None:
+                raise RuntimeError("candidate_store 未注入（应用启动配置错误）")
             record = candidate_store.get(card.candidate_id)
             if record is not None:
                 cand_data = dict(record.data or {})
@@ -191,22 +232,33 @@ async def review_release_card(card_id: str, req: ReleaseCardReviewRequest):
                 record.data = cand_data
                 candidate_store.save(record, dedup=False)
         except Exception:
-            # Q10 补偿：候选回写失败时回滚卡状态到裁决前，避免"卡已 agree 但候选未解锁"
-            # 的不一致窗口；抛 500 让调用方感知
-            import logging
-            logging.getLogger(__name__).error(
-                "放行卡 %s 审批通过后回写候选 %s 失败，回滚卡状态", card_id, card.candidate_id, exc_info=True,
+            # Q10 补偿：候选回写失败时经专用通道回退卡状态（decided 是终态，
+            # 必须走 store.rollback_decided 补偿通道，普通 update 会因状态机拒绝而失效）
+            logger.error(
+                "放行卡 %s 审批通过后回写候选 %s 失败，尝试补偿回退卡状态", card_id, card.candidate_id, exc_info=True,
             )
+            rollback_reason = f"候选 {card.candidate_id} 回写失败，自动补偿回退"
             try:
-                card.human_responsibility = None
-                card.status = "pending"
-                card.updated_at = now
-                store.update(card)
+                store.rollback_decided(card_id, reason=rollback_reason)
+                rolled_back = True
             except Exception:
-                pass
+                logger.critical(
+                    "放行卡 %s 补偿回退失败，卡保持 decided 但候选未解锁，需人工处理",
+                    card_id,
+                    exc_info=True,
+                )
+                rolled_back = False
+            if rolled_back:
+                raise HTTPException(
+                    status_code=500,
+                    detail="放行卡审批通过但候选回写失败，卡状态已回滚为待审批，可重试复核",
+                )
             raise HTTPException(
                 status_code=500,
-                detail=f"放行卡审批通过但候选回写失败，卡状态已回滚为待审批，请重试",
+                detail=(
+                    f"放行卡 {card_id} 审批通过但候选回写失败，且补偿回退失败："
+                    "卡保持已裁决状态、候选未解锁，请联系管理员人工处理该候选的放行标记"
+                ),
             )
 
     return card.model_dump(mode="json")

@@ -5,6 +5,7 @@
       <span>暂无知识图谱数据</span>
     </div>
     <div
+      v-else
       ref="chartRef"
       class="kg-chart"
       aria-label="知识图谱可视化"

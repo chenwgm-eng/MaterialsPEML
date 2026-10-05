@@ -148,6 +148,7 @@ class KnowledgeGraphStore:
         now = datetime.now(timezone.utc).isoformat()
 
         with self.engine.begin() as conn:
+            # created_at 保持首次创建时间（此前被覆写为 now，排序失真）
             conn.execute(
                 text("""UPDATE knowledge.knowledge_graphs
                 SET name=:name, query=:query,
@@ -155,7 +156,7 @@ class KnowledgeGraphStore:
                     edges_json=CAST(:edges_json AS JSONB),
                     node_count=:node_count, edge_count=:edge_count,
                     paper_count=paper_count + :paper_count,
-                    created_by=:created_by, created_at=:created_at
+                    created_by=:created_by
                 WHERE graph_id=:graph_id"""),
                 {
                     "graph_id": graph_id,
@@ -167,7 +168,6 @@ class KnowledgeGraphStore:
                     "edge_count": len(merged["edges"]),
                     "paper_count": paper_count,
                     "created_by": created_by or existing.get("created_by", ""),
-                    "created_at": now,
                 },
             )
 

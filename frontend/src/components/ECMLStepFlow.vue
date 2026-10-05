@@ -8,8 +8,8 @@
       role="listitem"
       :tabindex="isStepClickable(step.key) ? 0 : -1"
       :aria-label="`查看 ${step.title} 步骤详情`"
-      @click="onStepClick(step.key)"
-      @keydown.enter.prevent="onStepClick(step.key)"
+      @click="onStepClick(step)"
+      @keydown.enter.prevent="onStepClick(step)"
     >
       <div class="step-indicator">
         <div class="step-dot">
@@ -29,6 +29,7 @@
           class="step-agent-chip"
           :agent-id="step.agentId"
           :fallback-name="step.agentName"
+          :interactive="false"
         />
       </div>
     </div>
@@ -98,9 +99,9 @@ function getStepClass(key) {
   return 'pending'
 }
 
-function onStepClick(key) {
-  if (isStepClickable(key)) {
-    emit('step-click', key)
+function onStepClick(step) {
+  if (isStepClickable(step.key)) {
+    emit('step-click', step)
   }
 }
 </script>

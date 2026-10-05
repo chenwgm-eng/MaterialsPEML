@@ -223,39 +223,35 @@ watch(modalVisible, (val) => {
   else clear3DViewer() // 关闭弹窗时立即清理，释放 GPU 内存
 })
 
-// 后端 SDF 降级方案
+// 后端 SDF 降级方案（走 axios client：统一鉴权头/错误拦截/baseURL，MoleculeView 已 import client）
 async function fetchSDF() {
   let resp
   try {
-    resp = await fetch(`/api/molecule/sdf?smiles=${encodeURIComponent(props.smiles)}`)
-  } catch (networkErr) {
-    throw new Error(`网络请求失败：${networkErr.message}`)
-  }
-  if (!resp.ok) {
-    let detail = ''
-    try { detail = await resp.text() } catch { /* ignore */ }
-    // 尝试解析后端返回的结构化错误
-    let friendlyMsg = `HTTP ${resp.status}`
-    try {
-      const parsed = JSON.parse(detail)
-      const d = parsed.detail
-      if (typeof d === 'object' && d.message) {
-        friendlyMsg = d.message
-        if (d.hint) friendlyMsg += `（${d.hint}）`
-      } else if (typeof d === 'string') {
-        friendlyMsg = d
-      }
-    } catch { /* 非 JSON，保留原始 detail */ }
+    resp = await client.get('/molecule/sdf', {
+      params: { smiles: props.smiles },
+      responseType: 'text',
+      skipErrorNotification: true,
+    })
+  } catch (err) {
+    const status = err?.response?.status
+    const detail = err?.response?.data?.detail
+    let friendlyMsg = status ? `HTTP ${status}` : `网络请求失败：${err?.message || ''}`
+    if (typeof detail === 'object' && detail?.message) {
+      friendlyMsg = detail.message
+      if (detail.hint) friendlyMsg += `（${detail.hint}）`
+    } else if (typeof detail === 'string') {
+      friendlyMsg = detail
+    }
     // 针对常见错误给出可操作提示
-    if (resp.status === 400) {
+    if (status === 400) {
       friendlyMsg += '。该字符串不是合法 SMILES（可能是聚合物名称如 PEO）'
-    } else if (resp.status === 422) {
+    } else if (status === 422) {
       friendlyMsg += '。建议查看 2D 结构图或检查 SMILES 有效性'
     }
     throw new Error(`3D 结构生成失败：${friendlyMsg}`)
   }
-  const sdf = await resp.text()
-  if (!sdf || sdf.length < 50) {
+  const sdf = resp
+  if (!sdf || (typeof sdf === 'string' && sdf.length < 50)) {
     throw new Error(`SDF 数据为空或过短（length=${sdf?.length}）`)
   }
   return sdf

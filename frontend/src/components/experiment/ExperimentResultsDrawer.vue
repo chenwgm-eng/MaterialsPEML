@@ -541,9 +541,13 @@ function onOpenDeviation() {
     message.warning('暂无实验结果，无法检测偏差')
     return
   }
-  const props = [...new Set(orderResults.value.map((r) => r.property_name).filter(Boolean))]
-  const template = props.reduce((acc, p) => {
-    acc[p] = 0
+  // 局部变量不得命名 props（遮蔽 defineProps，导致预期值读取恒 undefined）
+  const propNames = [...new Set(orderResults.value.map((r) => r.property_name).filter(Boolean))]
+  // 优先带入订单预期值（候选估算属性，由 create_experiment_order 写入 acceptance_criteria.expected_values），
+  // 使"估算 vs 实测"偏差分析一键可做
+  const expected = props.order?.acceptance_criteria?.expected_values || {}
+  const template = propNames.reduce((acc, p) => {
+    acc[p] = expected[p] ?? 0
     return acc
   }, {})
   predictedValuesText.value = JSON.stringify(template, null, 2)

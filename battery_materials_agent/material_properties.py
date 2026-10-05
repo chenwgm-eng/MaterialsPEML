@@ -63,6 +63,37 @@ def get_property_direction(key: str) -> str:
     return PROPERTY_DIRECTION.get(key, "maximize")
 
 
+def normalize_by_reference(
+    value: float,
+    ref: tuple[float, float, str, str] | None,
+    direction: str = "maximize",
+    pool_values: list[float] | None = None,
+) -> float:
+    """ADR-0003 综合评分归一化的**唯一权威实现**（生成器与后端补算共用）。
+
+    - ref 命中 REFERENCE_RANGES：按 (下限, 上限) 线性归一并截断到 [0, 1]；
+    - ref 缺失：回退池内相对归一化（必须传 pool_values，否则按 0 处理）；
+    - direction == "minimize" 时反转（规格内越小越好）。
+
+    调用方（polymer_candidate_generator._apply_polymer_multi_objective、
+    api._backfill_multi_objective_scores）只负责权重与累加，不得各自复刻本公式。
+    """
+    if ref is not None:
+        lo, hi, _unit, _src = ref
+        rng = (hi - lo) if hi > lo else 1.0
+        normalized = max(0.0, min(1.0, (value - lo) / rng))
+    elif pool_values:
+        v_min, v_max = min(pool_values), max(pool_values)
+        rng = (v_max - v_min) if v_max > v_min else 1.0
+        normalized = (value - v_min) / rng
+        normalized = max(0.0, min(1.0, normalized))
+    else:
+        normalized = 0.0
+    if direction == "minimize":
+        normalized = 1.0 - normalized
+    return normalized
+
+
 class PropertyField(BaseModel):
     """单个属性字段定义。"""
     key: str  # 英文键名，如 ionic_conductivity

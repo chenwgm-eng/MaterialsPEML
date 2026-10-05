@@ -225,8 +225,12 @@ class CommitteeTriggerEngine:
             )
         return TriggerResult(triggered=False)
 
-    def check_all(self, state, step: str = "", **kwargs) -> list[TriggerResult]:
-        """检查所有触发条件。"""
+    def check_all(self, state, step: str = "", action: str = "", **kwargs) -> list[TriggerResult]:
+        """检查所有触发条件。
+
+        step 兼容旧 ECML 步骤名（step3/step4/…）；hybrid 编排层的 step_id 为
+        无语义的 step_{idx}，必须同时传 action（流水线阶段动作）才能命中分发。
+        """
         results = []
         if not self._conditions.get(
             "external_evidence",
@@ -234,25 +238,32 @@ class CommitteeTriggerEngine:
         ).enabled:
             return results
 
-        # 按步骤检查
-        if step in ("step3", "step3_synthesis_check", "step3_industrialization"):
+        # 按步骤检查（旧步骤名 ∨ 编排层 action 语义匹配）
+        if step in ("step3", "step3_synthesis_check", "step3_industrialization") or action in (
+            "check_synthesis_feasibility",
+            "compliance_check",
+        ):
             r = self.check_external_evidence(state)
             if r.triggered:
                 results.append(r)
 
-        if step in ("step4", "step4_predict"):
+        if step in ("step4", "step4_predict") or action in (
+            "predict_crystal_properties",
+            "predict_polymer_properties",
+        ):
             r = self.check_candidate_priority(
                 state, kwargs.get("dft_budget_remaining", 0)
             )
             if r.triggered:
                 results.append(r)
 
-        if step in ("step5", "step5_verify"):
+        if step in ("step5", "step5_verify") or action == "verify_dft":
             r = self.check_crystal_review(state)
             if r.triggered:
                 results.append(r)
 
         if step in ("step7", "step7_feedback"):
+            # 偏差复盘基于实验反馈数据，仅 ECML step7 路径触发（hybrid 流水线无对应 action）
             r = self.check_deviation_review(state)
             if r.triggered:
                 results.append(r)

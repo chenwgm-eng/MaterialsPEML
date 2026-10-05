@@ -90,6 +90,7 @@
         size="small"
         :row-key="(r) => r.card_id"
         :loading="loading"
+        :scroll="{ x: 900 }"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'title'">

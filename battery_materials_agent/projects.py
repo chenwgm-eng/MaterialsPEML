@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import json
 import uuid
 from sqlalchemy import text
-from .db import get_engine
+from .db import get_engine, get_tenant, tenant_filter
 
 
 def _iso(value) -> str:
@@ -91,13 +91,15 @@ class ProjectStore:
                 text("""INSERT INTO projects.projects
                 (project_id, name, target_application, current_stage, target_properties,
                  owner, department, start_date, end_date, budget, iteration_progress,
-                 candidate_ids, experiment_order_ids, notes, tasks, created_at, updated_at)
+                 candidate_ids, experiment_order_ids, notes, tasks, created_at, updated_at,
+                 tenant_id)
                 VALUES (:project_id, :name, :target_application, :current_stage,
                         CAST(:target_properties AS JSONB), :owner, :department,
                         :start_date, :end_date, :budget, :iteration_progress,
                         CAST(:candidate_ids AS JSONB),
                         CAST(:experiment_order_ids AS JSONB), :notes,
-                        CAST(:tasks AS JSONB), :created_at, :updated_at)"""),
+                        CAST(:tasks AS JSONB), :created_at, :updated_at,
+                        :tenant_id)"""),
                 {
                     "project_id": project.project_id,
                     "name": project.name,
@@ -116,6 +118,8 @@ class ProjectStore:
                     "tasks": json.dumps(project.tasks),
                     "created_at": project.created_at,
                     "updated_at": project.updated_at,
+                    # 多租户隔离（0050）：写入当前上下文租户
+                    "tenant_id": get_tenant(),
                 },
             )
         # 同步 tasks 到关系表（JSONB 字段保留为只读快照，deprecated）
@@ -281,8 +285,9 @@ class ProjectStore:
     def get(self, project_id: str) -> Project | None:
         with self.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT * FROM projects.projects WHERE project_id=:project_id"),
-                {"project_id": project_id},
+                text(f"SELECT * FROM projects.projects "
+                     f"WHERE project_id=:project_id AND {tenant_filter()}"),
+                {"project_id": project_id, "tenant_id": get_tenant()},
             ).fetchone()
         if not row:
             return None
@@ -291,8 +296,9 @@ class ProjectStore:
     def get_by_name(self, name: str) -> Project | None:
         with self.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT * FROM projects.projects WHERE name=:name"),
-                {"name": name},
+                text(f"SELECT * FROM projects.projects "
+                     f"WHERE name=:name AND {tenant_filter()}"),
+                {"name": name, "tenant_id": get_tenant()},
             ).fetchone()
         if not row:
             return None
@@ -301,15 +307,18 @@ class ProjectStore:
     def delete(self, project_id: str) -> bool:
         with self.engine.begin() as conn:
             cur = conn.execute(
-                text("DELETE FROM projects.projects WHERE project_id=:project_id"),
-                {"project_id": project_id},
+                text(f"DELETE FROM projects.projects "
+                     f"WHERE project_id=:project_id AND {tenant_filter()}"),
+                {"project_id": project_id, "tenant_id": get_tenant()},
             )
         return cur.rowcount > 0
 
     def list_all(self) -> list[Project]:
         with self.engine.connect() as conn:
             rows = conn.execute(
-                text("SELECT * FROM projects.projects ORDER BY created_at DESC")
+                text(f"SELECT * FROM projects.projects "
+                     f"WHERE {tenant_filter()} ORDER BY created_at DESC"),
+                {"tenant_id": get_tenant()},
             ).fetchall()
         return [self._row_to_project(r) for r in rows]
 
@@ -317,7 +326,7 @@ class ProjectStore:
         project.updated_at = datetime.now(timezone.utc).isoformat()
         with self.engine.begin() as conn:
             conn.execute(
-                text("""UPDATE projects.projects SET
+                text(f"""UPDATE projects.projects SET
                 name=:name, target_application=:target_application, current_stage=:current_stage,
                 target_properties=CAST(:target_properties AS JSONB), owner=:owner,
                 department=:department, start_date=:start_date, end_date=:end_date,
@@ -325,7 +334,7 @@ class ProjectStore:
                 candidate_ids=CAST(:candidate_ids AS JSONB),
                 experiment_order_ids=CAST(:experiment_order_ids AS JSONB),
                 notes=:notes, tasks=CAST(:tasks AS JSONB), updated_at=:updated_at
-                WHERE project_id=:project_id"""),
+                WHERE project_id=:project_id AND {tenant_filter()}"""),
                 {
                     "name": project.name,
                     "target_application": project.target_application,
@@ -343,6 +352,7 @@ class ProjectStore:
                     "tasks": json.dumps(project.tasks),
                     "updated_at": project.updated_at,
                     "project_id": project.project_id,
+                    "tenant_id": get_tenant(),
                 },
             )
         # 同步 tasks 到关系表（JSONB 字段保留为只读快照，deprecated）

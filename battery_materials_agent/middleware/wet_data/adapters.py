@@ -16,6 +16,8 @@ class ManualEntryAdapter:
     """人工表单数据标准化。"""
 
     def normalize(self, raw_data: dict) -> ExperimentResultRecord:
+        # ADR-0002：导入路径补 data_quality 与 provenance（此前落库 NULL/estimated 无溯源）
+        dq = raw_data.get("data_quality") or "estimated"
         return ExperimentResultRecord(
             result_id=f"RES_{uuid.uuid4().hex[:8]}",
             experiment_order_id=raw_data.get("experiment_order_id", ""),
@@ -31,6 +33,13 @@ class ManualEntryAdapter:
             instrument_id=raw_data.get("instrument_id", ""),
             raw_file_uri=raw_data.get("raw_file_uri", ""),
             qc_status="PENDING",
+            data_quality=dq,
+            provenance=[{
+                "source_type": "file_import",
+                "provider": "wet_data",
+                "model_or_tool": "wet_data_adapter",
+                "evidence_level": dq,
+            }],
         )
 
 

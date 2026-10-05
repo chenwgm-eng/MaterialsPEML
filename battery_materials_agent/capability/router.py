@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -10,6 +11,8 @@ from ..audit import AuditEntry, get_audit_logger
 from ..auth import User, UserRole, get_current_user, require_role
 from .models import CapabilityContract
 from .registry import CapabilityRegistry
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -29,7 +32,7 @@ def _validate_capability_id(capability_id: str) -> None:
 
 
 def _audit(request: Request, action: str, detail: dict, operator: str = "system") -> None:
-    """记录能力契约相关审计日志，失败不阻断主流程。"""
+    """记录能力契约相关审计日志，失败不阻断主流程，但必须留痕可诊断。"""
     try:
         get_audit_logger().log(AuditEntry(
             event_type="decision",
@@ -40,7 +43,8 @@ def _audit(request: Request, action: str, detail: dict, operator: str = "system"
             confirmed=True,
         ))
     except Exception:
-        pass
+        # 审计记录不允许静默丢失：至少 warning 级日志保留证据线索
+        logger.warning("能力契约审计写入失败 action=%s detail=%s", action, detail, exc_info=True)
 
 
 @router.get("/capabilities", dependencies=[Depends(require_role(UserRole.RESEARCHER))])

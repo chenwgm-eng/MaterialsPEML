@@ -8,7 +8,7 @@ from sqlalchemy import text
 import uuid
 import logging
 
-from ..db import get_engine
+from ..db import get_engine, get_tenant, tenant_filter
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +123,8 @@ class SampleStore:
                 with self.engine.connect() as conn:
                     row = conn.execute(
                         text("SELECT candidate_id FROM experiment.experiment_orders "
-                             "WHERE order_id = :oid"),
-                        {"oid": sample.source_order_id},
+                             f"WHERE order_id = :oid AND {tenant_filter()}"),
+                        {"oid": sample.source_order_id, "tenant_id": get_tenant()},
                     ).fetchone()
                 if row is not None and row[0]:
                     sample.source_candidate_id = row[0]
@@ -139,11 +139,11 @@ class SampleStore:
                 (sample_id, name, source_type, source_order_id, source_candidate_id,
                  batch_number, quantity, unit, status, storage_location, storage_condition,
                  created_at, updated_at, notes, sample_code, chemical_formula, scenario_id,
-                 test_task_id)
+                 test_task_id, tenant_id)
                 VALUES (:sample_id, :name, :source_type, :source_order_id, :source_candidate_id,
                  :batch_number, :quantity, :unit, :status, :storage_location, :storage_condition,
                  :created_at, :updated_at, :notes, :sample_code, :chemical_formula, :scenario_id,
-                 :test_task_id)
+                 :test_task_id, :tenant_id)
                 ON CONFLICT (sample_id) DO UPDATE SET
                     name = EXCLUDED.name,
                     source_type = EXCLUDED.source_type,
@@ -181,6 +181,8 @@ class SampleStore:
                     "chemical_formula": sample.chemical_formula,
                     "scenario_id": sample.scenario_id,
                     "test_task_id": sample.test_task_id or None,
+                    # 多租户隔离（0050）：写入当前上下文租户；upsert 不改租户（防跨租户搬移）
+                    "tenant_id": get_tenant(),
                 },
             )
         return sample
@@ -211,8 +213,9 @@ class SampleStore:
     def get(self, sample_id: str) -> Sample | None:
         with self.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT * FROM experiment.samples WHERE sample_id = :sample_id"),
-                {"sample_id": sample_id},
+                text(f"SELECT * FROM experiment.samples "
+                     f"WHERE sample_id = :sample_id AND {tenant_filter()}"),
+                {"sample_id": sample_id, "tenant_id": get_tenant()},
             ).fetchone()
         if row is None:
             return None
@@ -221,9 +224,10 @@ class SampleStore:
     def get_by_code(self, sample_code: str) -> Sample | None:
         with self.engine.connect() as conn:
             row = conn.execute(
-                text("SELECT * FROM experiment.samples "
-                     "WHERE sample_code = :sample_code AND sample_code != ''"),
-                {"sample_code": sample_code},
+                text(f"SELECT * FROM experiment.samples "
+                     f"WHERE sample_code = :sample_code AND sample_code != '' "
+                     f"AND {tenant_filter()}"),
+                {"sample_code": sample_code, "tenant_id": get_tenant()},
             ).fetchone()
         if row is None:
             return None
@@ -234,14 +238,16 @@ class SampleStore:
         with self.engine.connect() as conn:
             if test_task_id:
                 rows = conn.execute(
-                    text("SELECT * FROM experiment.samples "
-                         "WHERE test_task_id = :test_task_id "
-                         "ORDER BY created_at DESC"),
-                    {"test_task_id": test_task_id},
+                    text(f"SELECT * FROM experiment.samples "
+                         f"WHERE test_task_id = :test_task_id AND {tenant_filter()} "
+                         f"ORDER BY created_at DESC"),
+                    {"test_task_id": test_task_id, "tenant_id": get_tenant()},
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    text("SELECT * FROM experiment.samples ORDER BY created_at DESC")
+                    text(f"SELECT * FROM experiment.samples "
+                         f"WHERE {tenant_filter()} ORDER BY created_at DESC"),
+                    {"tenant_id": get_tenant()},
                 ).fetchall()
         return [self._row_to_sample(r) for r in rows]
 
@@ -256,8 +262,9 @@ class SampleStore:
     def delete(self, sample_id: str) -> bool:
         with self.engine.begin() as conn:
             cur = conn.execute(
-                text("DELETE FROM experiment.samples WHERE sample_id = :sample_id"),
-                {"sample_id": sample_id},
+                text(f"DELETE FROM experiment.samples "
+                     f"WHERE sample_id = :sample_id AND {tenant_filter()}"),
+                {"sample_id": sample_id, "tenant_id": get_tenant()},
             )
             return cur.rowcount > 0
 
@@ -266,8 +273,9 @@ class SampleStore:
         # 防止并发请求读到相同旧状态后分别更新造成覆盖
         with self.engine.begin() as conn:
             row = conn.execute(
-                text("SELECT * FROM experiment.samples WHERE sample_id = :sample_id FOR UPDATE"),
-                {"sample_id": sample_id},
+                text(f"SELECT * FROM experiment.samples "
+                     f"WHERE sample_id = :sample_id AND {tenant_filter()} FOR UPDATE"),
+                {"sample_id": sample_id, "tenant_id": get_tenant()},
             ).fetchone()
             if row is None:
                 return False
@@ -300,8 +308,9 @@ class SampleStore:
         # 确保读取-校验-写入原子化，避免并发迁移覆盖
         with self.engine.begin() as conn:
             row = conn.execute(
-                text("SELECT * FROM experiment.samples WHERE sample_id = :sample_id FOR UPDATE"),
-                {"sample_id": sample_id},
+                text(f"SELECT * FROM experiment.samples "
+                     f"WHERE sample_id = :sample_id AND {tenant_filter()} FOR UPDATE"),
+                {"sample_id": sample_id, "tenant_id": get_tenant()},
             ).fetchone()
             if row is None:
                 return None

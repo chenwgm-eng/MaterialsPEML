@@ -147,7 +147,8 @@ class CrystalGNNPredictor:
         pooled = np.mean(h, axis=0)
         value = float(pooled @ self._weights["readout_weight"].flatten())
 
-        confidence = min(0.95, max(0.5, 0.7 + 0.01 * graph["num_sites"]))
+        # ADR-0001：随机权重启发式 GNN 产出为工程估算——confidence 上限 0.5，不触发高置信语义
+        confidence = min(0.5, max(0.2, 0.3 + 0.01 * graph["num_sites"]))
         return value, confidence
 
 
