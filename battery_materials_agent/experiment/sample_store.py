@@ -161,6 +161,8 @@ class SampleStore:
                     chemical_formula = EXCLUDED.chemical_formula,
                     scenario_id = EXCLUDED.scenario_id,
                     test_task_id = EXCLUDED.test_task_id
+                    -- T03：跨租户不更新（冲突行属于别的租户则跳过）
+                WHERE samples.tenant_id = EXCLUDED.tenant_id
                 """),
                 {
                     "sample_id": sample.sample_id,

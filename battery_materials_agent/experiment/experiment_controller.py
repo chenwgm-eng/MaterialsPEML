@@ -675,6 +675,8 @@ class ExperimentDataStore:
                     bom_id = EXCLUDED.bom_id,
                     task_id = EXCLUDED.task_id,
                     idempotency_key = EXCLUDED.idempotency_key
+                    -- T03：跨租户不更新
+                WHERE experiment_orders.tenant_id = EXCLUDED.tenant_id
                 """),
                 {
                     "order_id": order.order_id,
@@ -850,6 +852,8 @@ class ExperimentDataStore:
                         test_task_id = EXCLUDED.test_task_id,
                         data_quality = EXCLUDED.data_quality,
                         provenance = EXCLUDED.provenance
+                        -- T03：跨租户不更新
+                    WHERE experiment_result_records.tenant_id = EXCLUDED.tenant_id
                     """),
                     {
                         "result_id": record.result_id,

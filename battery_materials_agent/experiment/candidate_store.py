@@ -311,6 +311,9 @@ class CandidateStore:
                     created_at = EXCLUDED.created_at,
                     data = EXCLUDED.data,
                     content_hash = EXCLUDED.content_hash
+                    -- T03：跨租户不更新（若冲突行属于别的租户则静默跳过该更新，
+                    -- 防 tenant A 用相同 candidate_id upsert 覆盖 tenant B 的数据）
+                WHERE candidates.tenant_id = EXCLUDED.tenant_id
                 """),
                 {
                     "candidate_id": record.candidate_id,

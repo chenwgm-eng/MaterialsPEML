@@ -29,7 +29,7 @@ depends_on = None
 def upgrade() -> None:
     op.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_candidates_content_hash "
-        "ON experiment.candidates(content_hash) WHERE content_hash IS NOT NULL"
+        "ON experiment.candidates(tenant_id, content_hash) WHERE content_hash IS NOT NULL"
     )
 
 
