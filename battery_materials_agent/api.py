@@ -1596,15 +1596,15 @@ def _is_ai_initiated(request: Request, payload_flag: bool) -> bool:
     """服务端判定 AI 发起（T-031 门禁信号收敛）。
 
     权威信号：验签通过的 X-Execution-Context 且含 agent_id（见
-    execution_context_middleware）；请求体 ai_initiated 自报标志仅作
-    迁移期冗余，Agent 凭证全面接入后废弃。
+    execution_context_middleware）。请求体 ai_initiated 自报标志不再作为
+    任何信任依据——删掉它也不改变判定结果（防冒名 AI 身份）。
     """
     if getattr(request.state, "ai_principal", False):
         return True
     ctx = getattr(request.state, "execution_context", None)
     if ctx is not None and getattr(ctx, "agent_id", None):
         return True
-    return bool(payload_flag)
+    return False
 
 
 class OrderApprovalRequest(BaseModel):
