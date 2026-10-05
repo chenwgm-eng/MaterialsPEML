@@ -102,6 +102,14 @@ def resolve_candidate_evidence_level(source: str, data: dict | None) -> str:
         explicit = str(data.get("evidence_level") or "").strip().lower()
         if explicit:
             return explicit
+        # T06：实验证据优先——有 qc 通过 / verified 数据质量 / learning_eligible
+        # 时，候选性能值属于实测，绝不能误标 estimated。
+        qc = str(data.get("qc_status") or "").upper()
+        dq = str(data.get("data_quality") or "").lower()
+        if qc in {"VALID", "VERIFIED"} and dq in {"verified", "measured"}:
+            return "measured"
+        if dq in {"simulated"}:
+            return "simulated"
     return CANDIDATE_SOURCE_EVIDENCE_LEVEL.get(source or "", "estimated")
 
 
