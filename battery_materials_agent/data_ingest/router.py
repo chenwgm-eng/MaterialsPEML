@@ -236,12 +236,17 @@ def _write_entity(entity_type: str, record: dict) -> str:
         else:
             learning_eligible = bool(raw_learning or False)
 
-        # value 数值解析（无法解析时置 None 而非 0.0，避免假 0 数据入库）
+        # T01：value 数值解析——缺失 / 无法解析 / NaN / Infinity 进入错误路径，
+        # 绝不写成假 0；0 和 "0" 是有效实测值。
         raw_value = record.get("value")
+        if raw_value is None or (isinstance(raw_value, str) and raw_value.strip() == ""):
+            raise ValueError("value 缺失：实验测量值不能为空")
         try:
-            value_num = float(raw_value) if raw_value not in (None, "") else 0.0
+            value_num = float(raw_value)
         except (TypeError, ValueError):
-            value_num = 0.0
+            raise ValueError(f"value 无法解析为数值: {raw_value!r}")
+        if value_num != value_num or value_num in (float("inf"), float("-inf")):
+            raise ValueError(f"value 不是有效实测值（NaN/Infinity）: {raw_value!r}")
 
         # ADR-0002：property_name 规范化（裸 key → prop.*，FK 保护）+ 溯源
         from ..api import _normalize_property_name
