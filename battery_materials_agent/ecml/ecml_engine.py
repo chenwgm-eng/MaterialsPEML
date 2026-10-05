@@ -2535,6 +2535,45 @@ class ECMLEngine:
         for rec in validation_data:
             dq = rec.get("data_quality") or "estimated"
             dq_dist[dq] = dq_dist.get(dq, 0) + 1
+        # T08：demo vs 真实指标分离——同一估算基准下，模拟实测只验证闭环自洽，
+        # 真实实测才是真正的验证精度。主分数为真实实测；缺失时主分数标注"仅模拟一致性"。
+        is_demo = self.experiment_controller is not None and getattr(self.experiment_controller, "run_mode", "demo") != "production"
+        demo_recs = [r for r in validation_data if (r.get("data_quality") or "") == "simulated"]
+        measured_recs = [r for r in validation_data if (r.get("data_quality") or "") not in ("simulated",)]
+
+        def _quick_mape(recs):
+            errs = []
+            for rec in recs:
+                prop = (rec.get("property_name") or "").strip()
+                if prop.startswith("prop."):
+                    prop = prop[len("prop."):]
+                sample_id = rec.get("sample_id") or ""
+                formula = ""
+                if sample_id.startswith("smp_"):
+                    formula = sample_id[len("smp_"):].rsplit("_", 1)[0]
+                pred = cand_est_by_formula.get(formula, {}).get(prop)
+                if pred is None:
+                    for p in state.predictions:
+                        if (p.get("property_name") or "").strip() == prop and (p.get("formula") or p.get("name") or "").strip() == formula and formula:
+                            try:
+                                pred = float(p.get("value") or 0.0)
+                            except (TypeError, ValueError):
+                                pred = None
+                            break
+                if pred is None:
+                    continue
+                try:
+                    actual = float(rec.get("value"))
+                except (TypeError, ValueError):
+                    continue
+                denom = abs(actual) if actual != 0 else 1e-9
+                errs.append(abs(pred - actual) / denom)
+            return round(sum(errs) / len(errs) * 100, 1) if errs else None, len(errs)
+
+        demo_mape, demo_n = _quick_mape(demo_recs)
+        measured_mape, measured_n = _quick_mape(measured_recs)
+        main_mape = measured_mape if measured_n else demo_mape
+        main_scope = "measured" if measured_n else ("demo_consistency" if demo_n else "none")
         return {
             "n_records": len(validation_data),
             "n_compared": total_pairs,
@@ -2543,7 +2582,12 @@ class ECMLEngine:
             "within_20pct_pct": round(hit_20 / total_pairs * 100, 1) if total_pairs else None,
             "per_property": per_prop_list,
             "data_quality_distribution": dq_dist,
-            "note": "demo 模式对比估算 vs 模拟实测（闭环自洽性）；生产模式对比估算 vs 真实实测（真实精度）",
+            "demo_consistency_metrics": {"mape_pct": demo_mape, "n": demo_n, "scope": "估计 vs 模拟实测（闭环自洽性）"},
+            "measured_validation_metrics": {"mape_pct": measured_mape, "n": measured_n, "scope": "估计 vs 真实实测（真实精度）"},
+            "primary_mape_pct": main_mape,
+            "primary_scope": main_scope,
+            "note": ("仅模拟一致性（无真实实测记录）；生产环境应有非模拟实测支撑真实精度" if (is_demo and not measured_n)
+                     else "demo 模式对比估算 vs 模拟实测（闭环自洽性）；生产模式对比估算 vs 真实实测（真实精度）"),
         }
 
     def _experiment_type_for_branch(self, branch: str):
