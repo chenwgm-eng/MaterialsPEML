@@ -116,20 +116,82 @@ def _decode_part(part: str) -> dict:
     return json.loads(raw)
 
 
-def _extract_claims(cfg: SSOConfig, token_resp: dict) -> dict:
-    """从 token 响应提取用户 claims（优先 ID token，其次 userinfo 或 access 解析）。
+_jwks_cache: dict[str, tuple[float, list[dict]]] = {}
 
-    注：仅解码 payload，不校验签名/JWKS——生产接入真实 IdP 时必须在网关/IdP 侧
-    保证 token 端点经 TLS 且 code 交换安全；当前主要用于受信任 IdP 会话中继场景。
+
+def _fetch_jwks(cfg: SSOConfig) -> list[dict]:
+    """从 discovery 的 jwks_uri 拉取 JWKS（60 秒缓存）。"""
+    import time as _t
+    import httpx
+    meta = _cached_discovery(cfg)
+    jwks_uri = meta.get("jwks_uri")
+    if not jwks_uri:
+        raise RuntimeError(f"OIDC issuer {cfg.issuer} 未提供 jwks_uri")
+    key = cfg.issuer
+    entry = _jwks_cache.get(key)
+    if entry and entry[0] > _t.monotonic():
+        return entry[1]
+    resp = httpx.get(jwks_uri, timeout=10.0)
+    resp.raise_for_status()
+    keys = resp.json().get("keys") or []
+    _jwks_cache[key] = (_t.monotonic() + 60, keys)
+    return keys
+
+
+def _verify_id_token(cfg: SSOConfig, id_token: str, expected_nonce: str | None = None) -> dict:
+    """校验 ID token 签名 + issuer + audience + 有效期，返回 claims。"""
+    import jwt
+    keys = _fetch_jwks(cfg)
+    jws = jwt.get_unverified_header(id_token)
+    kid = jws.get("kid")
+    alg = jws.get("alg")
+    if not alg or alg.startswith("HS"):
+        # 不接受对称算法（secret 泄露即可伪造）；必须 Rs*/ES* 等非对称
+        raise RuntimeError(f"ID token 使用不支持的签名算法: {alg!r}")
+    candidate = None
+    for k in keys:
+        if not kid or k.get("kid") == kid:
+            candidate = k
+            break
+    if candidate is None:
+        raise RuntimeError("ID token kid 未在 JWKS 中找到签名密钥")
+    public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(candidate))
+    claims = jwt.decode(
+        id_token,
+        public_key,
+        algorithms=[alg],
+        audience=cfg.client_id,
+        issuer=cfg.issuer.rstrip("/"),
+        options={"require": ["exp", "iat", "sub"]},
+    )
+    if expected_nonce is not None and claims.get("nonce") != expected_nonce:
+        raise RuntimeError("ID token nonce 不匹配")
+    return claims
+
+
+def _extract_claims(cfg: SSOConfig, token_resp: dict, expected_nonce: str | None = None) -> dict:
+    """从 token 响应提取用户 claims。
+
+    T05：生产模式必须校验 ID token 的签名（JWKS）、issuer、audience、有效期；
+    验证失败直接拒绝（抛 RuntimeError），不再静默返回未验签的 claims。
     """
+    import os
     id_token = token_resp.get("id_token")
     if id_token:
         try:
-            return _decode_part(id_token.split(".")[1])
+            return _verify_id_token(cfg, id_token, expected_nonce=expected_nonce)
         except Exception as e:
-            logger.warning("ID token 解析失败：%s", e)
+            logger.warning("ID token 验签失败：%s", e)
+            if os.getenv("RUN_MODE", "").lower() == "production":
+                raise RuntimeError(f"ID token 校验失败：{e}") from e
+            # 非生产：标记不安全，仍退化返回但不得进入主链（由调用方决策）
+            logger.warning("非生产模式：退化为未验签 claims（禁止用于生产身份建立）")
+            try:
+                return _decode_part(id_token.split(".")[1])
+            except Exception:
+                pass
     if token_resp.get("access_token"):
-        # 部分 IdP 把身份信息编码在 access token（JWT）
+        # 部分 IdP 把身份信息编码在 access token（JWT）——生产模式不信任未验签
         try:
             return _decode_part(token_resp["access_token"].split(".")[1])
         except Exception:
