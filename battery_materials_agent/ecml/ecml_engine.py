@@ -2629,10 +2629,30 @@ class ECMLEngine:
                 "prop.ionic_conductivity": "S/cm",
             }
             unit_val = units.get(prop_name, "") or _PROP_UNITS.get(canonical, "")
-            # result_id 用 order_id 尾部（含候选序号），避免同迭代两个候选同属性互相覆盖
+            # result_id 用 run/iteration/order 序号/属性组成业务唯一键，
+            # 迭代间或不同候选同属性不再互相覆盖。
             _order_suffix = (order_id or "").rsplit("-", 1)[-1] if order_id else str(iteration)
+            candidate_props = f"REC-ECML-{run_id_suffix}-{iteration}-{_order_suffix}-{prop_name}"
+            # T02：同 result_id 覆盖前核对业务身份——幂等重跑（同一 run/iteration/order/sample/property）
+            # 允许更新；业务键不一致（不同 run/候选/属性/样品复用同一 id）则报错，不静默覆盖。
+            existing_rec = None
+            try:
+                existing_rec = store.get_result_record(candidate_props)
+            except Exception:
+                existing_rec = None
+            if existing_rec is not None:
+                same_measurement = (
+                    (existing_rec.experiment_order_id or "") == (order_id or "")
+                    and (existing_rec.sample_id or "") == (sample_id or "")
+                    and (existing_rec.property_name or "") == (canonical or "")
+                )
+                if not same_measurement:
+                    raise ValueError(
+                        f"ECML result_id 冲突：{candidate_props} 已被不同业务身份占用"
+                        f"（order/sample/property 不一致），拒绝静默覆盖"
+                    )
             record = ExperimentResultRecord(
-                result_id=f"REC-ECML-{run_id_suffix}-{_order_suffix}-{prop_name}",
+                result_id=candidate_props,
                 experiment_order_id=order_id,
                 sample_id=sample_id,
                 sample_batch_id=f"ecml_iter_{iteration}",
