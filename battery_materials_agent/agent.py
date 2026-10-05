@@ -305,16 +305,18 @@ class BatteryMaterialsAgent:
         engine = self.experiment_controller._store.engine
         # formula 参数按"候选 ID 或候选名"匹配（o.candidate_id 等值），
         # 同时兼容按 sample_id 前缀模糊（ECML 模拟记录 sample_id=smp_{formula}_{iter}）
+        # formula 参数按"候选 ID"精确匹配；T09：移除 sample_id 的 'smp_' 前缀模糊扩展，
+        # smp_{formula}_{iter} 含中文/空格/通配符时会错误匹配同名不同候选。sample_id /
+        # order_id / batch_id 参数走精确等值，不再 ILIKE 模糊。
         clauses = [
             "(:formula = '' OR o.candidate_id = :formula)",
-            "(:formula = '' OR r.sample_id ILIKE :formula_sample_like)",
-            "(:sample_id = '' OR r.sample_id ILIKE :sample_id_like)",
+            "(:sample_id = '' OR r.sample_id = :sample_id)",
             "(:experiment_type = '' OR r.test_method = :experiment_type)",
             "(:project_id = '' OR o.project_id = :project_id)",
-            "(:batch_id = '' OR r.sample_batch_id ILIKE :batch_id_like)",
+            "(:batch_id = '' OR r.sample_batch_id = :batch_id)",
             "(:source_type = '' OR r.source_type = :source_type)",
-            "(:operator = '' OR r.uploaded_by ILIKE :operator_like)",
-            "(:order_id = '' OR r.experiment_order_id ILIKE :order_id_like)",
+            "(:operator = '' OR r.uploaded_by = :operator)",
+            "(:order_id = '' OR r.experiment_order_id = :order_id)",
             "(:date_from = '' OR r.uploaded_at >= CAST(:date_from AS timestamptz))",
             "(:date_to = '' OR r.uploaded_at <= CAST(:date_to AS timestamptz))",
         ]
@@ -332,18 +334,13 @@ class BatteryMaterialsAgent:
                 text(query),
                 {
                     "formula": formula or "",
-                    "formula_sample_like": f"%{formula}%" if formula else "",
                     "sample_id": sample_id or "",
-                    "sample_id_like": f"%{sample_id}%" if sample_id else "",
                     "experiment_type": experiment_type or "",
                     "project_id": project_id or "",
                     "batch_id": batch_id or "",
-                    "batch_id_like": f"%{batch_id}%" if batch_id else "",
                     "source_type": source_type or "",
                     "operator": operator or "",
-                    "operator_like": f"%{operator}%" if operator else "",
                     "order_id": order_id or "",
-                    "order_id_like": f"%{order_id}%" if order_id else "",
                     "date_from": date_from or "",
                     "date_to": date_to or "",
                 },
