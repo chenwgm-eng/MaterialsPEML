@@ -322,6 +322,16 @@ class EvalRunner:
             "total_cases": len(all_cases),
         }
 
+        # T14：所有数据集缺失/为空 → 整体失败而非 completed——
+        #   缺数据集时 total_cases=0 必须阻断发布，不能把空结果当成功。
+        if not all_cases and per_dataset_metrics and all(
+            isinstance(v, dict) and v.get("error") for v in per_dataset_metrics.values()
+        ):
+            raise RuntimeError(
+                "所有数据集缺失或为空，评估无法产生有效用例："
+                + ", ".join(f"{n}:{v.get('error')}" for n, v in per_dataset_metrics.items())
+            )
+
         # Baseline comparison (if a baseline version was supplied).
         if run.baseline_version:
             run.metrics["baseline_comparison"] = self.compare_with_baseline(run, run.baseline_version)

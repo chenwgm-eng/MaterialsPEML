@@ -89,7 +89,7 @@ class _PlaceholderAdapter:
                 "metadata": {"cube_path": "esp.cube", "method": "placeholder"},
             })
 
-        return {"status": "completed", "results": results, "warnings": ["Multiwfn 适配器不可用，使用占位 ESP 分析"]}
+        return {"status": "placeholder_unavailable", "results": results, "warnings": ["Multiwfn 适配器不可用，使用占位 ESP 分析"]}
 
     def execute_orbitals(self, prepared_input: dict[str, Any]) -> dict[str, Any]:
         file_format = prepared_input.get("file_format", "fchk")
@@ -163,7 +163,7 @@ class _PlaceholderAdapter:
                 "metadata": {"orbital": orb["index"], "method": "placeholder"},
             })
 
-        return {"status": "completed", "results": results, "warnings": ["Multiwfn 适配器不可用，使用占位轨道分析"]}
+        return {"status": "placeholder_unavailable", "results": results, "warnings": ["Multiwfn 适配器不可用，使用占位轨道分析"]}
 
     def execute_render(self, prepared_input: dict[str, Any]) -> dict[str, Any]:
         input_dir = prepared_input.get("input_dir", ".")
