@@ -1480,44 +1480,13 @@ def _normalize_test_method(raw: str) -> str:
 
 # 特性别名：数据录入模板主字段 key（裸值）→ mdm.properties.property_id。
 # 与 test_method 同类：property_name 列有 FK → mdm.properties.property_id。
-_PROPERTY_ALIASES = {
-    "ionic_conductivity": "prop.ionic_conductivity",
-    "operating_voltage": "prop.operating_voltage",
-    "bulk_resistance": "prop.bulk_resistance",
-    "oxidation_potential": "prop.oxidation_potential",
-    "crystallinity": "prop.crystallinity",
-    "particle_size": "prop.particle_size",
-    "glass_transition_temp": "prop.glass_transition_temp",
-    "decomposition_temp": "prop.decomposition_temp",
-    # v4.1 改性塑料：高分子模板主字段（0058 迁移已播种 prop.*）
-    "tensile_strength": "prop.tensile_strength",
-    "elongation_at_break": "prop.elongation_at_break",
-    "tensile_modulus": "prop.tensile_modulus",
-    "impact_strength": "prop.impact_strength",
-    "flexural_modulus": "prop.flexural_modulus",
-    "flexural_strength": "prop.flexural_strength",
-    "heat_deflection_temp": "prop.heat_deflection_temp",
-    "melt_flow_index": "prop.melt_flow_index",
-    "melting_point": "prop.melting_point",
-    "thermal_stability": "prop.thermal_stability",
-    "weight_loss": "prop.weight_loss",
-    "residual_mass": "prop.residual_mass",
-    "flame_retardancy": "prop.flame_retardancy",
-}
+from .properties import _PROPERTY_ALIASES, normalize_property_name as _properties_normalize
+
+_PROPERTY_ALIASES_COMPAT = _PROPERTY_ALIASES
 
 
 def _normalize_property_name(raw: str) -> str:
-    """规范化 property_name 为 mdm.properties 的合法 property_id。规则同 _normalize_test_method。"""
-    v = (raw or "").strip()
-    if not v or v.startswith("prop."):
-        return v
-    mapped = _PROPERTY_ALIASES.get(v)
-    if mapped:
-        return mapped
-    raise HTTPException(
-        status_code=400,
-        detail=f"未知特性「{raw}」。可选值：{', '.join(sorted(_PROPERTY_ALIASES))}，或 mdm.properties 中的 property_id",
-    )
+    return _properties_normalize(raw)
 
 
 # 单位别名：模板/常用写法 → mdm.units.unit_code（°C → C，m²/g → m2/g 等）

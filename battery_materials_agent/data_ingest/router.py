@@ -249,7 +249,7 @@ def _write_entity(entity_type: str, record: dict) -> str:
             raise ValueError(f"value 不是有效实测值（NaN/Infinity）: {raw_value!r}")
 
         # ADR-0002：property_name 规范化（裸 key → prop.*，FK 保护）+ 溯源
-        from ..api import _normalize_property_name
+        from ..properties import normalize_property_name as _normalize_property_name
         try:
             prop_canonical = _normalize_property_name(record.get("property_name") or "")
         except Exception:

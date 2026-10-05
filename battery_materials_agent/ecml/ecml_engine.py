@@ -2645,7 +2645,7 @@ class ECMLEngine:
             # v4.1：模拟测量值 key 带单位后缀（如 tensile_strength_MPa），
             # property_name 列有 FK → mdm.properties.property_id：剥离后缀后映射到 prop.*；
             # 无对应主数据时跳过该条（避免 FK 500 静默失败污染历史）
-            from ..api import _PROPERTY_ALIASES
+            from ..properties import _PROPERTY_ALIASES
             canonical = prop_name
             for suffix in ("_MPa", "_pct", "_percent", "_C", "_g_10min", "_kJ_m2", "_ohm", "_V", "_eV", "_K", "_m2_g", "_nm", "_deg", "_J_g",
                            "_S_cm", "_Hz", "_mAh_g", "_mAh_cm2", "_g_cm3", "_nm2", "_deg_c", "_counts"):
