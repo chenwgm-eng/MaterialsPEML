@@ -6,7 +6,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -32,10 +32,18 @@ _committee_repo: CommitteeRepository | None = None
 # 替代反向 `from .. import api` 取 app.state（领域路由不得依赖 API 单体）
 _candidate_store_provider = None
 
+# T11：补偿通知注入点（由应用启动时注入，向 notifications 表写补偿任务）
+_notification_sink: Callable[[str, str, str], None] | None = None
+
 
 def set_candidate_store(store) -> None:
     global _candidate_store_provider
     _candidate_store_provider = store
+
+
+def set_notification_sink(sink: Callable[[str, str, str], None] | None) -> None:
+    global _notification_sink
+    _notification_sink = sink
 
 
 def _get_store() -> ReleaseCardStore:
@@ -237,6 +245,16 @@ async def review_release_card(
             logger.error(
                 "放行卡 %s 审批通过后回写候选 %s 失败，尝试补偿回退卡状态", card_id, card.candidate_id, exc_info=True,
             )
+            # T11：补偿任务入库。失败后卡状态可回滚，但运维必须能看到需要人工对账的补偿任务。
+            if _notification_sink is not None:
+                try:
+                    _notification_sink(
+                        f"RC-FAIL-{card_id}",
+                        "admin",
+                        f"放行卡审批回写候选失败需补偿：card={card_id}, candidate={card.candidate_id}, decision={req.final_decision}",
+                    )
+                except Exception:
+                    logger.error("放行卡 %s 补偿通知写入失败", card_id, exc_info=True)
             rollback_reason = f"候选 {card.candidate_id} 回写失败，自动补偿回退"
             try:
                 store.rollback_decided(card_id, reason=rollback_reason)

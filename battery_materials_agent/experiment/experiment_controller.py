@@ -1175,6 +1175,22 @@ class ExperimentDataStore:
             )
         return notification_id
 
+    def notification_exists(self, order_id: str, assignee: str | None = None,
+                            message_prefix: str | None = None) -> bool:
+        """查询是否已存在同一 order_id/assignee/消息前缀 的通知（幂等防重复）。"""
+        clauses = ["order_id = :order_id"]
+        params: dict = {"order_id": order_id}
+        if assignee is not None:
+            clauses.append("assignee = :assignee")
+            params["assignee"] = assignee
+        if message_prefix is not None:
+            clauses.append("message LIKE :message_prefix")
+            params["message_prefix"] = f"{message_prefix}%"
+        sql = ("SELECT 1 FROM experiment.notifications WHERE " + " AND ".join(clauses) + " LIMIT 1")
+        with self.engine.connect() as conn:
+            row = conn.execute(text(sql), params).fetchone()
+        return row is not None
+
 
 class ExperimentController:
     """Controller for self-driving lab experiment hardware with real data flow."""
@@ -1449,6 +1465,16 @@ class ExperimentController:
         order.approved_by = approved_by
         order.approved_at = datetime.now(timezone.utc).isoformat()
         return order
+
+    def save_notification(self, order_id: str, assignee: str, message: str) -> str:
+        """委托底层 store 记录通知，方便 API/路由注入使用。"""
+        return self._store.save_notification(order_id, assignee, message)
+
+    def notification_exists(self, order_id: str, assignee: str | None = None,
+                            message_prefix: str | None = None) -> bool:
+        """检查同一 order_id/assignee/消息前缀 是否已有通知（用于幂等防重复）。"""
+        return self._store.notification_exists(order_id=order_id, assignee=assignee,
+                                               message_prefix=message_prefix)
 
     def notify_assignee(self, order_id: str, message: str) -> str | None:
         """通知实验任务负责人，记录到 notifications 表。返回 notification_id 或 None。"""

@@ -609,6 +609,17 @@ async def startup():
     # 架构解耦（审查 2026-08）：领域模块通过注入获取依赖，禁止反向 import api
     from .release_card.router import set_candidate_store as _rc_set_candidate_store
     _rc_set_candidate_store(agent.candidate_store)
+    # T11：放行卡审批回写失败时，将补偿任务写入 notifications，供运维对账
+    from .release_card.router import set_notification_sink as _rc_set_notification_sink
+
+    def _rc_notification_sink(order_id: str, assignee: str, message: str) -> None:
+        try:
+            if not agent.experiment_controller.notification_exists(order_id=order_id, assignee=assignee):
+                agent.experiment_controller.save_notification(order_id=order_id, assignee=assignee, message=message)
+        except Exception as e:
+            logger.warning("放行卡补偿通知写入失败: %s", e)
+
+    _rc_set_notification_sink(_rc_notification_sink)
     from .experiment.experiment_controller import set_raw_material_db
     set_raw_material_db(getattr(agent, "raw_material_db", None))
     # 业务链路 MDM：BOM 方案存储（候选材料 1:N BOM 方案，0021 迁移放宽）
@@ -4115,6 +4126,24 @@ async def create_one_click_experiment(candidate_id: str, req: OneClickExperiment
             notes=req.notes,
         )
     except ValueError as e:
+        # T10：实验创建失败补偿——写入 notifications 供运维对账，幂等防重复
+        try:
+            _failed_order_id = f"FAILED-{candidate_id}-{req.process_id or 'none'}"
+            if not agent.experiment_controller.notification_exists(
+                order_id=_failed_order_id, assignee="admin"
+            ):
+                _msg = (f"实验创建失败需人工补偿：候选 {candidate_id} 工艺 {req.process_id or '未关联'}，"
+                        f"原因：{e}")
+                agent.experiment_controller.save_notification(
+                    order_id=_failed_order_id,
+                    assignee="admin",
+                    message=_msg,
+                )
+                logger.warning("实验创建失败已记录补偿通知：%s", _msg)
+            else:
+                logger.info("实验创建失败补偿通知已存在，跳过重复通知：%s", _failed_order_id)
+        except Exception as ne:
+            logger.error("实验创建失败补偿通知写入失败：%s", ne)
         raise HTTPException(status_code=400, detail=str(e)) from e
     _log_research_event(
         event_type="experiment",
