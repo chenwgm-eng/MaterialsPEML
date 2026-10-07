@@ -52,6 +52,7 @@ from .workflow_schema import get_schema_loader
 from .projects import Project, ProjectStore, ProjectTask, _iso
 from .audit import get_audit_logger, AuditEntry
 from .auth.tenant_store import TenantStore
+from .auth.tenant_router import router as _tenant_router
 from .auth import (
     UserRole, User, UserStore,
     get_current_user, require_role, require_login, check_project_access,
@@ -143,6 +144,7 @@ from .agent_team.mapping_router import router as _mapping_router
 
 app.include_router(_capability_router, dependencies=[Depends(require_login)])
 app.include_router(_release_card_router, dependencies=[Depends(require_login)])
+app.include_router(_tenant_router, dependencies=[Depends(require_login)])
 app.include_router(_value_realization_router, dependencies=[Depends(require_login)])
 app.include_router(_data_ingest_router, dependencies=[Depends(require_login)])
 app.include_router(_mapping_router, dependencies=[Depends(require_login)])
@@ -1492,12 +1494,6 @@ class NavVisibilityUpdateRequest(BaseModel):
     matrix: dict[str, dict[str, bool]] = Field(default_factory=dict)
 
 
-class TenantCreateRequest(BaseModel):
-    tenant_id: str = ""
-    name: str = ""
-    status: str = "active"
-
-
 def _user_to_dict(user: User) -> dict:
     """转换为字典并剔除密码哈希，避免泄露到接口响应。"""
     d = user.model_dump()
@@ -1881,30 +1877,6 @@ async def archive_audit(before_at: str):
 
 
 # --- 租户管理（多租户隔离 A1）---
-
-@app.get("/tenants", dependencies=[Depends(require_permission("tenant.manage"))])
-async def list_tenants():
-    """列出所有租户（tenant.manage 权限）。"""
-    return [t.model_dump() for t in TenantStore().list_all()]
-
-
-@app.post("/tenants", dependencies=[Depends(require_permission("tenant.manage"))])
-async def create_tenant(req: TenantCreateRequest):
-    """创建租户（tenant.manage 权限）。"""
-    store = TenantStore()
-    if store.get(req.tenant_id) is not None:
-        raise HTTPException(status_code=409, detail=f"租户 {req.tenant_id} 已存在")
-    tenant = store.create(req.tenant_id, req.name, req.status or "active")
-    return tenant.model_dump()
-
-
-@app.post("/tenants/{tenant_id}/status", dependencies=[Depends(require_permission("tenant.manage"))])
-async def set_tenant_status(tenant_id: str, status: str):
-    """启用/停用租户（tenant.manage 权限）。"""
-    if not TenantStore().set_status(tenant_id, status):
-        raise HTTPException(status_code=404, detail="租户不存在")
-    return {"ok": True, "tenant_id": tenant_id, "status": status}
-
 
 # --- 异常监控 ---
 
